@@ -9,6 +9,15 @@ const ICONS = {
   sparkles: Sparkles,
 } as const;
 
+const TONE: Record<CardTone, string> = {
+  pink: "var(--accent-pink)",
+  cyan: "var(--accent-cyan)",
+  lime: "var(--accent-lime)",
+  amber: "var(--accent-amber)",
+  mauve: "var(--accent-mauve)",
+  violet: "var(--accent-blue)",
+};
+
 const EASE = [0.22, 1, 0.36, 1] as const;
 
 type Insight = {
@@ -20,14 +29,15 @@ type Insight = {
 };
 
 /**
- * InsightCard — a personalised, actionable observation. Deliberately styled
- * apart from the metric cards: a lit left rail, a small tinted glyph, plain
- * language, and action chips. Dismissable.
+ * InsightCard — a personalised, actionable observation. A calm, neutral card:
+ * the tone shows only in the left rail and the glyph, never as a coloured edge
+ * around the whole card.
  */
 export function InsightCard({ insight }: { insight: Insight }) {
   const reduce = useReducedMotion();
   const [dismissed, setDismissed] = useState(false);
   const Icon = ICONS[insight.icon] ?? Sparkles;
+  const accent = TONE[insight.tone] ?? "var(--accent-pink)";
 
   return (
     <AnimatePresence>
@@ -38,20 +48,18 @@ export function InsightCard({ insight }: { insight: Insight }) {
           animate={{ opacity: 1, y: 0 }}
           exit={reduce ? { opacity: 0 } : { opacity: 0, x: 24, height: 0, marginBottom: 0 }}
           transition={{ duration: 0.32, ease: EASE }}
-          data-tone={insight.tone}
-          data-variant="glow"
-          className="metric-card group relative flex gap-3.5 !rounded-[24px] !p-4"
+          className="group relative flex gap-3.5 overflow-hidden rounded-[24px] border border-white/[0.08] bg-white/[0.03] p-4"
         >
           <span
             aria-hidden
             className="absolute inset-y-3 left-0 w-[3px] rounded-full"
-            style={{ background: "var(--tone-color)" }}
+            style={{ background: accent }}
           />
           <span
             className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-xl"
             style={{
-              background: "color-mix(in srgb, var(--tone-color) 20%, transparent)",
-              color: "var(--tone-color)",
+              background: `color-mix(in srgb, ${accent} 18%, transparent)`,
+              color: accent,
             }}
           >
             <Icon size={16} strokeWidth={2} />

@@ -40,10 +40,21 @@ function KaiAvatar({ state = "done", size = 28 }: { state?: AIState; size?: numb
   return <KaiOrb size={size} state={state} />;
 }
 
+/** Plain solid dot used for the message rows — the animated face lives only in the header. */
+function ChatDot() {
+  return (
+    <span
+      aria-hidden
+      className="grid h-7 w-7 shrink-0 place-items-center rounded-full"
+      style={{ background: "radial-gradient(circle at 38% 32%, #E984BE, #92255F)" }}
+    />
+  );
+}
+
 function TypingBubble() {
   return (
     <div className="flex items-end gap-2">
-      <KaiAvatar state="thinking" />
+      <ChatDot />
       <div className="surface-recessed flex items-center gap-1 rounded-2xl rounded-bl-md px-4 py-3">
         {[0, 1, 2].map((i) => (
           <motion.span
@@ -134,17 +145,17 @@ export default function Trainer() {
   return (
     <div className="mx-auto grid max-w-[1120px] gap-6 lg:grid-cols-[minmax(0,1fr)_300px]">
       <div className="min-w-0">
-        <PageHeader eyebrow="trainer" title={trainer.data?.name?.toLowerCase() ?? "kai"} />
+        <PageHeader eyebrow="trainer" title={trainer.data?.name ?? "kai"} />
 
         <Reveal className="ai-card flex h-[64vh] min-h-[460px] flex-col overflow-hidden">
           {/* header bar */}
           <div className="flex items-center gap-2.5 border-b border-white/[0.06] px-5 py-3.5">
             <KaiAvatar size={36} state={typing ? "thinking" : mood} />
             <div className="min-w-0">
-              <div className="text-[0.92rem] text-content-primary">{trainer.data?.name?.toLowerCase() ?? "kai"}</div>
+              <div className="text-[0.92rem] text-content-primary">{trainer.data?.name ?? "Kai"}</div>
               <div className="num flex items-center gap-1.5 text-[0.7rem] text-content-tertiary">
                 <span className="h-1.5 w-1.5 rounded-full bg-[var(--accent-lime)]" />
-                online · replies in seconds
+                Online · replies in seconds
               </div>
             </div>
           </div>
@@ -162,16 +173,16 @@ export default function Trainer() {
             ) : thread.length === 0 && !typing ? (
               <div className="flex h-full flex-col items-center justify-center gap-3 text-center">
                 <KaiAvatar size={52} state={mood} />
-                <div className="text-[0.98rem] lowercase text-content-primary">say hi to kai</div>
+                <div className="text-[0.98rem] text-content-primary">Say hi to Kai</div>
                 <p className="max-w-[32ch] text-[0.85rem] leading-relaxed text-content-secondary">
-                  ask about today's session, your form, an injury, or how a lift is progressing.
+                  Ask about today's session, your form, an injury, or how a lift is progressing.
                 </p>
               </div>
             ) : (
               <>
                 <div className="mb-3 text-center">
                   <span className="rounded-full bg-white/[0.05] px-2.5 py-1 text-[0.68rem] uppercase tracking-[0.1em] text-content-tertiary">
-                    today
+                    Today
                   </span>
                 </div>
 
@@ -188,7 +199,7 @@ export default function Trainer() {
                         mine ? "flex-row-reverse" : ""
                       }`}
                     >
-                      <span className="w-7 shrink-0">{!mine && !grouped ? <KaiAvatar /> : null}</span>
+                      <span className="w-7 shrink-0">{!mine && !grouped ? <ChatDot /> : null}</span>
                       <div className={`flex max-w-[78%] flex-col ${mine ? "items-end" : "items-start"}`}>
                         <div
                           className={`px-4 py-2.5 text-[0.92rem] leading-relaxed ${
@@ -232,7 +243,7 @@ export default function Trainer() {
                   key={p}
                   onClick={() => send(p)}
                   disabled={typing}
-                  className="focus-ring tactile shrink-0 whitespace-nowrap rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-[0.78rem] lowercase text-content-secondary transition-colors hover:border-white/20 hover:text-content-primary disabled:opacity-40"
+                  className="focus-ring tactile shrink-0 whitespace-nowrap rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-[0.78rem] text-content-secondary transition-colors hover:border-white/20 hover:text-content-primary disabled:opacity-40"
                 >
                   {p}
                 </button>
@@ -248,7 +259,7 @@ export default function Trainer() {
               <input
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
-                placeholder="message kai…"
+                placeholder="Message Kai…"
                 className="flex-1 bg-transparent px-4 text-[0.9rem] text-content-primary outline-none placeholder:text-content-tertiary"
               />
               <button
@@ -286,10 +297,10 @@ export default function Trainer() {
           </div>
           <Link
             to="/store"
-            className="focus-ring tactile mt-3 flex items-center justify-center gap-2 rounded-pill border border-white/12 bg-white/[0.05] py-2.5 text-[0.82rem] lowercase text-content-primary transition-colors hover:border-white/25"
+            className="focus-ring tactile mt-3 flex items-center justify-center gap-2 rounded-pill border border-white/12 bg-white/[0.05] py-2.5 text-[0.82rem] text-content-primary transition-colors hover:border-white/25"
           >
             <Coins size={13} strokeWidth={2} className="text-[var(--accent-amber)]" />
-            customize kai · store
+            Customize Kai
           </Link>
         </Reveal>
 
