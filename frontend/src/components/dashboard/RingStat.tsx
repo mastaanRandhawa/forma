@@ -74,9 +74,10 @@ export function RingStat({
   );
 
   // mobile: a compact square — just the label + ring. sm+: the full row with value + sub.
+  // `w-full` + fixed height so all three cards are exactly the same size.
   const cls =
-    "metric-card metric-card--link group focus-ring flex aspect-square flex-col items-center justify-between gap-2 !rounded-[var(--radius-medium)] !p-3 " +
-    "sm:!flex-row sm:aspect-auto sm:items-center sm:justify-between sm:gap-3 sm:!p-4";
+    "metric-card metric-card--link group focus-ring flex aspect-square w-full flex-col items-center justify-between gap-2 !rounded-[var(--radius-medium)] !p-3 " +
+    "sm:!flex-row sm:aspect-auto sm:h-[104px] sm:items-center sm:justify-between sm:gap-3 sm:!p-4";
 
   if (onSelect) {
     return (

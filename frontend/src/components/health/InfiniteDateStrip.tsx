@@ -54,6 +54,7 @@ export const InfiniteDateStrip = memo(function InfiniteDateStrip({
 
   const [anchor, setAnchor] = useState(() => addDays(new Date(value + "T00:00:00"), 0));
   const [centerIdx, setCenterIdx] = useState(HALF);
+  const liveIdx = useRef(HALF);
 
   const days = useMemo<Cell[]>(() => {
     const t = todayISO();
@@ -102,6 +103,8 @@ export const InfiniteDateStrip = memo(function InfiniteDateStrip({
   useEffect(() => {
     if (days[HALF].iso !== value) {
       setAnchor(addDays(new Date(value + "T00:00:00"), 0));
+      setCenterIdx(HALF);
+      liveIdx.current = HALF;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value]);
@@ -115,6 +118,7 @@ export const InfiniteDateStrip = memo(function InfiniteDateStrip({
     stopTween.current?.();
     setLive(true);
     setCenterIdx(idx);
+    liveIdx.current = idx;
     const target = centerX(idx);
     const done = () => {
       const picked = days[idx];
@@ -122,6 +126,7 @@ export const InfiniteDateStrip = memo(function InfiniteDateStrip({
       if (idx < REANCHOR_MARGIN || idx > days.length - 1 - REANCHOR_MARGIN) {
         setAnchor(addDays(new Date(picked.iso + "T00:00:00"), 0));
         setCenterIdx(HALF);
+        liveIdx.current = HALF;
       }
     };
     if (reduce) {
@@ -148,12 +153,36 @@ export const InfiniteDateStrip = memo(function InfiniteDateStrip({
     const dx = e.clientX - drag.current.startX;
     if (Math.abs(dx) > 4) moved.current = true;
     setX(drag.current.startVal + dx);
+    // the selection follows whatever cell is under the centre while scrolling
+    const idx = nearestIndex();
+    if (idx !== liveIdx.current) {
+      liveIdx.current = idx;
+      setCenterIdx(idx);
+    }
   };
   const endDrag = (e: React.PointerEvent) => {
     if (!drag.current.active || drag.current.id !== e.pointerId) return;
     drag.current.active = false;
     settle(nearestIndex());
   };
+
+  // idle → glide back to today after 5s (never mid-drag)
+  useEffect(() => {
+    if (value === todayISO()) return;
+    let id: ReturnType<typeof setTimeout>;
+    const run = () => {
+      if (drag.current.active) {
+        id = setTimeout(run, 800);
+        return;
+      }
+      const idx = days.findIndex((d) => d.today);
+      if (idx >= 0) settle(idx);
+      else onChange(todayISO());
+    };
+    id = setTimeout(run, 5000);
+    return () => clearTimeout(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value, days]);
 
   return (
     <div
