@@ -1,6 +1,8 @@
 import { Outlet, useLocation } from "react-router-dom";
 import { Suspense, useEffect, useState } from "react";
-import { House, Dumbbell, MessageSquare, TrendingUp, Target, Library } from "lucide-react";
+import { House, Dumbbell, MessageSquare, TrendingUp, Library, Activity } from "lucide-react";
+import { API_ENABLED } from "../api/hooks";
+import { useFormaData } from "../lib/localStore";
 import { AtmosphericBackground } from "./layout/AtmosphericBackground";
 import { TopNav, type NavItem } from "./layout/TopNav";
 import { RouteProgress } from "./layout/RouteProgress";
@@ -13,13 +15,13 @@ const ICON = { size: 19, strokeWidth: 1.75 } as const;
 const NAV: NavItem[] = [
   { to: "/dashboard", label: "home", end: true, icon: <House {...ICON} />, feature: "dashboard" },
   { to: "/workouts", label: "train", icon: <Dumbbell {...ICON} />, feature: "workouts" },
-  { to: "/goals", label: "goals", icon: <Target {...ICON} />, feature: "goals" },
-  { to: "/trainer", label: "trainer", icon: <MessageSquare {...ICON} />, feature: "trainer" },
   { to: "/progress", label: "progress", icon: <TrendingUp {...ICON} />, feature: "progress_basic" },
+  { to: "/trainer", label: "trainer", icon: <MessageSquare {...ICON} />, feature: "trainer" },
 ];
 
 const SECONDARY: NavItem[] = [
   { to: "/exercise-library", label: "Exercise library", icon: <Library {...ICON} /> },
+  { to: "/body", label: "Muscle balance", icon: <Activity {...ICON} /> },
 ];
 
 const LOAD_MS = 380;
@@ -68,6 +70,33 @@ export function AppShell() {
       </main>
 
       <QuickActions />
+      <LocalDataBadge />
+    </div>
+  );
+}
+
+/** Honest marker that this build has no backend — data lives in this browser. */
+function LocalDataBadge() {
+  const { profile, sessions } = useFormaData();
+  const [dismissed, setDismissed] = useState(false);
+  if (API_ENABLED || dismissed) return null;
+  const fresh = !profile.onboardedAt && sessions.length === 0;
+  return (
+    <div className="fixed bottom-4 left-4 z-[60] max-w-[15rem]">
+      <div className="flex items-start gap-2 rounded-2xl border border-white/10 bg-[rgba(24,13,20,0.92)] px-3 py-2 text-[0.72rem] leading-snug text-content-tertiary shadow-[0_16px_36px_-14px_rgba(0,0,0,0.6)] backdrop-blur-md">
+        <span>
+          {fresh
+            ? "Demo build · running on template defaults. Finish setup to make it yours — data stays in this browser."
+            : "Local build · your data is stored in this browser, not on a server."}
+        </span>
+        <button
+          onClick={() => setDismissed(true)}
+          aria-label="Dismiss"
+          className="focus-ring -mr-1 -mt-0.5 shrink-0 text-content-tertiary hover:text-content-secondary"
+        >
+          ×
+        </button>
+      </div>
     </div>
   );
 }

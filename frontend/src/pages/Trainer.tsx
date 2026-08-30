@@ -14,10 +14,11 @@ import {
   useChatHistory,
   useSuggestedPrompts,
   useTrainer,
-  useDashboard,
   API_ENABLED,
   errorMessage,
 } from "../api/hooks";
+import { buildLocalDashboard } from "../api/localDashboard";
+import { useFormaData } from "../lib/localStore";
 import { api } from "../api";
 import type { ChatMessage } from "../api/types";
 
@@ -74,8 +75,8 @@ export default function Trainer() {
   const history = useChatHistory();
   const prompts = useSuggestedPrompts();
   const trainer = useTrainer();
-  const dashboard = useDashboard();
-  const mood = coachMood(dashboard.data);
+  const formaData = useFormaData();
+  const mood = coachMood(buildLocalDashboard(formaData));
 
   const [thread, setThread] = useState<Msg[]>([]);
   const [seeded, setSeeded] = useState(false);
@@ -135,7 +136,7 @@ export default function Trainer() {
         ...t,
         {
           from: "trainer",
-          text: "Got it. I've logged that and I'll factor it into tomorrow's session, so expect a lighter top set and an extra warm-up ramp.",
+          text: "Thanks for the context — noted. Automatic program adjustments aren't wired up in this build yet, so nothing changes on its own. When you start your next session you can tweak the weights and swap exercises directly in the logger.",
           time: timeLabel(),
         },
       ]);
@@ -308,8 +309,11 @@ export default function Trainer() {
           <div className="label-soft lowercase">recent insight</div>
           <p className="mt-3 flex items-start gap-2 text-[0.92rem] leading-relaxed text-content-secondary">
             <MessageSquare size={14} strokeWidth={1.9} className="mt-1 shrink-0 text-content-tertiary" />
-            Your squat depth averaged 92% of parallel last week, up from 85%. Keeping the tempo
-            controlled is paying off.
+            {formaData.sessions.length === 0
+              ? "Log a few sessions and Kai will start surfacing trends from your working sets here."
+              : `You've logged ${formaData.sessions.length} session${
+                  formaData.sessions.length > 1 ? "s" : ""
+                }. Ask about how a specific lift is trending and I'll pull the numbers.`}
           </p>
         </Reveal>
       </aside>

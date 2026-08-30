@@ -1,52 +1,107 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { ArrowRight, ArrowLeft, Check, Activity, Dumbbell, HeartPulse, Moon, Scale, Sparkles } from "lucide-react";
 import { AtmosphericBackground } from "../components/layout/AtmosphericBackground";
+import { saveProfile, type Environment, type Experience, type Units } from "../lib/localStore";
+import { todayPlan } from "../lib/program";
 
 const EASE = [0.22, 1, 0.36, 1] as const;
 
 const GOALS = [
-  { id: "lose", label: "lose weight", icon: Scale },
+  { id: "lose", label: "lose fat", icon: Scale },
   { id: "muscle", label: "build muscle", icon: Dumbbell },
-  { id: "fitness", label: "improve fitness", icon: Activity },
-  { id: "sleep", label: "improve sleep", icon: Moon },
-  { id: "recovery", label: "improve recovery", icon: HeartPulse },
-  { id: "maintain", label: "maintain health", icon: Sparkles },
+  { id: "strength", label: "get stronger", icon: Activity },
+  { id: "fitness", label: "general fitness", icon: HeartPulse },
+  { id: "sleep", label: "sleep & recovery", icon: Moon },
+  { id: "maintain", label: "maintain", icon: Sparkles },
 ];
 
-const ACTIVITY = ["sedentary", "lightly active", "active", "very active"];
-const FREQ = ["1–2", "3–4", "5–6", "daily"];
-const DEVICES = ["Apple Health", "Garmin", "Fitbit", "WHOOP", "Oura", "Strava"];
+const EXPERIENCE: { id: Experience; label: string; hint: string }[] = [
+  { id: "beginner", label: "beginner", hint: "new, or back after a long break" },
+  { id: "intermediate", label: "intermediate", hint: "training consistently for 6+ months" },
+  { id: "advanced", label: "advanced", hint: "years of structured training" },
+];
+
+const DAYS = [2, 3, 4, 5, 6];
+const DURATIONS = [30, 45, 60, 75];
+const ENVIRONMENTS: { id: Environment; label: string }[] = [
+  { id: "gym", label: "full gym" },
+  { id: "home", label: "home setup" },
+  { id: "both", label: "both" },
+];
+const EQUIPMENT = ["Barbell", "Dumbbells", "Machines", "Cables", "Kettlebell", "Bands", "Pull-up bar", "Bodyweight only"];
+const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+const STEPS = ["goal", "baseline", "environment", "safety", "schedule", "ready"] as const;
 
 export default function Onboarding() {
   const nav = useNavigate();
   const reduce = useReducedMotion();
   const [step, setStep] = useState(0);
-  const [goal, setGoal] = useState<string | null>(null);
-  const [activity, setActivity] = useState<string | null>(null);
-  const [freq, setFreq] = useState<string | null>(null);
-  const [device, setDevice] = useState<string | null>(null);
 
-  const steps = ["goal", "about you", "training", "device", "done"];
+  const [goal, setGoal] = useState<string | null>(null);
+  const [experience, setExperience] = useState<Experience | null>(null);
+  const [daysPerWeek, setDaysPerWeek] = useState<number | null>(null);
+  const [sessionMin, setSessionMin] = useState<number | null>(45);
+  const [units, setUnits] = useState<Units>("lb");
+  const [environment, setEnvironment] = useState<Environment | null>(null);
+  const [equipment, setEquipment] = useState<string[]>([]);
+  const [injuries, setInjuries] = useState("");
+  const [preferredDays, setPreferredDays] = useState<number[]>([]);
+
+  const plan = useMemo(() => todayPlan(), []);
+  const nextTrainingDay = useMemo(() => {
+    if (!preferredDays.length) return "your next session";
+    const dow = new Date().getDay();
+    const sorted = [...preferredDays].sort((a, b) => a - b);
+    const next = sorted.find((d) => d > dow) ?? sorted[0];
+    return next === (dow + 1) % 7 ? "tomorrow" : WEEKDAYS[next];
+  }, [preferredDays]);
+
   const canNext =
     (step === 0 && goal) ||
-    (step === 1 && activity) ||
-    (step === 2 && freq) ||
+    (step === 1 && experience && daysPerWeek && sessionMin) ||
+    (step === 2 && environment) ||
     step === 3 ||
-    step === 4;
+    (step === 4 && preferredDays.length > 0) ||
+    step === 5;
 
-  const next = () => (step < 4 ? setStep(step + 1) : nav("/dashboard"));
+  const finish = () => {
+    saveProfile({
+      goal,
+      experience,
+      daysPerWeek,
+      sessionMin,
+      units,
+      environment,
+      equipment,
+      injuries: injuries.trim(),
+      preferredDays,
+    });
+    nav("/dashboard");
+  };
+
+  const next = () => (step < STEPS.length - 1 ? setStep(step + 1) : finish());
   const back = () => setStep(Math.max(0, step - 1));
+
+  const toggle = <T,>(list: T[], v: T, set: (l: T[]) => void) =>
+    set(list.includes(v) ? list.filter((x) => x !== v) : [...list, v]);
+
+  const chip = (active: boolean) =>
+    `focus-ring tactile rounded-pill border px-3.5 py-1.5 text-[0.8rem] lowercase transition-colors ${
+      active
+        ? "border-[var(--accent-pink)] bg-[color-mix(in_srgb,var(--accent-pink)_12%,transparent)] text-content-primary"
+        : "border-white/10 text-content-tertiary hover:text-content-secondary"
+    }`;
 
   return (
     <div className="relative flex min-h-[100dvh] flex-col">
       <AtmosphericBackground />
 
-      <div className="mx-auto flex w-full max-w-[520px] flex-1 flex-col px-5 py-8">
-        {/* progress */}
+      <div className="mx-auto flex w-full max-w-[560px] flex-1 flex-col px-5 py-8">
         <div className="flex items-center gap-2">
-          {steps.map((s, i) => (
+          {STEPS.map((s, i) => (
             <div key={s} className="flex-1">
               <div className="h-1 overflow-hidden rounded-full bg-white/10">
                 <motion.div
@@ -60,7 +115,7 @@ export default function Onboarding() {
           ))}
         </div>
         <div className="mt-2 label-instrument">
-          step {Math.min(step + 1, 5)} of 5 · {steps[step]}
+          step {step + 1} of {STEPS.length} · {STEPS[step]}
         </div>
 
         <div className="flex flex-1 flex-col justify-center py-10">
@@ -77,6 +132,7 @@ export default function Onboarding() {
                   <h1 className="text-[1.7rem] font-light lowercase leading-tight text-content-primary">
                     what's your primary goal?
                   </h1>
+                  <p className="mt-2 text-[0.9rem] text-content-secondary">pick one — it shapes your program.</p>
                   <div className="mt-6 grid grid-cols-2 gap-2.5">
                     {GOALS.map(({ id, label, icon: Icon }) => (
                       <button
@@ -99,33 +155,49 @@ export default function Onboarding() {
               {step === 1 && (
                 <>
                   <h1 className="text-[1.7rem] font-light lowercase leading-tight text-content-primary">
-                    a little about you
+                    your training baseline
                   </h1>
-                  <div className="mt-6 grid grid-cols-3 gap-2.5">
-                    {[
-                      ["age", "29"],
-                      ["height", "5'11\""],
-                      ["weight", "178 lb"],
-                    ].map(([k, v]) => (
-                      <div key={k} className="rounded-2xl border border-white/[0.08] bg-white/[0.03] p-3.5">
-                        <div className="label-instrument">{k}</div>
-                        <div className="metric-numeral mt-1 text-[1.1rem] text-content-primary">{v}</div>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="mt-4 label-instrument">activity level</div>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {ACTIVITY.map((a) => (
+                  <div className="mt-6 label-instrument">experience</div>
+                  <div className="mt-2 flex flex-col gap-2">
+                    {EXPERIENCE.map((e) => (
                       <button
-                        key={a}
-                        onClick={() => setActivity(a)}
-                        className={`focus-ring rounded-pill border px-3.5 py-1.5 text-[0.8rem] lowercase transition-colors ${
-                          activity === a
-                            ? "border-[var(--accent-pink)] text-content-primary"
-                            : "border-white/10 text-content-tertiary hover:text-content-secondary"
+                        key={e.id}
+                        onClick={() => setExperience(e.id)}
+                        className={`focus-ring tactile rounded-2xl border p-3.5 text-left transition-colors ${
+                          experience === e.id
+                            ? "border-[var(--accent-pink)] bg-[color-mix(in_srgb,var(--accent-pink)_12%,transparent)]"
+                            : "border-white/[0.08] bg-white/[0.03] hover:border-white/20"
                         }`}
                       >
-                        {a}
+                        <div className="text-[0.9rem] lowercase text-content-primary">{e.label}</div>
+                        <div className="label-instrument mt-0.5 normal-case">{e.hint}</div>
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="mt-5 label-instrument">training days per week</div>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {DAYS.map((d) => (
+                      <button key={d} onClick={() => setDaysPerWeek(d)} className={chip(daysPerWeek === d)}>
+                        {d}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="mt-5 label-instrument">session length</div>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {DURATIONS.map((d) => (
+                      <button key={d} onClick={() => setSessionMin(d)} className={chip(sessionMin === d)}>
+                        {d} min
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="mt-5 label-instrument">units</div>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {(["lb", "kg"] as Units[]).map((u) => (
+                      <button key={u} onClick={() => setUnits(u)} className={chip(units === u)}>
+                        {u}
                       </button>
                     ))}
                   </div>
@@ -135,21 +207,25 @@ export default function Onboarding() {
               {step === 2 && (
                 <>
                   <h1 className="text-[1.7rem] font-light lowercase leading-tight text-content-primary">
-                    how often do you train?
+                    where do you train?
                   </h1>
-                  <p className="mt-2 text-[0.9rem] text-content-secondary">sessions per week</p>
-                  <div className="mt-5 grid grid-cols-4 gap-2.5">
-                    {FREQ.map((f) => (
+                  <p className="mt-2 text-[0.9rem] text-content-secondary">this picks which exercises you'll see.</p>
+                  <div className="mt-5 flex flex-wrap gap-2">
+                    {ENVIRONMENTS.map((e) => (
+                      <button key={e.id} onClick={() => setEnvironment(e.id)} className={chip(environment === e.id)}>
+                        {e.label}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="mt-5 label-instrument">available equipment</div>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {EQUIPMENT.map((eq) => (
                       <button
-                        key={f}
-                        onClick={() => setFreq(f)}
-                        className={`focus-ring tactile rounded-2xl border py-4 text-center transition-colors ${
-                          freq === f
-                            ? "border-[var(--accent-pink)] bg-[color-mix(in_srgb,var(--accent-pink)_12%,transparent)]"
-                            : "border-white/[0.08] bg-white/[0.03] hover:border-white/20"
-                        }`}
+                        key={eq}
+                        onClick={() => toggle(equipment, eq, setEquipment)}
+                        className={chip(equipment.includes(eq))}
                       >
-                        <span className="metric-numeral text-[1.05rem] text-content-primary">{f}</span>
+                        {eq}
                       </button>
                     ))}
                   </div>
@@ -159,31 +235,44 @@ export default function Onboarding() {
               {step === 3 && (
                 <>
                   <h1 className="text-[1.7rem] font-light lowercase leading-tight text-content-primary">
-                    connect a device
+                    anything to work around?
                   </h1>
                   <p className="mt-2 text-[0.9rem] text-content-secondary">
-                    optional — pulls in sleep, HRV and steps automatically. you can do this later.
+                    injuries, limitations, or lifts to avoid. optional — skip if nothing applies.
                   </p>
-                  <div className="mt-5 grid grid-cols-2 gap-2.5">
-                    {DEVICES.map((d) => (
+                  <textarea
+                    value={injuries}
+                    onChange={(e) => setInjuries(e.target.value)}
+                    rows={4}
+                    placeholder="e.g. left shoulder — no heavy overhead pressing"
+                    className="focus-ring mt-5 w-full resize-none rounded-2xl border border-white/[0.08] bg-white/[0.03] p-4 text-[0.9rem] text-content-primary outline-none placeholder:text-content-tertiary"
+                  />
+                </>
+              )}
+
+              {step === 4 && (
+                <>
+                  <h1 className="text-[1.7rem] font-light lowercase leading-tight text-content-primary">
+                    which days work best?
+                  </h1>
+                  <p className="mt-2 text-[0.9rem] text-content-secondary">
+                    pick {daysPerWeek ?? "a few"} — we'll schedule your sessions around them.
+                  </p>
+                  <div className="mt-5 flex flex-wrap gap-2">
+                    {WEEKDAYS.map((d, i) => (
                       <button
                         key={d}
-                        onClick={() => setDevice(device === d ? null : d)}
-                        className={`focus-ring tactile flex items-center justify-between rounded-2xl border px-4 py-3.5 text-left transition-colors ${
-                          device === d
-                            ? "border-[var(--accent-cyan)] bg-[color-mix(in_srgb,var(--accent-cyan)_10%,transparent)]"
-                            : "border-white/[0.08] bg-white/[0.03] hover:border-white/20"
-                        }`}
+                        onClick={() => toggle(preferredDays, i, setPreferredDays)}
+                        className={chip(preferredDays.includes(i))}
                       >
-                        <span className="text-[0.86rem] text-content-primary">{d}</span>
-                        {device === d && <Check size={14} strokeWidth={2.5} className="text-[var(--accent-cyan)]" />}
+                        {d}
                       </button>
                     ))}
                   </div>
                 </>
               )}
 
-              {step === 4 && (
+              {step === 5 && (
                 <div className="text-center">
                   <motion.span
                     className="mx-auto mb-5 grid h-16 w-16 place-items-center rounded-full"
@@ -195,21 +284,30 @@ export default function Onboarding() {
                     <Check size={26} strokeWidth={2.5} className="text-[var(--accent-lime)]" />
                   </motion.span>
                   <h1 className="text-[1.7rem] font-light lowercase leading-tight text-content-primary">
-                    your dashboard is ready
+                    your first week is ready
                   </h1>
-                  <p className="mx-auto mt-2 max-w-[36ch] text-[0.9rem] text-content-secondary">
-                    tuned to {GOALS.find((g) => g.id === goal)?.label ?? "your goals"}
-                    {device ? ` and synced with ${device}` : ""}. you can change any of this in settings.
+                  <p className="mx-auto mt-2 max-w-[40ch] text-[0.9rem] text-content-secondary">
+                    {daysPerWeek ?? 4} sessions a week, tuned to{" "}
+                    {GOALS.find((g) => g.id === goal)?.label ?? "your goal"}. first up:{" "}
+                    <span className="text-content-primary">{plan.name.toLowerCase()}</span>, {nextTrainingDay}.
                   </p>
+                  <div className="mx-auto mt-5 max-w-[36ch] rounded-2xl border border-white/[0.08] bg-white/[0.03] p-4 text-left">
+                    <div className="label-instrument">{plan.name.toLowerCase()}</div>
+                    <ul className="mt-2 space-y-1 text-[0.84rem] text-content-secondary">
+                      {plan.exercises.slice(0, 4).map((e) => (
+                        <li key={e.name}>{e.name}</li>
+                      ))}
+                      {plan.exercises.length > 4 && <li className="label-instrument">+{plan.exercises.length - 4} more</li>}
+                    </ul>
+                  </div>
                 </div>
               )}
             </motion.div>
           </AnimatePresence>
         </div>
 
-        {/* nav */}
         <div className="flex items-center justify-between">
-          {step > 0 && step < 4 ? (
+          {step > 0 && step < STEPS.length - 1 ? (
             <button
               onClick={back}
               className="focus-ring flex items-center gap-1.5 text-[0.85rem] lowercase text-content-tertiary transition-colors hover:text-content-secondary"
@@ -234,7 +332,7 @@ export default function Onboarding() {
               className="focus-ring tactile inline-flex items-center gap-2 rounded-pill py-2.5 pl-6 pr-2.5 text-[0.9rem] font-medium text-[var(--fill-on-color)] disabled:opacity-40"
               style={{ background: "var(--fill-coral)" }}
             >
-              {step === 4 ? "enter forma" : "continue"}
+              {step === STEPS.length - 1 ? "enter forma" : "continue"}
               <span className="grid h-7 w-7 place-items-center rounded-pill bg-[rgba(255,250,248,0.22)]">
                 <ArrowRight size={14} strokeWidth={2.25} />
               </span>

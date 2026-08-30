@@ -34,6 +34,8 @@ jobs:
 
       - run: npm ci
       - run: npm run build
+        env:
+          VITE_API_URL: ${{ vars.VITE_API_URL }}
       # SPA fallback: GitHub Pages serves 404.html for unknown paths (deep links,
       # hard refresh). A copy of index.html lets the client router take over.
       - run: cp dist/index.html dist/404.html

@@ -2,19 +2,26 @@ import { useMemo, useRef, useState } from "react";
 import { PageHeader } from "../components/PageHeader";
 import { Reveal } from "../components/Reveal";
 import { EmptyState } from "../components/EmptyState";
-import { useProgressOverview } from "../api/hooks";
 import { PillSelector } from "../components/primitives";
 import { MetricCard } from "../components/health/MetricCard";
 import { MiniTrend } from "../components/health/MiniTrend";
 import { CountUp } from "../components/health/CountUp";
-import { AchievementStrip } from "../components/dashboard/AchievementStrip";
-import { useFakeLoad } from "../lib/motion";
-import { progressSummary, strengthSeries } from "../lib/data";
+import { useFormaData } from "../lib/localStore";
+import {
+  adherence,
+  allTimePRs,
+  avgWeeklyVolume,
+  consistencyDays,
+  longestStreak,
+  loggedExerciseNames,
+  strengthSeriesFor,
+  weeklyVolumeSeries,
+  workoutsThisMonth,
+} from "../lib/fitness";
 
 const RANGE = ["1M", "3M", "6M", "1Y"] as const;
+const RANGE_DAYS: Record<(typeof RANGE)[number], number> = { "1M": 30, "3M": 91, "6M": 182, "1Y": 365 };
 
-/** Interactive strength curve — glowing line, hover crosshair + value readout,
- *  redraws itself when the lift or range changes. */
 function TrendCurve({ data, unit = "lb" }: { data: number[]; unit?: string }) {
   const color = "var(--accent-pink)";
   const w = 560;
@@ -26,7 +33,7 @@ function TrendCurve({ data, unit = "lb" }: { data: number[]; unit?: string }) {
   const max = Math.max(...data);
   const min = Math.min(...data);
   const span = max - min || 1;
-  const x = (i: number) => pad + (i / (data.length - 1)) * (w - pad * 2);
+  const x = (i: number) => pad + (i / (data.length - 1 || 1)) * (w - pad * 2);
   const y = (d: number) => h - pad - ((d - min) / span) * (h - pad * 2);
   const line = data.map((d, i) => `${x(i)},${y(d)}`).join(" ");
 
@@ -69,7 +76,6 @@ function TrendCurve({ data, unit = "lb" }: { data: number[]; unit?: string }) {
         strokeLinejoin="round"
         style={{ filter: `drop-shadow(0 0 6px ${color})` }}
       />
-      {/* crosshair + readout */}
       {hover != null && (
         <line x1={x(hi)} x2={x(hi)} y1={pad} y2={h - pad} stroke="rgba(255,255,255,0.18)" strokeWidth="1" />
       )}
@@ -88,22 +94,48 @@ function TrendCurve({ data, unit = "lb" }: { data: number[]; unit?: string }) {
 
 export default function Progress() {
   const [range, setRange] = useState<(typeof RANGE)[number]>("3M");
-  const loading = useFakeLoad("progress-cards", 700);
-  const [lift, setLift] = useState(strengthSeries[0]);
-  const overview = useProgressOverview();
-  const summary = overview.data?.summary ?? progressSummary;
+  const data = useFormaData();
+  const { sessions, profile } = data;
+  const windowDays = RANGE_DAYS[range];
 
-  const grid = useMemo(
-    () => Array.from({ length: 91 }).map(() => Math.random()),
-    []
+  const inRange = useMemo(
+    () => sessions.filter((s) => Date.parse(s.finishedAt) >= Date.now() - windowDays * 864e5),
+    [sessions, windowDays],
   );
 
-  const prs: string[][] = [
-    ["Bench Press", "195 lb × 3", "Aug 12"],
-    ["Back Squat", "285 lb × 2", "Aug 05"],
-    ["Deadlift", "365 lb × 1", "Jul 29"],
-    ["Overhead Press", "135 lb × 5", "Jul 22"],
-  ];
+  const liftNames = useMemo(() => loggedExerciseNames(sessions), [sessions]);
+  const [lift, setLift] = useState<string | null>(null);
+  const activeLift = lift ?? liftNames[0] ?? null;
+  const liftSeries = useMemo(
+    () => (activeLift ? strengthSeriesFor(inRange, activeLift) : []),
+    [inRange, activeLift],
+  );
+
+  const consistency = useMemo(() => consistencyDays(sessions, 91), [sessions]);
+  const prs = useMemo(() => allTimePRs(sessions).slice(0, 6), [sessions]);
+  const weeklyVol = useMemo(() => weeklyVolumeSeries(sessions, 8), [sessions]);
+  const adh = useMemo(
+    () => (profile.daysPerWeek ? adherence(sessions, profile.daysPerWeek, 13) : null),
+    [sessions, profile.daysPerWeek],
+  );
+  const trainedDays91 = consistency.filter((c) => c > 0).length;
+
+  const hasData = sessions.length > 0;
+
+  if (!hasData) {
+    return (
+      <div className="mx-auto max-w-[1120px]">
+        <PageHeader eyebrow="progress" title="your" ghost="trends" />
+        <Reveal className="mt-6">
+          <EmptyState
+            title="nothing to chart yet"
+            body="finish a few workouts and this fills in — estimated 1RM, volume, streaks, PRs and consistency, all from your logged sets."
+            action={{ label: "start a workout", to: "/workouts" }}
+          />
+        </Reveal>
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto max-w-[1120px]">
@@ -111,104 +143,125 @@ export default function Progress() {
         <PillSelector options={RANGE} value={range} onChange={setRange} />
       </PageHeader>
 
-      {/* summary — a sentence, not a dashboard */}
       <Reveal as="p" className="max-w-[62ch] text-[1rem] leading-relaxed text-content-secondary">
         <span className="label-instrument mr-2" style={{ color: "var(--accent-cyan)" }}>
-          8-week summary
+          summary
         </span>
-        {summary}
+        {sessions.length} session{sessions.length > 1 ? "s" : ""} logged, {trainedDays91} active days in the
+        last 13 weeks{adh != null ? `, ${Math.round(adh * 100)}% of your ${profile.daysPerWeek}-day target` : ""}.
       </Reveal>
 
-      {/* primary strength number as a graphic object */}
-      <Reveal onView delay={0.05} className="mt-12 grid gap-10 lg:grid-cols-[minmax(0,1fr)_260px] lg:items-center">
-        <div>
-          <div className="flex flex-wrap gap-1.5">
-            {strengthSeries.map((s) => (
-              <button
-                key={s.label}
-                onClick={() => setLift(s)}
-                className={`focus-ring tactile rounded-pill px-3.5 py-1.5 text-[0.76rem] lowercase tracking-[0.03em] ${
-                  lift.label === s.label
-                    ? "surface-float text-content-primary"
-                    : "text-content-tertiary hover:text-content-secondary"
-                }`}
-              >
-                {s.label.split(" ")[0]}
-              </button>
-            ))}
-          </div>
-          <div className="mt-6">
-            <TrendCurve key={`${lift.label}-${range}`} data={lift.data} />
-          </div>
-          <div className="label-instrument mt-2">{lift.label.toLowerCase()} · estimated 1rm</div>
-        </div>
-
-        <div className="flex flex-col items-center text-center">
-          <div className="local-glow" style={{ width: 240, height: 240 }} />
-          <CountUp
-            value={lift.e1rm}
-            className="metric-numeral text-content-primary"
-            style={{ fontSize: "3.6rem" }}
+      {/* strength */}
+      <Reveal onView delay={0.05} className="mt-12">
+        <div className="label-soft lowercase">estimated 1rm · Epley</div>
+        {liftNames.length === 0 ? (
+          <EmptyState
+            className="mt-4"
+            title="no lifts tracked yet"
+            body="log weight and reps on a working set and its strength curve appears here."
           />
-          <div className="label-instrument mt-1">lb estimated 1rm</div>
-          <div className="mt-3 text-[0.82rem] tabular-nums" style={{ color: "var(--accent-lime)" }}>
-            +{lift.data[lift.data.length - 1] - lift.data[0]} lb over {range}
+        ) : (
+          <div className="mt-4 grid gap-10 lg:grid-cols-[minmax(0,1fr)_260px] lg:items-center">
+            <div>
+              <div className="flex flex-wrap gap-1.5">
+                {liftNames.slice(0, 6).map((n) => (
+                  <button
+                    key={n}
+                    onClick={() => setLift(n)}
+                    className={`focus-ring tactile rounded-pill px-3.5 py-1.5 text-[0.76rem] lowercase tracking-[0.03em] ${
+                      activeLift === n
+                        ? "surface-float text-content-primary"
+                        : "text-content-tertiary hover:text-content-secondary"
+                    }`}
+                  >
+                    {n.split(" ").slice(-2).join(" ")}
+                  </button>
+                ))}
+              </div>
+              <div className="mt-6">
+                {liftSeries.length >= 2 ? (
+                  <TrendCurve key={`${activeLift}-${range}`} data={liftSeries.map((p) => p.e1rm)} unit={profile.units} />
+                ) : (
+                  <p className="label-instrument py-10">
+                    need at least two sessions with {activeLift?.toLowerCase()} in this range
+                  </p>
+                )}
+              </div>
+              <div className="label-instrument mt-2">{activeLift?.toLowerCase()} · estimated 1rm</div>
+            </div>
+
+            <div className="flex flex-col items-center text-center">
+              <div className="local-glow" style={{ width: 240, height: 240 }} />
+              <CountUp
+                value={liftSeries.length ? liftSeries[liftSeries.length - 1].e1rm : 0}
+                className="metric-numeral text-content-primary"
+                style={{ fontSize: "3.6rem" }}
+              />
+              <div className="label-instrument mt-1">{profile.units} estimated 1rm</div>
+              {liftSeries.length >= 2 && (
+                <div className="mt-3 text-[0.82rem] tabular-nums" style={{ color: "var(--accent-lime)" }}>
+                  {liftSeries[liftSeries.length - 1].e1rm - liftSeries[0].e1rm >= 0 ? "+" : ""}
+                  {liftSeries[liftSeries.length - 1].e1rm - liftSeries[0].e1rm} {profile.units} over {range}
+                </div>
+              )}
+            </div>
           </div>
-        </div>
+        )}
       </Reveal>
 
-      <Reveal onView className="mt-14 block">
-        <div className="label-soft lowercase">achievements</div>
-        <div className="mt-4">
-          <AchievementStrip />
-        </div>
-      </Reveal>
-
+      {/* training counts */}
       <Reveal onView className="mt-14 grid gap-4 sm:grid-cols-3">
         <MetricCard
           tone="amber"
           label="workouts / month"
-          value="18"
+          value={String(workoutsThisMonth(sessions))}
           unit="sessions"
-          loading={loading}
           className="min-h-[168px]"
-          viz={<MiniTrend data={[0.6, 0.7, 0.65, 0.8, 0.9, 1]} mode="pulses" color="var(--accent-amber)" fill height={54} />}
+          viz={<MiniTrend data={weeklyVol.map((v) => v || 0.01)} mode="pulses" color="var(--accent-amber)" fill height={54} />}
         />
         <MetricCard
           tone="cyan"
           label="avg weekly volume"
-          value="46.8"
-          unit="k lb"
-          loading={loading}
+          value={(avgWeeklyVolume(sessions) / 1000).toFixed(1)}
+          unit={`k ${profile.units}`}
           revealDelay={0.08}
           className="min-h-[168px]"
-          viz={<MiniTrend data={[0.4, 0.5, 0.6, 0.7, 0.85, 1]} mode="curve" color="var(--accent-cyan)" fill height={54} />}
+          viz={<MiniTrend data={weeklyVol.map((v) => v || 0.01)} mode="curve" color="var(--accent-cyan)" fill height={54} />}
         />
-        <MetricCard tone="mauve" label="longest streak" value="21" unit="days" loading={loading} revealDelay={0.16} className="min-h-[168px]" />
+        <MetricCard
+          tone="mauve"
+          label="longest streak"
+          value={String(longestStreak(sessions))}
+          unit="days"
+          revealDelay={0.16}
+          className="min-h-[168px]"
+        />
       </Reveal>
 
+      {/* consistency + PRs */}
       <Reveal onView className="mt-14 grid gap-10 sm:grid-cols-2">
         <div>
           <div className="label-soft lowercase">consistency · last 13 weeks</div>
-          <div className="mt-4 grid grid-cols-[repeat(13,1fr)] gap-1.5">
-            {grid.map((v, i) => (
+          <div className="mt-4 grid grid-cols-[repeat(13,1fr)] grid-flow-col gap-1.5" style={{ gridTemplateRows: "repeat(7, 1fr)" }}>
+            {consistency.map((count, i) => (
               <div
                 key={i}
+                title={count ? `${count} session${count > 1 ? "s" : ""}` : "rest"}
                 className="aspect-square rounded-[4px]"
                 style={{
                   background:
-                    v > 0.72
+                    count >= 2
                       ? "var(--accent-pink)"
-                      : v > 0.5
-                      ? "rgba(213,26,122,0.5)"
-                      : v > 0.35
-                      ? "rgba(122,23,79,0.4)"
+                      : count === 1
+                      ? "rgba(213,26,122,0.55)"
                       : "rgba(255,241,248,0.06)",
                 }}
               />
             ))}
           </div>
-          <div className="label-instrument mt-3">82% adherence</div>
+          <div className="label-instrument mt-3">
+            {adh != null ? `${Math.round(adh * 100)}% adherence` : `${trainedDays91} active days`}
+          </div>
         </div>
 
         <div>
@@ -222,13 +275,15 @@ export default function Progress() {
             />
           ) : (
             <ul className="mt-4 divide-y divide-[var(--line-soft)]">
-              {prs.map(([l, detail, date]) => (
-                <li key={l} className="flex items-center justify-between py-3 first:pt-0">
+              {prs.map((pr) => (
+                <li key={pr.exercise} className="flex items-center justify-between py-3 first:pt-0">
                   <div>
-                    <div className="text-[0.92rem] text-content-primary lowercase">{l}</div>
-                    <div className="label-instrument mt-0.5">{detail}</div>
+                    <div className="text-[0.92rem] text-content-primary lowercase">{pr.exercise}</div>
+                    <div className="label-instrument mt-0.5">
+                      {pr.detail} · e1rm {pr.e1rm} {profile.units}
+                    </div>
                   </div>
-                  <span className="label-instrument">{date.toLowerCase()}</span>
+                  <span className="label-instrument">{pr.date}</span>
                 </li>
               ))}
             </ul>

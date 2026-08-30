@@ -1,26 +1,36 @@
+import { Link } from "react-router-dom";
 import { motion, useReducedMotion } from "motion/react";
 import { Flame } from "lucide-react";
-import { streakData } from "../../lib/data";
 import { useDashboardData } from "../../api/dashboard-context";
 
 const DAYS = ["m", "t", "w", "t", "f", "s", "s"];
 
 /** Streak card — flame + day count + this-week target row. */
-export function StreakWidget({ onSelect }: { onSelect?: () => void }) {
+export function StreakWidget({
+  onSelect,
+  to,
+  weekTrained,
+}: {
+  onSelect?: () => void;
+  to?: string;
+  weekTrained?: boolean[];
+}) {
   const reduce = useReducedMotion();
   const dash = useDashboardData();
-  const days = dash?.streakDays ?? streakData.days;
-  const best = Math.max(days, streakData.best);
-  const weekDone = dash?.weeklyRing.done ?? streakData.weekDone;
-  const weekTarget = dash?.weeklyRing.target ?? streakData.weekTarget;
-  const Wrap = onSelect ? "button" : "div";
+  const days = dash?.streakDays ?? 0;
+  const best = days;
+  const weekDone = dash?.weeklyRing.done ?? 0;
+  const weekTarget = dash?.weeklyRing.target ?? 4;
+  const week = weekTrained ?? new Array(7).fill(false);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const Wrap: any = onSelect ? "button" : to ? Link : "div";
 
   return (
     <Wrap
-      {...(onSelect ? { type: "button" as const, onClick: onSelect } : {})}
+      {...(onSelect ? { type: "button" as const, onClick: onSelect } : to ? { to } : {})}
       data-tone="amber"
       data-variant="glow"
-      className={`metric-card group focus-ring block w-full text-left ${onSelect ? "metric-card--link" : ""}`}
+      className={`metric-card group focus-ring block w-full text-left ${onSelect || to ? "metric-card--link" : ""}`}
     >
       <div className="relative z-10">
         <div className="flex items-center justify-between">
@@ -50,7 +60,7 @@ export function StreakWidget({ onSelect }: { onSelect?: () => void }) {
             </span>
           </div>
           <div className="flex gap-1.5">
-            {streakData.week.map((done, i) => (
+            {week.map((done, i) => (
               <div key={i} className="flex flex-1 flex-col items-center gap-1">
                 <span
                   className="h-6 w-full rounded-md transition-colors"

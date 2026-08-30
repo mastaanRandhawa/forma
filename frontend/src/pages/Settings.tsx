@@ -1,37 +1,10 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { Check, Plus, Sparkles } from "lucide-react";
+import { Check, Sparkles } from "lucide-react";
 import { PageHeader } from "../components/PageHeader";
 import { Reveal } from "../components/Reveal";
 import { useSettings, useAppearance, useProgression, PRESETS } from "../api/settings";
-
-function DeviceRow({ name, connected, sync }: { name: string; connected: boolean; sync?: string }) {
-  const [on, setOn] = useState(connected);
-  return (
-    <div className="flex items-center justify-between border-t border-[var(--line-soft)] py-3.5 first:border-t-0">
-      <div>
-        <div className="text-[0.9rem] text-content-primary">{name}</div>
-        {on ? (
-          <div className="num mt-0.5 text-[0.72rem]" style={{ color: "var(--accent-lime)" }}>
-            connected · synced {sync}
-          </div>
-        ) : (
-          <div className="label-instrument mt-0.5">not connected</div>
-        )}
-      </div>
-      <button
-        onClick={() => setOn(!on)}
-        className={`focus-ring tactile inline-flex items-center gap-1.5 rounded-pill px-3.5 py-1.5 text-[0.78rem] lowercase transition-colors ${
-          on
-            ? "bg-white/[0.06] text-content-tertiary hover:text-content-secondary"
-            : "bg-[color-mix(in_srgb,var(--accent-cyan)_14%,transparent)] text-[var(--accent-cyan)]"
-        }`}
-      >
-        {on ? "disconnect" : <><Plus size={12} strokeWidth={2.5} /> connect</>}
-      </button>
-    </div>
-  );
-}
+import { addCheckin, latestCheckin, useFormaData } from "../lib/localStore";
 
 function Toggle({
   label,
@@ -141,6 +114,113 @@ function AppearanceGroup() {
   );
 }
 
+const GOAL_LABELS: Record<string, string> = {
+  lose: "lose fat",
+  muscle: "build muscle",
+  strength: "get stronger",
+  fitness: "general fitness",
+  sleep: "sleep & recovery",
+  maintain: "maintain",
+};
+
+function ProfileGroup() {
+  const { profile } = useFormaData();
+  const rows: [string, string][] = [
+    ["goal", profile.goal ? GOAL_LABELS[profile.goal] ?? profile.goal : "not set"],
+    ["experience", profile.experience ?? "not set"],
+    ["training days / week", profile.daysPerWeek ? String(profile.daysPerWeek) : "not set"],
+    ["session length", profile.sessionMin ? `${profile.sessionMin} min` : "not set"],
+    ["units", profile.units],
+    ["bodyweight", profile.bodyweight ? `${profile.bodyweight} ${profile.units}` : "not logged"],
+  ];
+  return (
+    <Group title="profile">
+      <p className="mb-3 text-[0.85rem] leading-relaxed text-content-secondary">
+        {profile.onboardedAt
+          ? "From your setup. Re-run setup to change any of it."
+          : "You haven't completed setup yet — the app is running on template defaults."}
+      </p>
+      {rows.map(([k, v]) => (
+        <div
+          key={k}
+          className="flex items-center justify-between border-t border-[var(--line-soft)] py-3.5 text-[0.9rem] first:border-t-0"
+        >
+          <span className="text-content-tertiary lowercase">{k}</span>
+          <span className="text-content-primary lowercase">{v}</span>
+        </div>
+      ))}
+      <Link
+        to="/onboarding"
+        className="focus-ring tactile mt-4 inline-flex items-center gap-2 rounded-pill bg-white/[0.06] px-4 py-2 text-[0.82rem] lowercase text-content-primary transition-colors hover:bg-white/[0.12]"
+      >
+        {profile.onboardedAt ? "re-run setup" : "complete setup"}
+      </Link>
+    </Group>
+  );
+}
+
+function RecoveryGroup() {
+  const data = useFormaData();
+  const last = latestCheckin(data);
+  const [sleepH, setSleepH] = useState(7);
+  const [sleepQuality, setSleepQuality] = useState(3);
+  const [fatigue, setFatigue] = useState(3);
+  const [soreness, setSoreness] = useState(3);
+  const [saved, setSaved] = useState(false);
+
+  const Slider = ({ label, value, set, min, max, step = 1, suffix = "" }: {
+    label: string; value: number; set: (v: number) => void; min: number; max: number; step?: number; suffix?: string;
+  }) => (
+    <div className="py-2.5">
+      <div className="mb-1.5 flex items-center justify-between text-[0.85rem]">
+        <span className="text-content-primary lowercase">{label}</span>
+        <span className="num text-content-secondary">{value}{suffix}</span>
+      </div>
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        onChange={(e) => set(Number(e.target.value))}
+        className="focus-ring w-full accent-[var(--accent-pink)]"
+      />
+    </div>
+  );
+
+  return (
+    <Group title="recovery check-in">
+      <p className="mb-2 text-[0.83rem] leading-relaxed text-content-secondary">
+        Health sync (Apple Health, Health Connect, WHOOP, Oura) runs in the mobile
+        companion — it isn't available in the web build. Until then, a manual
+        check-in gives Forma a readiness signal.
+      </p>
+      {last && (
+        <div className="mb-2 label-instrument">
+          last check-in {last.date} · {last.sleepH}h sleep
+        </div>
+      )}
+      <div className="divide-y divide-[var(--line-soft)]">
+        <Slider label="hours slept" value={sleepH} set={setSleepH} min={3} max={11} step={0.5} suffix="h" />
+        <Slider label="sleep quality" value={sleepQuality} set={setSleepQuality} min={1} max={5} />
+        <Slider label="fatigue" value={fatigue} set={setFatigue} min={1} max={5} />
+        <Slider label="muscle soreness" value={soreness} set={setSoreness} min={1} max={5} />
+      </div>
+      <button
+        onClick={() => {
+          addCheckin({ sleepH, sleepQuality, fatigue, soreness });
+          setSaved(true);
+          setTimeout(() => setSaved(false), 2000);
+        }}
+        className="focus-ring tactile mt-4 inline-flex items-center gap-2 rounded-pill px-5 py-2.5 text-[0.86rem] font-medium text-[var(--fill-on-color)]"
+        style={{ background: "var(--fill-coral)" }}
+      >
+        <Check size={15} strokeWidth={2.5} /> {saved ? "saved" : "save check-in"}
+      </button>
+    </Group>
+  );
+}
+
 function GettingStartedGroup() {
   const { bundle, update, setGating } = useSettings();
   const prog = useProgression();
@@ -182,27 +262,8 @@ export default function Settings() {
       <div className="grid gap-6 lg:grid-cols-2">
         <AppearanceGroup />
         <GettingStartedGroup />
-
-        <Group title="profile">
-          <div className="mb-4 flex items-center gap-4">
-            <div className="h-14 w-14 rounded-full surface-float" />
-            <div>
-              <div className="text-[0.95rem] text-content-primary">Alex Rivera</div>
-              <div className="label-instrument mt-0.5">alex.rivera@example.com</div>
-            </div>
-          </div>
-          {["Height 5'11\"", "Weight 178 lb", "Age 29", "Units, Imperial"].map((r) => (
-            <div
-              key={r}
-              className="flex items-center justify-between border-t border-[var(--line-soft)] py-3.5 text-[0.9rem]"
-            >
-              <span className="text-content-primary lowercase">{r}</span>
-              <span className="label-instrument" style={{ color: "var(--accent-cyan)" }}>
-                edit
-              </span>
-            </div>
-          ))}
-        </Group>
+        <ProfileGroup />
+        <RecoveryGroup />
 
         <Group title="camera & privacy">
           <p className="mb-2 text-[0.85rem] leading-relaxed text-content-secondary">
@@ -226,24 +287,11 @@ export default function Settings() {
         </Group>
 
         <Group title="connected devices">
-          <p className="mb-2 text-[0.83rem] leading-relaxed text-content-secondary">
-            Pull sleep, HRV, resting heart rate and steps in automatically.
+          <p className="text-[0.83rem] leading-relaxed text-content-secondary">
+            Apple Health, Health Connect, WHOOP, Garmin, Oura and Strava sync
+            through the mobile companion app. There's no device connection in the
+            web build — use the recovery check-in above for a manual signal.
           </p>
-          <DeviceRow name="Apple Health / Health Connect" connected sync="2 min ago" />
-          <DeviceRow name="WHOOP" connected sync="14 min ago" />
-          <DeviceRow name="Garmin Connect" connected={false} />
-          <DeviceRow name="Oura" connected={false} />
-          <DeviceRow name="Strava" connected={false} />
-        </Group>
-
-        <Group title="subscription">
-          <div className="surface-recessed rounded-hero p-4">
-            <div className="text-[0.95rem] text-content-primary">Forma Pro</div>
-            <div className="label-instrument mt-0.5">$14.99 / month · renews sep 12, 2026</div>
-          </div>
-          <button className="label-instrument mt-3" style={{ color: "var(--accent-cyan)" }}>
-            manage billing
-          </button>
         </Group>
 
         <Group title="about">
