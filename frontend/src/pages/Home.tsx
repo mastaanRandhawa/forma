@@ -12,7 +12,7 @@ import { ProgressStat } from "../components/dashboard/ProgressStat";
 import { StreakWidget } from "../components/dashboard/StreakWidget";
 import { InsightCard } from "../components/dashboard/InsightCard";
 import { GoalsCard } from "../components/dashboard/GoalsCard";
-import { KaiOrb } from "../components/KaiOrb";
+import { KaiOrb, coachMood } from "../components/KaiOrb";
 import { ActivityList } from "../components/dashboard/ActivityList";
 import { DetailDrawer } from "../components/dashboard/DetailDrawer";
 import { MetricDetailBody } from "../components/dashboard/MetricDetailBody";
@@ -84,7 +84,7 @@ export default function Home() {
                 {initialLoading
                   ? [0, 1, 2].map((i) => <Skel key={i} className="aspect-square rounded-[var(--radius-medium)] sm:aspect-auto sm:h-[104px]" />)
                   : rings.map((s) => (
-                      <Quiet key={s.id} widgetKey={RING_WIDGET[s.id] ?? s.id} label={s.label}>
+                      <Quiet key={s.id} widgetKey={RING_WIDGET[s.id] ?? s.id}>
                         <RingStat
                           label={s.label}
                           value={s.value}
@@ -105,7 +105,7 @@ export default function Home() {
 
               {/* main chart */}
               <Reveal onView delay={0.06}>
-                <Quiet widgetKey="training-volume-chart" label="training volume">
+                <Quiet widgetKey="training-volume-chart">
                   <TrendChartCard />
                 </Quiet>
               </Reveal>
@@ -115,7 +115,7 @@ export default function Home() {
                 {initialLoading
                   ? [0, 1].map((i) => <Skel key={i} className="h-[120px] rounded-[var(--radius-large)]" />)
                   : pstats.map((s) => (
-                      <Quiet key={s.id} widgetKey={PSTAT_WIDGET[s.id] ?? s.id} label={s.label}>
+                      <Quiet key={s.id} widgetKey={PSTAT_WIDGET[s.id] ?? s.id}>
                         <ProgressStat
                           label={s.label}
                           value={s.value}
@@ -129,7 +129,7 @@ export default function Home() {
               </Reveal>
 
               <Reveal onView>
-                <Quiet widgetKey="workout-streak" label="workout streak">
+                <Quiet widgetKey="workout-streak">
                   <StreakWidget onSelect={() => setDetail("streak")} />
                 </Quiet>
               </Reveal>
@@ -151,19 +151,19 @@ export default function Home() {
               </Reveal>
 
               <Reveal onView delay={0.05}>
-                <Quiet widgetKey="up-next" label="up next">
+                <Quiet widgetKey="up-next">
                   <ActivityList />
                 </Quiet>
               </Reveal>
 
               <Reveal onView delay={0.1}>
-                <Quiet widgetKey="kai-message" label="message from kai">
+                <Quiet widgetKey="kai-message">
                   <Link
                     to="/trainer"
                     className="focus-ring group block ai-card p-4 transition-transform duration-200 hover:-translate-y-0.5"
                   >
                     <div className="flex items-start gap-3">
-                      <KaiOrb size={40} state="idle" gaze className="mt-0.5" />
+                      <KaiOrb size={40} state={coachMood(dash)} gaze className="mt-0.5" />
                       <div className="min-w-0">
                         <div className="label-soft lowercase">kai · your trainer</div>
                         <p className="mt-1 line-clamp-3 text-[0.86rem] leading-relaxed text-content-secondary">
@@ -177,7 +177,7 @@ export default function Home() {
 
               {prog.has("goals") && (
                 <Reveal onView delay={0.15}>
-                  <Quiet widgetKey="goals-card" label="goals">
+                  <Quiet widgetKey="goals-card">
                     <GoalsCard />
                   </Quiet>
                 </Reveal>

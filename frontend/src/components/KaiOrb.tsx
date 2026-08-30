@@ -1,5 +1,6 @@
 import AIOrbFace from "./smoothui/ai-orb-face";
 import type { AIState } from "./smoothui/ai-core";
+import type { Dashboard } from "../api/types";
 
 /** Forma-tinted SmoothUI orb-face — the face of the coach, "kai". */
 const KAI_COLORS = {
@@ -8,9 +9,21 @@ const KAI_COLORS = {
   feature: "oklch(23% 0.05 330)",
 };
 
+/**
+ * Kai's expression from how the week is going. Happy ("done") when on track;
+ * a searching "thinking" look when the user is behind pace, under-recovered or
+ * has let the streak lapse.
+ */
+export function coachMood(d: Dashboard | null | undefined): AIState {
+  if (!d) return "done";
+  const pace = d.weeklyRing.target ? d.weeklyRing.done / d.weeklyRing.target : 1;
+  const behind = pace < 0.4 || d.readiness < 55 || d.streakDays === 0;
+  return behind ? "thinking" : "done";
+}
+
 export function KaiOrb({
   size = 40,
-  state = "idle",
+  state = "done",
   gaze = false,
   label,
   className = "",

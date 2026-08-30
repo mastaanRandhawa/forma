@@ -4,7 +4,7 @@ import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { ArrowUp, Coins, MessageSquare } from "lucide-react";
 import { PageHeader } from "../components/PageHeader";
 import { Reveal } from "../components/Reveal";
-import { KaiOrb } from "../components/KaiOrb";
+import { KaiOrb, coachMood } from "../components/KaiOrb";
 import type { AIState } from "../components/smoothui/ai-core";
 import { BarProgress } from "../components/health/ProgressIndicator";
 import { Skel } from "../components/skeleton/Skeleton";
@@ -14,6 +14,7 @@ import {
   useChatHistory,
   useSuggestedPrompts,
   useTrainer,
+  useDashboard,
   API_ENABLED,
   errorMessage,
 } from "../api/hooks";
@@ -35,7 +36,7 @@ const toMsg = (m: ChatMessage): Msg => ({
   time: timeLabel(m.createdAt),
 });
 
-function KaiAvatar({ state = "idle", size = 28 }: { state?: AIState; size?: number }) {
+function KaiAvatar({ state = "done", size = 28 }: { state?: AIState; size?: number }) {
   return <KaiOrb size={size} state={state} />;
 }
 
@@ -62,6 +63,8 @@ export default function Trainer() {
   const history = useChatHistory();
   const prompts = useSuggestedPrompts();
   const trainer = useTrainer();
+  const dashboard = useDashboard();
+  const mood = coachMood(dashboard.data);
 
   const [thread, setThread] = useState<Msg[]>([]);
   const [seeded, setSeeded] = useState(false);
@@ -136,7 +139,7 @@ export default function Trainer() {
         <Reveal className="ai-card flex h-[64vh] min-h-[460px] flex-col overflow-hidden">
           {/* header bar */}
           <div className="flex items-center gap-2.5 border-b border-white/[0.06] px-5 py-3.5">
-            <KaiAvatar size={36} state={typing ? "thinking" : "idle"} />
+            <KaiAvatar size={36} state={typing ? "thinking" : mood} />
             <div className="min-w-0">
               <div className="text-[0.92rem] text-content-primary">{trainer.data?.name?.toLowerCase() ?? "kai"}</div>
               <div className="num flex items-center gap-1.5 text-[0.7rem] text-content-tertiary">
@@ -158,7 +161,7 @@ export default function Trainer() {
               <ErrorState message={errorMessage(history.error)} onRetry={history.refetch} className="mt-6" />
             ) : thread.length === 0 && !typing ? (
               <div className="flex h-full flex-col items-center justify-center gap-3 text-center">
-                <KaiAvatar size={52} state="idle" />
+                <KaiAvatar size={52} state={mood} />
                 <div className="text-[0.98rem] lowercase text-content-primary">say hi to kai</div>
                 <p className="max-w-[32ch] text-[0.85rem] leading-relaxed text-content-secondary">
                   ask about today's session, your form, an injury, or how a lift is progressing.

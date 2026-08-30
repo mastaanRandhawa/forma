@@ -39,29 +39,27 @@
   animation: forma-fade-soft 0.32s var(--ease-luxury) both;
 }
 
-/* progressive disclosure (<Quiet>) — hide the words, keep the shapes.
-   Rings, bars and chart paths use explicit fill/stroke so they stay; text
-   (and currentColor icons) go transparent until the widget is hovered. */
-.quiet[data-quiet] :is(span, p, a, div, h1, h2, h3, h4, li, button, strong, em, time, label, small) {
-  transition: color 0.28s var(--ease-luxury);
+/* progressive disclosure (<Quiet>) — hide the values, keep the widget title
+   and the shapes. Rings / bars / chart paths use explicit fill+stroke so they
+   stay; only text colour (and currentColor icons) fades. The title classes
+   (.metric-card__label / .label-soft) are exempt so nothing shifts on reveal. */
+.quiet[data-quiet]
+  :is(span, p, a, div, h1, h2, h3, h4, li, button, strong, em, time, small) {
+  transition: color 0.42s var(--ease-luxury);
 }
 .quiet[data-quiet] :is(text, tspan) {
-  transition: fill 0.28s var(--ease-luxury);
+  transition: fill 0.42s var(--ease-luxury);
 }
 .quiet[data-quiet="hidden"]
-  :is(span, p, a, div, h1, h2, h3, h4, li, button, strong, em, time, label, small) {
+  :is(span, p, a, div, h1, h2, h3, h4, li, button, strong, em, time, small):not(.metric-card__label):not(.label-soft) {
   color: transparent !important;
   text-shadow: none !important;
 }
 .quiet[data-quiet="hidden"] :is(text, tspan) {
   fill: transparent !important;
 }
-/* the identifying corner tag stays readable */
-.quiet[data-quiet="hidden"] > span[aria-hidden] {
-  color: var(--text-tertiary) !important;
-}
 @media (prefers-reduced-motion: reduce) {
-  .quiet[data-quiet] * {
+  .quiet[data-quiet] :is(span, p, a, div, text, tspan) {
     transition: none;
   }
 }
