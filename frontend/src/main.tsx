@@ -16,6 +16,9 @@ const ExerciseLibrary = lazy(() => import("./pages/ExerciseLibrary"));
 const Settings = lazy(() => import("./pages/Settings"));
 const Onboarding = lazy(() => import("./pages/Onboarding"));
 
+// Vite injects BASE_URL ("/forma/" in the Pages build, "/" in dev).
+const basename = import.meta.env.BASE_URL.replace(/\/$/, "") || "/";
+
 const router = createBrowserRouter([
   {
     path: "/onboarding",
@@ -42,7 +45,7 @@ const router = createBrowserRouter([
       { path: "*", element: <Navigate to="/dashboard" replace /> },
     ],
   },
-]);
+], { basename });
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
