@@ -1,4 +1,4 @@
-name: Deploy frontend to Cloudflare Pages
+name: Deploy frontend to GitHub Pages
 
 on:
   push:
@@ -8,13 +8,17 @@ on:
       - ".github/workflows/deploy.yml"
   workflow_dispatch:
 
-# One deploy at a time; let a newer push cancel an in-flight run.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
 concurrency:
-  group: cloudflare-pages
+  group: pages
   cancel-in-progress: true
 
 jobs:
-  deploy:
+  build:
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -29,18 +33,26 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
 
       - run: npm ci
-
       - run: npm run build
         env:
-          # Repo → Settings → Secrets and variables → Actions → Variables.
-          # Unset ⇒ the app builds in demo mode (bundled dataset, no API calls).
           VITE_API_URL: ${{ vars.VITE_API_URL }}
+      # SPA fallback: GitHub Pages serves 404.html for unknown paths (deep links,
+      # hard refresh). A copy of index.html lets the client router take over.
+      - run: cp dist/index.html dist/404.html
 
-      - name: Publish to Cloudflare Pages
-        uses: cloudflare/wrangler-action@v3
+      - uses: actions/configure-pages@v5
         with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          workingDirectory: frontend
-          # `name` + `pages_build_output_dir` come from frontend/wrangler.toml.
-          command: pages deploy --branch=${{ github.ref_name }}
+          enablement: true
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: frontend/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

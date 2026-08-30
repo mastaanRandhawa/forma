@@ -1,6 +1,0 @@
-# Cloudflare Pages project config.
-# `wrangler pages deploy` reads this; the Pages dashboard Git integration ignores
-# it and uses the build settings configured there instead (see README → Deploy).
-name = "forma-web"
-compatibility_date = "2026-01-01"
-pages_build_output_dir = "dist"

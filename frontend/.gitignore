@@ -3,5 +3,3 @@ dist
 *.local
 *.tsbuildinfo
 .DS_Store
-.wrangler
-.dev.vars

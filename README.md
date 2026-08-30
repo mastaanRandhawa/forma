@@ -3,7 +3,7 @@
 Companion web app for **Forma**, an AI personal-trainer product. The cloud API
 lives in its own repository; this repo is the frontend only.
 
-**Live:** deployed on Cloudflare Pages (see [Deploy](#deploy)).
+**Live:** https://mastaanrandhawa.github.io/forma/
 
 ```bash
 cd frontend
@@ -34,48 +34,19 @@ production it's a build-time variable on the host (below).
 
 ## Deploy
 
-Hosted on **Cloudflare Pages**. Everything under `frontend/` builds to a static
-site (`base: "/"`); `frontend/public/_redirects` gives the SPA its deep-link
-fallback and `frontend/public/_headers` sets cache policy.
+Hosted on **GitHub Pages**. `.github/workflows/deploy.yml` builds `frontend/`
+and publishes on every push to `main` that touches `frontend/**`. The build uses
+`base: "/forma/"` (Pages project sub-path) and copies `index.html` → `404.html`
+so client-side routes survive a deep link / hard refresh.
 
-### Option A — GitHub Actions (in this repo)
+One-time setup:
 
-`.github/workflows/deploy.yml` builds and publishes on every push to `main` that
-touches `frontend/**`. One-time setup:
+1. Repo → **Settings → Pages** → Source: **GitHub Actions**.
+2. Repo → **Settings → Secrets and variables → Actions → Variables** → add
+   `VITE_API_URL` = the API origin (e.g. `https://api.forma.app/api/v1`). Omit it
+   to ship demo mode.
+3. The API's `WEB_ORIGIN` must include `https://<user>.github.io` for CORS.
 
-1. Create the Pages project once (matches `name` in `frontend/wrangler.toml`):
-   ```bash
-   cd frontend && npx wrangler pages project create forma-web --production-branch main
-   ```
-2. Repo → **Settings → Secrets and variables → Actions**:
-   - Secrets: `CLOUDFLARE_API_TOKEN` (token with the *Cloudflare Pages: Edit*
-     permission), `CLOUDFLARE_ACCOUNT_ID`.
-   - Variables: `VITE_API_URL` — the API origin, e.g.
-     `https://api.forma.app/api/v1`. Omit to ship demo mode.
-
-### Option B — Cloudflare Pages Git integration (no CI secrets)
-
-In the Cloudflare dashboard → **Workers & Pages → Create → Pages → Connect to Git**:
-
-| Setting | Value |
-| --- | --- |
-| Root directory | `frontend` |
-| Build command | `npm run build` |
-| Build output directory | `dist` |
-| Environment variables | `VITE_API_URL` (Production **and** Preview) |
-
-If you use Option B, delete `.github/workflows/deploy.yml` so the two don't race.
-
-### Manual one-off
-
-```bash
-cd frontend
-npm run build
-VITE_API_URL=… npm run build      # to bake in the API origin
-npx wrangler pages deploy         # reads frontend/wrangler.toml
-```
-
-### CORS
-
-The API's `WEB_ORIGIN` must include the deployed origin (the `*.pages.dev`
-domain and any custom domain, comma-separated).
+Serving from a custom domain instead? Set repo variable `VITE_BASE=/` (or pass it
+in the workflow) so assets resolve from the domain root, and point `WEB_ORIGIN`
+at the domain.
