@@ -1,0 +1,48 @@
+@import "./styles/tokens.css";
+@import "./styles/typography.css";
+@import "./styles/surfaces.css";
+@import "./styles/atmosphere.css";
+@import "./styles/motion.css";
+@import "./styles/skeleton.css";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html {
+  overflow-x: hidden;
+}
+
+/* hide scrollbars everywhere — the page scrolls, the bar does not show */
+html,
+body {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+*::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    scroll-behavior: smooth;
+  }
+}
+body {
+  margin: 0;
+  min-height: 100%;
+  background: var(--background-deep);
+  color: var(--text-primary);
+}
+#root {
+  isolation: isolate;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  scrollbar-width: none;
+}
+

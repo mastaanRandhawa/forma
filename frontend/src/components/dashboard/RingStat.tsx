@@ -1,0 +1,87 @@
+import { Link } from "react-router-dom";
+import type { CardTone } from "../health/MetricCard";
+
+const TONE: Record<CardTone, string> = {
+  pink: "var(--accent-pink)",
+  cyan: "var(--accent-cyan)",
+  lime: "var(--accent-lime)",
+  amber: "var(--accent-amber)",
+  mauve: "var(--accent-mauve)",
+  violet: "var(--accent-blue)",
+};
+
+/**
+ * RingStat — a compact stat card: label + big value on the left, a small
+ * donut ring (percent) on the right. The dashboard's top row.
+ */
+export function RingStat({
+  label,
+  value,
+  sub,
+  pct,
+  tone = "pink",
+  to,
+  onSelect,
+}: {
+  label: string;
+  value: string;
+  sub?: string;
+  pct: number;
+  tone?: CardTone;
+  to?: string;
+  onSelect?: () => void;
+}) {
+  const color = TONE[tone];
+  const size = 54;
+  const sw = 5;
+  const r = size / 2 - sw;
+  const c = 2 * Math.PI * r;
+  const f = Math.max(0, Math.min(1, pct / 100));
+
+  const inner = (
+    <>
+      <div className="relative z-10 min-w-0">
+        <div className="metric-card__label truncate">{label}</div>
+        <div className="metric-numeral mt-1.5 text-[1.55rem] text-content-primary">{value}</div>
+        {sub && <div className="num mt-0.5 truncate text-[0.72rem] text-content-tertiary">{sub}</div>}
+      </div>
+      <div className="relative z-10 shrink-0">
+        <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="-rotate-90">
+          <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="rgba(255,255,255,0.09)" strokeWidth={sw} />
+          <circle
+            className="ring-fill"
+            cx={size / 2}
+            cy={size / 2}
+            r={r}
+            fill="none"
+            stroke={color}
+            strokeWidth={sw}
+            strokeLinecap="round"
+            strokeDasharray={`${c * f} ${c}`}
+            strokeDashoffset={0}
+            style={{ filter: `drop-shadow(0 0 5px ${color})`, ["--ring-circumference" as string]: c }}
+          />
+        </svg>
+        <span className="num absolute inset-0 grid place-items-center text-[0.68rem] text-content-secondary">
+          {Math.round(pct)}%
+        </span>
+      </div>
+    </>
+  );
+
+  const cls =
+    "metric-card metric-card--link group focus-ring !flex-row items-center justify-between gap-3 !rounded-[var(--radius-medium)] !p-4";
+
+  if (onSelect) {
+    return (
+      <button type="button" onClick={onSelect} data-tone={tone} data-variant="glow" className={`${cls} text-left`}>
+        {inner}
+      </button>
+    );
+  }
+  return (
+    <Link to={to ?? "/progress"} data-tone={tone} data-variant="glow" className={cls}>
+      {inner}
+    </Link>
+  );
+}

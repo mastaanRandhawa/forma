@@ -1,0 +1,40 @@
+/* =========================================================================
+   Forma — Skeleton loading shimmer
+   ========================================================================= */
+
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  background: rgba(255, 244, 250, 0.055);
+  border-radius: 14px;
+}
+
+.skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 244, 250, 0.08) 45%,
+    rgba(255, 244, 250, 0.13) 50%,
+    rgba(255, 244, 250, 0.08) 55%,
+    transparent
+  );
+  animation: skeleton-sweep 1.5s var(--ease-luxury) infinite;
+}
+
+@keyframes skeleton-sweep {
+  to {
+    transform: translateX(100%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton::after {
+    animation: none;
+    opacity: 0.4;
+    transform: none;
+  }
+}

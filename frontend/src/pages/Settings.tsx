@@ -1,0 +1,157 @@
+import { useState } from "react";
+import { Link } from "react-router-dom";
+import { Check, Plus } from "lucide-react";
+import { PageHeader } from "../components/PageHeader";
+import { Reveal } from "../components/Reveal";
+
+function DeviceRow({ name, connected, sync }: { name: string; connected: boolean; sync?: string }) {
+  const [on, setOn] = useState(connected);
+  return (
+    <div className="flex items-center justify-between border-t border-[var(--line-soft)] py-3.5 first:border-t-0">
+      <div>
+        <div className="text-[0.9rem] text-content-primary">{name}</div>
+        {on ? (
+          <div className="num mt-0.5 text-[0.72rem]" style={{ color: "var(--accent-lime)" }}>
+            connected · synced {sync}
+          </div>
+        ) : (
+          <div className="label-instrument mt-0.5">not connected</div>
+        )}
+      </div>
+      <button
+        onClick={() => setOn(!on)}
+        className={`focus-ring tactile inline-flex items-center gap-1.5 rounded-pill px-3.5 py-1.5 text-[0.78rem] lowercase transition-colors ${
+          on
+            ? "bg-white/[0.06] text-content-tertiary hover:text-content-secondary"
+            : "bg-[color-mix(in_srgb,var(--accent-cyan)_14%,transparent)] text-[var(--accent-cyan)]"
+        }`}
+      >
+        {on ? "disconnect" : <><Plus size={12} strokeWidth={2.5} /> connect</>}
+      </button>
+    </div>
+  );
+}
+
+function Toggle({ label, defaultOn = false }: { label: string; defaultOn?: boolean }) {
+  const [on, setOn] = useState(defaultOn);
+  return (
+    <button
+      onClick={() => setOn(!on)}
+      role="switch"
+      aria-checked={on}
+      aria-label={label}
+      className="focus-ring flex w-full items-center justify-between py-3.5"
+    >
+      <span className="text-[0.92rem] text-content-primary lowercase">{label}</span>
+      <span
+        className="relative h-6 w-11 rounded-pill transition-colors surface-recessed"
+        style={on ? { background: "var(--accent-pink)", boxShadow: "0 0 16px -2px rgba(213,26,122,0.6)" } : undefined}
+      >
+        <span
+          className="absolute left-0.5 top-0.5 h-5 w-5 rounded-full surface-float"
+          style={{
+            transform: on ? "translateX(20px)" : "translateX(0)",
+            transition: "transform 200ms var(--ease-luxury)",
+          }}
+        />
+      </span>
+    </button>
+  );
+}
+
+function Group({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <Reveal as="section" onView className="surface-soft p-5 sm:p-6">
+      <h2 className="label-soft lowercase">{title}</h2>
+      <div className="mt-3">{children}</div>
+    </Reveal>
+  );
+}
+
+export default function Settings() {
+  return (
+    <div className="mx-auto max-w-[1120px]">
+      <PageHeader eyebrow="account" title="settings" />
+
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Group title="profile">
+          <div className="mb-4 flex items-center gap-4">
+            <div className="h-14 w-14 rounded-full surface-float" />
+            <div>
+              <div className="text-[0.95rem] text-content-primary">Alex Rivera</div>
+              <div className="label-instrument mt-0.5">alex.rivera@example.com</div>
+            </div>
+          </div>
+          {["Height 5'11\"", "Weight 178 lb", "Age 29", "Units, Imperial"].map((r) => (
+            <div
+              key={r}
+              className="flex items-center justify-between border-t border-[var(--line-soft)] py-3.5 text-[0.9rem]"
+            >
+              <span className="text-content-primary lowercase">{r}</span>
+              <span className="label-instrument" style={{ color: "var(--accent-cyan)" }}>
+                edit
+              </span>
+            </div>
+          ))}
+        </Group>
+
+        <Group title="camera & privacy">
+          <p className="mb-2 text-[0.85rem] leading-relaxed text-content-secondary">
+            Pose estimation runs on-device. Raw video is never uploaded or stored. Only
+            form scores and rep counts are saved.
+          </p>
+          <div className="divide-y divide-[var(--line-soft)]">
+            <Toggle label="Allow camera form-tracking" defaultOn />
+            <Toggle label="Save form highlight clips" />
+            <Toggle label="Share anonymized form data for research" />
+          </div>
+        </Group>
+
+        <Group title="notifications">
+          <div className="divide-y divide-[var(--line-soft)]">
+            <Toggle label="Workout reminders" defaultOn />
+            <Toggle label="Trainer proactive check-ins" defaultOn />
+            <Toggle label="Milestone & PR celebrations" defaultOn />
+            <Toggle label="Weekly progress digest (email)" defaultOn />
+          </div>
+        </Group>
+
+        <Group title="connected devices">
+          <p className="mb-2 text-[0.83rem] leading-relaxed text-content-secondary">
+            Pull sleep, HRV, resting heart rate and steps in automatically.
+          </p>
+          <DeviceRow name="Apple Health / Health Connect" connected sync="2 min ago" />
+          <DeviceRow name="WHOOP" connected sync="14 min ago" />
+          <DeviceRow name="Garmin Connect" connected={false} />
+          <DeviceRow name="Oura" connected={false} />
+          <DeviceRow name="Strava" connected={false} />
+        </Group>
+
+        <Group title="subscription">
+          <div className="surface-recessed rounded-hero p-4">
+            <div className="text-[0.95rem] text-content-primary">Forma Pro</div>
+            <div className="label-instrument mt-0.5">$14.99 / month · renews sep 12, 2026</div>
+          </div>
+          <button className="label-instrument mt-3" style={{ color: "var(--accent-cyan)" }}>
+            manage billing
+          </button>
+        </Group>
+
+        <Group title="about">
+          <Link
+            to="/onboarding"
+            className="focus-ring tactile mb-3 inline-flex items-center gap-2 rounded-pill bg-white/[0.06] px-4 py-2 text-[0.82rem] lowercase text-content-primary transition-colors hover:bg-white/[0.12]"
+          >
+            <Check size={13} strokeWidth={2.25} /> re-run setup
+          </Link>
+          <ul className="space-y-2 text-[0.9rem] text-content-secondary lowercase">
+            <li>Forma Web v1.0.0</li>
+            <li>Privacy Policy</li>
+            <li>Terms of Service</li>
+            <li>Help & Support</li>
+          </ul>
+        </Group>
+      </div>
+    </div>
+  );
+}

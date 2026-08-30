@@ -1,0 +1,390 @@
+/* =========================================================================
+   Forma — Material / surface primitives
+   Named surface states. Not every element gets the same radius/blur/border.
+   ========================================================================= */
+
+/* 7.1 surface-soft — broad molded UI regions ------------------------------ */
+.surface-soft {
+  position: relative;
+  border-radius: var(--radius-large);
+  background:
+    linear-gradient(150deg, rgba(255, 244, 250, 0.13), rgba(255, 244, 250, 0.05) 60%, rgba(122, 23, 79, 0.06));
+  box-shadow: var(--shadow-soft), inset 0 1px 0 rgba(255, 255, 255, 0.16);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+/* 7.2 surface-raised — tactile primary controls ------------------------- */
+.surface-raised {
+  position: relative;
+  border-radius: var(--radius-medium);
+  background:
+    linear-gradient(155deg, rgba(255, 239, 248, 0.22), rgba(255, 239, 248, 0.10) 55%, rgba(122, 23, 79, 0.08));
+  box-shadow: var(--shadow-raised);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  transition: box-shadow var(--dur-hover) var(--ease-luxury),
+    filter var(--dur-hover) var(--ease-luxury),
+    transform var(--dur-press) var(--ease-luxury);
+}
+.surface-raised--interactive:hover {
+  filter: brightness(1.05);
+  box-shadow:
+    20px 26px 66px rgba(60, 18, 46, 0.26),
+    -12px -14px 36px rgba(255, 221, 239, 0.09),
+    inset 0 1px 0 rgba(255, 255, 255, 0.30);
+}
+.surface-raised--interactive:active {
+  transform: scale(0.99);
+  box-shadow: var(--shadow-press);
+}
+
+/* 7.3 surface-recessed — wells, dial tracks, date strips, inputs -------- */
+.surface-recessed {
+  position: relative;
+  border-radius: var(--radius-medium);
+  background:
+    radial-gradient(120% 120% at 50% 20%, rgba(20, 6, 16, 0.5), rgba(48, 16, 40, 0.36) 70%);
+  box-shadow: var(--shadow-recessed);
+  border: 1px solid rgba(255, 255, 255, 0.03);
+}
+
+/* 7.4 surface-glass — floating nav + a couple of overlays.
+   backdrop-filter is one of the most expensive paints, so it is small (12px),
+   dropped entirely on touch / small screens and under reduced-transparency,
+   and the translucent fill alone still reads as frosted over the atmosphere. */
+.surface-glass {
+  position: relative;
+  border-radius: var(--radius-large);
+  background: linear-gradient(
+      180deg,
+      rgba(41, 22, 35, 0.55),
+      rgba(33, 18, 28, 0.42) 42%,
+      rgba(33, 18, 28, 0.40)
+    );
+  backdrop-filter: blur(12px) saturate(1.25);
+  -webkit-backdrop-filter: blur(12px) saturate(1.25);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  box-shadow:
+    inset 0 1px 0 var(--specular),
+    0 24px 70px -30px rgba(20, 4, 16, 0.7);
+}
+
+@media (hover: none), (max-width: 640px), (prefers-reduced-transparency: reduce) {
+  .surface-glass {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    background: linear-gradient(
+        180deg,
+        rgba(45, 25, 39, 0.72),
+        rgba(33, 18, 28, 0.66)
+      );
+  }
+}
+
+/* 7.5 surface-float — pebble/capsule indicators, FAB, dial thumb -------- */
+.surface-float {
+  position: relative;
+  border-radius: var(--radius-pill);
+  background:
+    radial-gradient(120% 120% at 32% 24%, rgba(255, 245, 250, 0.5), rgba(232, 165, 197, 0.28) 45%, rgba(122, 23, 79, 0.4));
+  box-shadow: var(--shadow-float);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+/* specular top-edge helper (compose onto any surface) ------------------- */
+.specular-edge::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: radial-gradient(120% 60% at 50% -20%, rgba(255, 255, 255, 0.22), transparent 68%);
+}
+
+/* =========================================================================
+   Notis patterns — dot-matrix kickers, pill rows, island bars, AI card,
+   circular controls, gradient-mesh tiles. Palette unchanged.
+   ========================================================================= */
+
+/* checklist / list row — a recessed pill with a circular indicator */
+.pill-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  border-radius: var(--radius-pill);
+  padding: 0.6rem 1rem 0.6rem 0.7rem;
+  background: rgba(255, 244, 250, 0.055);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  transition:
+    background var(--dur-hover) var(--ease-luxury),
+    border-color var(--dur-hover) var(--ease-luxury);
+}
+.pill-row:hover {
+  background: rgba(255, 244, 250, 0.085);
+  border-color: rgba(255, 255, 255, 0.09);
+}
+.pill-row__dot {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  border-radius: 999px;
+  border: 1.5px solid rgba(255, 241, 248, 0.28);
+  display: grid;
+  place-items: center;
+}
+.pill-row__dot--on {
+  border-color: transparent;
+  background: var(--accent-pink);
+  color: var(--btn-white);
+}
+
+/* dark island bar — the Notis Dynamic-Island toolbar */
+.island {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  border-radius: var(--radius-pill);
+  padding: 0.4rem;
+  background: linear-gradient(180deg, rgba(31, 17, 26, 0.92), rgba(22, 12, 19, 0.9));
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 18px 44px -18px rgba(12, 4, 10, 0.8), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+/* white circular action button */
+.btn-white {
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--btn-white);
+  color: var(--btn-white-ink);
+  box-shadow: 0 4px 14px -4px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+
+/* circular translucent icon button (headers, card actions) */
+.icon-btn {
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: rgba(255, 244, 250, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  color: var(--text-secondary);
+  transition: color var(--dur-hover) var(--ease-luxury),
+    background var(--dur-hover) var(--ease-luxury);
+}
+.icon-btn:hover {
+  color: var(--text-primary);
+  background: rgba(255, 244, 250, 0.12);
+}
+
+/* the AI-assistant card — frosted body, no lit edge */
+.ai-card {
+  position: relative;
+  isolation: isolate;
+  border-radius: var(--radius-large);
+  background: linear-gradient(180deg, rgba(255, 244, 250, 0.08), rgba(29, 15, 25, 0.5) 30%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: var(--shadow-soft);
+  overflow: hidden;
+}
+
+/* =========================================================================
+   MetricCard — the single health-metric card (reference: dark bento tiles with
+   dot-matrix numerals + a soft single-colour bloom, plus full-gradient "vivid"
+   hero cards). Drive the colour family with data-tone; treatment with data-variant.
+   ========================================================================= */
+.metric-card {
+  --tone-color: #d93c8d;
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--radius-large); /* 32px — one card radius across the app */
+  padding: 1.15rem 1.2rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow:
+    0 22px 46px -24px rgba(30, 5, 24, 0.66),
+    inset 0 1px 0 rgba(255, 255, 255, 0.14);
+  overflow: hidden;
+  transition:
+    transform var(--dur-hover) var(--ease-luxury),
+    box-shadow var(--dur-hover) var(--ease-luxury);
+}
+
+.metric-card[data-tone="pink"] { --tone-color: #d1519a; }
+.metric-card[data-tone="cyan"] { --tone-color: #5ba3b4; }
+.metric-card[data-tone="lime"] { --tone-color: #9cc158; }
+.metric-card[data-tone="amber"] { --tone-color: #d6934a; }
+.metric-card[data-tone="mauve"] { --tone-color: #b661a0; }
+.metric-card[data-tone="violet"] { --tone-color: #7a68d8; }
+
+/* glow — rides on the page atmosphere (no opaque black fill), lifted only by a
+   soft bloom of the tone colour, kept off the card edge, and a faint wash */
+.metric-card[data-variant="glow"] {
+  background:
+    radial-gradient(70% 58% at 26% 2%, color-mix(in srgb, var(--tone-color) 30%, transparent), transparent 68%),
+    radial-gradient(60% 54% at 96% 102%, color-mix(in srgb, var(--tone-color) 11%, transparent), transparent 72%),
+    linear-gradient(180deg, rgba(255, 244, 250, 0.06), rgba(255, 244, 250, 0.025));
+  box-shadow:
+    0 22px 46px -24px rgba(46, 12, 38, 0.42),
+    inset 0 1px 0 rgba(255, 255, 255, 0.07);
+}
+
+/* vivid — full gradient card, modelled on the "Last test" reference. The dark
+   end of the gradient is the page background, never black. */
+.metric-card[data-variant="vivid"] {
+  background:
+    radial-gradient(94% 78% at 74% -12%, color-mix(in srgb, var(--tone-color) 100%, white 16%), transparent 62%),
+    radial-gradient(74% 68% at 14% 98%, color-mix(in srgb, var(--tone-color) 44%, white 42%), transparent 62%),
+    radial-gradient(64% 62% at 106% 46%, color-mix(in srgb, var(--tone-color) 30%, var(--background)), transparent 68%),
+    linear-gradient(150deg, color-mix(in srgb, var(--tone-color) 60%, var(--background-soft)) 0%, color-mix(in srgb, var(--tone-color) 30%, var(--background)) 84%);
+  border-color: rgba(255, 255, 255, 0.16);
+  box-shadow:
+    0 28px 56px -22px color-mix(in srgb, var(--tone-color) 40%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.26);
+}
+
+.metric-card--link {
+  cursor: pointer;
+}
+.metric-card--link:hover {
+  transform: translateY(-2px);
+  box-shadow:
+    0 34px 62px -24px rgba(30, 5, 24, 0.72),
+    inset 0 1px 0 rgba(255, 255, 255, 0.22);
+}
+.metric-card[data-variant="vivid"].metric-card--link:hover {
+  box-shadow:
+    0 34px 66px -20px color-mix(in srgb, var(--tone-color) 48%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.26);
+}
+.metric-card--link:active {
+  transform: translateY(0) scale(0.994);
+}
+
+.metric-card__label {
+  font-size: 0.9rem;
+  font-weight: 500;
+  letter-spacing: -0.006em;
+  color: rgba(255, 255, 255, 0.9);
+}
+.metric-card[data-variant="glow"] .metric-card__label {
+  color: var(--text-secondary);
+}
+
+.metric-card__action {
+  display: grid;
+  place-items: center;
+  height: 28px;
+  width: 28px;
+  flex-shrink: 0;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.13);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: rgba(255, 255, 255, 0.82);
+  transition:
+    background var(--dur-hover) var(--ease-luxury),
+    color var(--dur-hover) var(--ease-luxury),
+    transform var(--dur-press) var(--ease-luxury);
+}
+.metric-card[data-variant="glow"] .metric-card__action {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-tertiary);
+}
+.metric-card__action:hover {
+  background: rgba(255, 255, 255, 0.24);
+  color: #fff;
+}
+.metric-card__action:active {
+  transform: scale(0.9);
+}
+
+.metric-card__value {
+  font-family: "Space Grotesk", ui-monospace, monospace;
+  font-weight: 500;
+  line-height: 0.94;
+  letter-spacing: -0.028em;
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+}
+.metric-card__value .metric-card__value-unit {
+  font-size: 0.44em;
+  font-weight: 500;
+  letter-spacing: 0;
+  color: rgba(255, 255, 255, 0.5);
+  margin-left: 0.28em;
+}
+.metric-card[data-variant="glow"] .metric-card__value .metric-card__value-unit {
+  color: var(--text-tertiary);
+}
+.metric-card__unit {
+  font-size: 0.8rem;
+  font-weight: 500;
+  letter-spacing: 0.005em;
+  color: rgba(255, 255, 255, 0.5);
+}
+.metric-card[data-variant="glow"] .metric-card__unit {
+  color: var(--text-tertiary);
+}
+.metric-card__delta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.28rem;
+  font-family: "Space Grotesk", ui-monospace, monospace;
+  font-size: 0.76rem;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+}
+.metric-card__delta--up { color: var(--accent-lime); }
+.metric-card__delta--down { color: var(--accent-coral); }
+.metric-card__delta--flat { color: var(--text-tertiary); }
+.metric-card__delta--warn { color: var(--accent-amber); }
+
+.metric-card__goal-track {
+  position: relative;
+  height: 5px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+}
+.metric-card__goal-fill {
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  background: currentColor;
+  box-shadow: 0 0 12px currentColor;
+  transform-origin: left center;
+}
+.metric-card[data-variant="glow"] .metric-card__unit {
+  color: var(--text-tertiary);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .metric-card,
+  .metric-card--link:hover,
+  .metric-card--link:active {
+    transition: none;
+    transform: none;
+  }
+}
+
+/* accessible focus ring — a clean neutral ring, keyboard only, no glow ---- */
+.focus-ring:focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 2px var(--background),
+    0 0 0 3.5px rgba(255, 255, 255, 0.5);
+}
+/* pointer clicks shouldn't leave a ring stuck on cards */
+.focus-ring:focus:not(:focus-visible) {
+  box-shadow: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .surface-raised,
+  .surface-raised--interactive:hover,
+  .surface-raised--interactive:active {
+    transition: none;
+    transform: none;
+  }
+}

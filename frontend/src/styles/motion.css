@@ -1,0 +1,215 @@
+/* =========================================================================
+   Forma — Motion system
+   Subtle, GPU-cheap: transform + opacity only, no layout-triggering props.
+   ========================================================================= */
+
+.ease-luxury { transition-timing-function: var(--ease-luxury); }
+
+/* section / list entry — cross-fade with a short lift */
+@keyframes forma-fade {
+  from { opacity: 0; transform: translate3d(0, 10px, 0); }
+  to   { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+@keyframes forma-fade-soft {
+  from { opacity: 0; transform: translate3d(0, 5px, 0); }
+  to   { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+.animate-rise {
+  animation: forma-fade 0.45s var(--ease-luxury) both;
+}
+
+/* Stagger.Item — mount lift + fade with a per-position delay (CSS only) */
+.stg {
+  opacity: 0;
+  animation: forma-fade 0.5s var(--ease-luxury) both;
+}
+.stg:nth-child(1)  { animation-delay: 30ms; }
+.stg:nth-child(2)  { animation-delay: 90ms; }
+.stg:nth-child(3)  { animation-delay: 150ms; }
+.stg:nth-child(4)  { animation-delay: 210ms; }
+.stg:nth-child(5)  { animation-delay: 270ms; }
+.stg:nth-child(6)  { animation-delay: 330ms; }
+.stg:nth-child(7)  { animation-delay: 390ms; }
+.stg:nth-child(8)  { animation-delay: 450ms; }
+.stg:nth-child(9)  { animation-delay: 510ms; }
+.stg:nth-child(n+10) { animation-delay: 570ms; }
+
+/* chat message entry — plays once as each message is added to the DOM */
+.msg-in {
+  animation: forma-fade-soft 0.32s var(--ease-luxury) both;
+}
+
+/* route loading bar */
+.route-progress {
+  position: fixed;
+  inset: 0 0 auto 0;
+  height: 2px;
+  z-index: 60;
+  pointer-events: none;
+  transform-origin: left center;
+  transform: scaleX(0);
+  opacity: 0;
+  background: linear-gradient(90deg, var(--accent-pink), var(--accent-coral) 55%, var(--accent-amber));
+  box-shadow: 0 0 12px rgba(213, 26, 122, 0.55);
+}
+.route-progress.is-active {
+  opacity: 1;
+  transform: scaleX(0.9);
+  transition: transform 7s cubic-bezier(0.12, 0.85, 0.25, 1);
+}
+.route-progress.is-done {
+  opacity: 0;
+  transform: scaleX(1);
+  transition: transform 0.2s ease, opacity 0.3s ease 0.12s;
+}
+@media (prefers-reduced-motion: reduce) {
+  .route-progress { transition: opacity 0.2s !important; }
+}
+
+/* data-viz reveal — bars grow from the baseline, lines draw themselves in */
+@keyframes bar-grow {
+  from { transform: scaleY(0); }
+  to   { transform: scaleY(1); }
+}
+.bar-grow {
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+  animation: bar-grow 0.55s var(--ease-luxury) both;
+}
+@keyframes line-draw {
+  to { stroke-dashoffset: 0; }
+}
+.line-draw {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: line-draw 0.9s var(--ease-luxury) 0.1s both;
+}
+@keyframes area-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+.area-in { animation: area-in 0.9s var(--ease-luxury) 0.35s both; }
+
+/* radial ring — sweeps clockwise to its target on reveal */
+@keyframes ring-fill {
+  from { stroke-dashoffset: var(--ring-circumference); }
+}
+.ring-fill {
+  animation: ring-fill 0.95s var(--ease-luxury) 0.15s both;
+}
+
+/* Jarvis orb — continuous scan-ring rotation (transform only, compositor) */
+@keyframes orb-rotate {
+  to { transform: rotate(360deg); }
+}
+@keyframes orb-rotate-rev {
+  to { transform: rotate(-360deg); }
+}
+.orb-spin-slow { animation: orb-rotate 26s linear infinite; }
+.orb-spin-mid { animation: orb-rotate 18s linear infinite; }
+.orb-spin-rev { animation: orb-rotate-rev 34s linear infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .orb-spin-slow, .orb-spin-mid, .orb-spin-rev { animation: none; }
+}
+
+/* instrument graphics — a slow breathing pulse for decorative radar/rings */
+@keyframes radar-breathe {
+  0%, 100% { transform: scale(1); opacity: 0.85; }
+  50%      { transform: scale(1.045); opacity: 1; }
+}
+.radar-breathe {
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+  animation: radar-breathe 9s var(--ease-luxury) infinite;
+}
+
+/* -------------------------------------------------------------------------
+   Global interaction motion — every interactive element inherits a smooth
+   colour/shadow transition so hover, focus and disabled states ease instead
+   of snapping. Deliberately NOT transitioning transform/opacity here: Motion
+   drives those on its own elements and a CSS transition would fight it.
+   ------------------------------------------------------------------------- */
+a,
+button,
+summary,
+label,
+select,
+input,
+textarea,
+[role="button"],
+[role="tab"],
+[role="switch"],
+[role="menuitem"] {
+  transition-property: color, background-color, border-color, box-shadow,
+    text-decoration-color, outline-color, fill, stroke;
+  transition-duration: var(--dur-hover);
+  transition-timing-function: var(--ease-luxury);
+}
+
+/* tactile feedback — the physical "give" on press. Small controls dip in
+   scale, never a bounce; hover only brightens. Colour props kept in the list
+   so hover/disabled tints still ease (the shorthand would otherwise drop the
+   global rule above). */
+/* doubled class so this beats a Tailwind `transition-colors` utility on the
+   same element (which would otherwise drop the transform easing). */
+.tactile.tactile {
+  transition:
+    color var(--dur-hover) var(--ease-luxury),
+    background-color var(--dur-hover) var(--ease-luxury),
+    border-color var(--dur-hover) var(--ease-luxury),
+    filter var(--dur-hover) var(--ease-luxury),
+    box-shadow var(--dur-hover) var(--ease-luxury),
+    transform var(--dur-press) var(--ease-luxury);
+}
+.tactile:hover { filter: brightness(1.05); }
+.tactile:active { transform: scale(0.965); }
+@media (hover: none) {
+  .tactile:hover { filter: none; }
+}
+
+/* lift — cards, tiles and list rows that rise toward the pointer. Opt-in so
+   it never lands on a Motion-controlled element. */
+.lift.lift {
+  transition:
+    color var(--dur-hover) var(--ease-luxury),
+    background-color var(--dur-hover) var(--ease-luxury),
+    border-color var(--dur-hover) var(--ease-luxury),
+    transform var(--dur-hover) var(--ease-luxury),
+    box-shadow var(--dur-hover) var(--ease-luxury);
+}
+.lift:hover { transform: translateY(-3px); }
+.lift:active { transform: translateY(-1px) scale(0.996); }
+
+/* icon nudge — a chevron / arrow that eases forward when its .group is hovered */
+.nudge-x,
+.nudge-up {
+  transition: transform var(--dur-hover) var(--ease-luxury);
+}
+.group:hover .nudge-x { transform: translateX(3px); }
+.group:hover .nudge-up { transform: translate(2px, -2px); }
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-rise,
+  .stg {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+  .tactile,
+  .lift,
+  .lift:hover,
+  .lift:active,
+  .nudge-x,
+  .nudge-up {
+    transition: none !important;
+    transform: none !important;
+    filter: none !important;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}

@@ -1,0 +1,106 @@
+/* =========================================================================
+   Forma — Typography
+   Urbanist for text; Space Grotesk (tabular figures) for every number and the
+   small technical labels. Hierarchy from size + contrast, not weight.
+   ========================================================================= */
+
+body {
+  font-family: "Urbanist", ui-sans-serif, system-ui, sans-serif;
+  font-weight: 400;
+  letter-spacing: -0.005em;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* every number — aligned columns, technical feel */
+.num,
+.tabular-nums {
+  font-family: "Space Grotesk", ui-monospace, SFMono-Regular, monospace;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1, "cv01" 1;
+}
+
+/* large health values behave like graphic objects */
+.metric-numeral {
+  font-family: "Space Grotesk", ui-monospace, monospace;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+  letter-spacing: -0.02em;
+  line-height: 0.92;
+}
+
+.metric-hero {
+  font-family: "Space Grotesk", ui-monospace, monospace;
+  font-size: var(--type-display-xl);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+  letter-spacing: -0.035em;
+  line-height: 0.9;
+}
+
+/* compact label */
+.label-soft {
+  font-size: var(--type-meta);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--text-tertiary);
+}
+
+/* instrument label — small technical kicker (eyebrows, card labels, timestamps) */
+.label-instrument {
+  font-family: "Space Grotesk", ui-monospace, monospace;
+  font-size: 0.72rem;
+  line-height: 1.15;
+  font-weight: 500;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+.label-instrument.\!lowercase,
+.label-instrument .lowercase {
+  text-transform: uppercase;
+}
+
+.text-title {
+  font-size: var(--type-title);
+  font-weight: 500;
+  letter-spacing: -0.03em;
+  line-height: 1.05;
+}
+
+.text-heading {
+  font-size: var(--type-heading);
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+}
+
+/* two-tone "ghost" headline tail — the Notis black + grey move */
+.ghost {
+  color: var(--text-tertiary);
+}
+
+/* blinking text caret for editable-feeling headings */
+.caret::after {
+  content: "";
+  display: inline-block;
+  width: 2px;
+  height: 0.82em;
+  margin-left: 0.12em;
+  transform: translateY(0.06em);
+  background: currentColor;
+  animation: caret-blink 1.1s steps(1) infinite;
+}
+@keyframes caret-blink {
+  0%, 50% { opacity: 1; }
+  50.01%, 100% { opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .caret::after { animation: none; opacity: 0.6; }
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}

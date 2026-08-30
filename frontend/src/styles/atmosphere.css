@@ -1,0 +1,111 @@
+/* =========================================================================
+   Forma — Atmospheric background system
+   A single fixed, statically-painted gradient. No animated blurred layers
+   (transform/scale on a blurred element re-rasterises every frame). The base
+   gradient is rich enough to carry the whole atmosphere on its own.
+   ========================================================================= */
+
+.atmosphere {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+  background:
+    radial-gradient(120% 90% at 50% -14%, rgba(122, 23, 79, 0.40), transparent 60%),
+    radial-gradient(90% 70% at 8% 2%, rgba(255, 156, 99, 0.20), transparent 55%),
+    radial-gradient(95% 75% at 20% 26%, rgba(232, 165, 197, 0.22), transparent 55%),
+    radial-gradient(85% 70% at 92% 12%, rgba(77, 124, 255, 0.16), transparent 55%),
+    radial-gradient(75% 62% at 84% 58%, rgba(79, 214, 166, 0.11), transparent 55%),
+    radial-gradient(95% 85% at 66% 104%, rgba(213, 26, 122, 0.28), transparent 60%),
+    linear-gradient(168deg, #34132D 0%, #1B0E1A 48%, #100A11 100%);
+}
+
+/* legacy hooks — kept so older markup stays valid, render nothing */
+.atmosphere__field {
+  display: none;
+}
+
+/* --------------------------------------------------------------------------
+   Aurora drift — three very slow, very soft colour fields that translate across
+   the viewport. No filter:blur (the gradient's own transparent falloff does the
+   softening), so the animation stays on the compositor — transform only. Pauses
+   under prefers-reduced-motion.
+   -------------------------------------------------------------------------- */
+.atmosphere__aurora {
+  position: absolute;
+  border-radius: 999px;
+  pointer-events: none;
+  will-change: transform;
+  opacity: 0.42;
+}
+.atmosphere__aurora--1 {
+  width: 62vw;
+  height: 62vw;
+  top: -24vw;
+  left: -18vw;
+  background: radial-gradient(circle, rgba(213, 26, 122, 0.28), transparent 66%);
+  animation: aurora-drift-1 42s ease-in-out infinite alternate;
+}
+.atmosphere__aurora--2 {
+  width: 56vw;
+  height: 56vw;
+  right: -24vw;
+  bottom: -28vw;
+  background: radial-gradient(circle, rgba(122, 23, 79, 0.34), transparent 68%);
+  animation: aurora-drift-2 58s ease-in-out infinite alternate;
+}
+.atmosphere__aurora--3 {
+  width: 46vw;
+  height: 46vw;
+  top: 22%;
+  right: 2%;
+  background: radial-gradient(circle, rgba(179, 101, 150, 0.18), transparent 72%);
+  animation: aurora-drift-3 48s ease-in-out infinite alternate;
+}
+@keyframes aurora-drift-1 {
+  from { transform: translate3d(0, 0, 0) scale(1); }
+  to { transform: translate3d(9vw, 7vw, 0) scale(1.18); }
+}
+@keyframes aurora-drift-2 {
+  from { transform: translate3d(0, 0, 0) scale(1.12); }
+  to { transform: translate3d(-8vw, -6vw, 0) scale(1); }
+}
+@keyframes aurora-drift-3 {
+  from { transform: translate3d(0, 0, 0) scale(1); }
+  to { transform: translate3d(-6vw, 5vw, 0) scale(1.22); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .atmosphere__aurora {
+    animation: none;
+  }
+}
+
+.atmosphere__vignette {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(120% 100% at 50% 36%, transparent 40%, rgba(16, 10, 17, 0.58) 100%);
+}
+
+.atmosphere__grain {
+  position: absolute;
+  inset: 0;
+  opacity: 0.028;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-repeat: repeat;
+}
+
+/* local glow behind a screen's primary metric/control — static soft radial,
+   softness comes from the gradient stops, not a filter. */
+.local-glow {
+  position: absolute;
+  border-radius: 999px;
+  pointer-events: none;
+  z-index: -1;
+  background: radial-gradient(
+    circle,
+    rgba(213, 26, 122, 0.30),
+    rgba(122, 23, 79, 0.12) 42%,
+    transparent 74%
+  );
+}
