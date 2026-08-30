@@ -15,6 +15,17 @@
   --background-wine: #7A174F;
   --background-aubergine: #34132D;
 
+  /* ---- Appearance engine (driven by /me/settings appearance block) ---
+     Defaults reproduce the shipped look. The SettingsProvider overrides
+     these on <html> from the user's preset / custom values. Every surface
+     is translucent "liquid glass" over --app-bg. */
+  --app-bg: #170D17;         /* the solid (or gradient / image) ground */
+  --app-bg-dim: 0;
+  --glass-opacity: 0.72;     /* 0.35–0.95 — scales every glass fill      */
+  --glass-blur: 18px;        /* 0–40px    — backdrop blur on glass       */
+  --glass-tint-rgb: 42, 22, 35;   /* rgb of the glass tint colour       */
+  --accent: #D51A7A;
+
   /* ---- Surfaces (material states) ------------------------------------ */
   --surface: rgba(255, 244, 250, 0.10);
   --surface-glass: rgba(255, 244, 250, 0.13);

@@ -11,11 +11,11 @@ import { PageSkeleton } from "./skeleton/PageSkeleton";
 const ICON = { size: 19, strokeWidth: 1.75 } as const;
 
 const NAV: NavItem[] = [
-  { to: "/dashboard", label: "home", end: true, icon: <House {...ICON} /> },
-  { to: "/workouts", label: "train", icon: <Dumbbell {...ICON} /> },
-  { to: "/goals", label: "goals", icon: <Target {...ICON} /> },
-  { to: "/trainer", label: "trainer", icon: <MessageSquare {...ICON} /> },
-  { to: "/progress", label: "progress", icon: <TrendingUp {...ICON} /> },
+  { to: "/dashboard", label: "home", end: true, icon: <House {...ICON} />, feature: "dashboard" },
+  { to: "/workouts", label: "train", icon: <Dumbbell {...ICON} />, feature: "workouts" },
+  { to: "/goals", label: "goals", icon: <Target {...ICON} />, feature: "goals" },
+  { to: "/trainer", label: "trainer", icon: <MessageSquare {...ICON} />, feature: "trainer" },
+  { to: "/progress", label: "progress", icon: <TrendingUp {...ICON} />, feature: "progress_basic" },
 ];
 
 const SECONDARY: NavItem[] = [

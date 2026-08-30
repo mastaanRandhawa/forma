@@ -11,8 +11,34 @@ hooks.ts              React hooks — useDashboard(), useGoals(), … → { data
 demo.ts               demo dataset in DTO shape; served by the hooks when no VITE_API_URL
 adapt.ts              DTO → presentational-component shapes (goalToWidget, insightToCard, …)
 dashboard-context.tsx <DashboardProvider> so dashboard cards read one shared aggregate
+settings.tsx          <SettingsProvider> — the /me/settings bundle: appearance
+                      (→ CSS vars), progressive disclosure (<Quiet>), unlock
+                      progression (<FeatureGate>, nav gating). Demo mode persists
+                      changes to localStorage.
 index.ts              re-exports
 ```
+
+## The settings bundle
+
+`<SettingsProvider>` (in `main.tsx`, above the router) fetches `GET /me/settings`
+once, or a demo default. It exposes:
+
+```tsx
+const { bundle, update, applyPreset, setGating } = useSettings();
+const appearance = useAppearance();                 // applied to --app-bg, --glass-*, --accent
+const mode = useWidgetMode("readiness-ring");        // "always" | "on_interaction"
+const { has, tier, nextUnlock } = useProgression();  // has("store") gates routes + nav
+```
+
+- **Appearance** — `applyAppearance()` writes `--app-bg` (solid / gradient / image),
+  `--glass-opacity`, `--glass-blur`, `--glass-tint-rgb`, `--accent`. Every panel
+  is `backdrop-filter` glass over that background (see `surfaces.css`).
+  6 presets in `PRESETS`; the Settings page picks them.
+- **Disclosure** — `<Quiet widgetKey="…">` hides a widget's *text* (rings, bars,
+  charts stay) until hovered, when the mode is `on_interaction`. Toggle in
+  Settings → "calm mode".
+- **Progression** — routes wrapped in `<FeatureGate feature="…">`, nav items
+  filtered by `has()`. "Ease me in" in Settings turns gating on.
 
 ## Setup — demo mode vs. live
 

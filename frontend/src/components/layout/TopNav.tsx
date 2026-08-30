@@ -2,8 +2,10 @@ import { ReactNode, useEffect, useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import { AnimatePresence, LayoutGroup, motion, useReducedMotion } from "motion/react";
 import { CoinBalance } from "../CoinBalance";
+import { useProgression } from "../../api/settings";
+import type { FeatureKey } from "../../api/types";
 
-export type NavItem = { to: string; label: string; icon: ReactNode; end?: boolean };
+export type NavItem = { to: string; label: string; icon: ReactNode; end?: boolean; feature?: FeatureKey };
 
 /** Small geometric wordmark glyph — a soft chevron cut from the pink gradient. */
 function Mark() {
@@ -86,9 +88,12 @@ export function TopNav({
   const loc = useLocation();
   const reduce = useReducedMotion();
   const scrolled = useScrolled();
+  const { has } = useProgression();
   const [menuOpen, setMenuOpen] = useState(false);
   const isActive = (n: NavItem) =>
     n.end ? loc.pathname === n.to : loc.pathname.startsWith(n.to);
+  // gated destinations drop out of the nav until unlocked (less on screen early)
+  const visibleItems = items.filter((n) => !n.feature || has(n.feature));
 
   // close the mobile menu on navigation
   useEffect(() => setMenuOpen(false), [loc.pathname]);
@@ -122,7 +127,7 @@ export function TopNav({
           "0 0 0 0 rgba(0, 0, 0, 0), inset 0 1px 0 rgba(255, 255, 255, 0)",
       };
 
-  const menuItems = [...items, ...secondary, { to: "/settings", label: "settings", icon: <ProfileGlyph /> }];
+  const menuItems = [...visibleItems, ...secondary, { to: "/settings", label: "settings", icon: <ProfileGlyph /> }];
 
   return (
     <motion.header
@@ -162,7 +167,7 @@ export function TopNav({
             className="hidden items-center gap-0 sm:flex lg:absolute lg:left-1/2 lg:-translate-x-1/2 lg:gap-0.5"
             aria-label="Primary"
           >
-            {items.map((n) => {
+            {visibleItems.map((n) => {
               const active = isActive(n);
               return (
                 <NavLink

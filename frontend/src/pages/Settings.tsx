@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { Check, Plus } from "lucide-react";
+import { Check, Plus, Sparkles } from "lucide-react";
 import { PageHeader } from "../components/PageHeader";
 import { Reveal } from "../components/Reveal";
+import { useSettings, useAppearance, useProgression, PRESETS } from "../api/settings";
 
 function DeviceRow({ name, connected, sync }: { name: string; connected: boolean; sync?: string }) {
   const [on, setOn] = useState(connected);
@@ -32,11 +33,26 @@ function DeviceRow({ name, connected, sync }: { name: string; connected: boolean
   );
 }
 
-function Toggle({ label, defaultOn = false }: { label: string; defaultOn?: boolean }) {
-  const [on, setOn] = useState(defaultOn);
+function Toggle({
+  label,
+  defaultOn = false,
+  checked,
+  onChange,
+}: {
+  label: string;
+  defaultOn?: boolean;
+  checked?: boolean;
+  onChange?: (v: boolean) => void;
+}) {
+  const [internal, setInternal] = useState(defaultOn);
+  const on = checked ?? internal;
+  const toggle = () => {
+    if (onChange) onChange(!on);
+    else setInternal(!on);
+  };
   return (
     <button
-      onClick={() => setOn(!on)}
+      onClick={toggle}
       role="switch"
       aria-checked={on}
       aria-label={label}
@@ -68,12 +84,105 @@ function Group({ title, children }: { title: string; children: React.ReactNode }
   );
 }
 
+function AppearanceGroup() {
+  const appearance = useAppearance();
+  const { update, applyPreset } = useSettings();
+  return (
+    <Group title="appearance">
+      <p className="mb-4 text-[0.85rem] leading-relaxed text-content-secondary">
+        Pick a background. Every panel frosts over it as translucent glass.
+      </p>
+      <div className="grid grid-cols-3 gap-2">
+        {PRESETS.map((p) => {
+          const active = appearance.presetId === p.id;
+          const bg =
+            p.appearance.backgroundMode === "gradient" && p.appearance.backgroundGradient
+              ? `linear-gradient(${p.appearance.backgroundGradient.angle}deg, ${p.appearance.backgroundGradient.stops
+                  .map((s) => s.color)
+                  .join(", ")})`
+              : p.appearance.backgroundColor;
+          return (
+            <button
+              key={p.id}
+              onClick={() => applyPreset(p.id)}
+              className={`focus-ring tactile relative overflow-hidden rounded-2xl border p-3 text-left transition-colors ${
+                active ? "border-white/35" : "border-white/10 hover:border-white/25"
+              }`}
+              style={{ background: bg }}
+            >
+              <span
+                className="block h-8 w-full rounded-lg border border-white/10"
+                style={{
+                  background: `rgba(255,255,255,${(p.appearance.glass?.opacity ?? 0.7) * 0.14})`,
+                  backdropFilter: "blur(4px)",
+                }}
+              />
+              <span className="mt-2 block text-[0.74rem] lowercase text-white/90">{p.name}</span>
+              {p.premium && (
+                <span className="label-instrument mt-0.5 block !text-[0.58rem] text-[var(--accent-amber)]">
+                  premium
+                </span>
+              )}
+              {active && (
+                <Check size={13} strokeWidth={3} className="absolute right-2 top-2 text-white" />
+              )}
+            </button>
+          );
+        })}
+      </div>
+      <div className="mt-4 divide-y divide-[var(--line-soft)]">
+        <Toggle
+          label="Reduce motion"
+          checked={appearance.reduceMotion}
+          onChange={(v) => update({ appearance: { reduceMotion: v } })}
+        />
+      </div>
+    </Group>
+  );
+}
+
+function GettingStartedGroup() {
+  const { bundle, update, setGating } = useSettings();
+  const prog = useProgression();
+  const calm = bundle.disclosure.mode === "on_interaction";
+  return (
+    <Group title="getting started">
+      <p className="mb-3 text-[0.85rem] leading-relaxed text-content-secondary">
+        Forma starts small and opens up as you train, so there's less to take in
+        on day one.
+      </p>
+      <div className="divide-y divide-[var(--line-soft)]">
+        <Toggle
+          label="Calm mode — hide widget details until I hover"
+          checked={calm}
+          onChange={(v) => update({ disclosure: { mode: v ? "on_interaction" : "always" } })}
+        />
+        <Toggle
+          label="Ease me in (lock advanced screens until unlocked)"
+          checked={prog.gatingEnabled}
+          onChange={(v) => setGating(v)}
+        />
+      </div>
+      {prog.gatingEnabled && prog.nextUnlock && (
+        <div className="mt-4 flex items-center gap-2 rounded-2xl bg-white/[0.04] px-4 py-3 text-[0.82rem] text-content-secondary">
+          <Sparkles size={14} strokeWidth={2} className="shrink-0 text-[var(--accent-amber)]" />
+          next: {prog.nextUnlock.requirement} ({prog.nextUnlock.progress.current}/
+          {prog.nextUnlock.progress.target})
+        </div>
+      )}
+    </Group>
+  );
+}
+
 export default function Settings() {
   return (
     <div className="mx-auto max-w-[1120px]">
       <PageHeader eyebrow="account" title="settings" />
 
       <div className="grid gap-6 lg:grid-cols-2">
+        <AppearanceGroup />
+        <GettingStartedGroup />
+
         <Group title="profile">
           <div className="mb-4 flex items-center gap-4">
             <div className="h-14 w-14 rounded-full surface-float" />

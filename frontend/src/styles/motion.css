@@ -39,6 +39,33 @@
   animation: forma-fade-soft 0.32s var(--ease-luxury) both;
 }
 
+/* progressive disclosure (<Quiet>) — hide the words, keep the shapes.
+   Rings, bars and chart paths use explicit fill/stroke so they stay; text
+   (and currentColor icons) go transparent until the widget is hovered. */
+.quiet[data-quiet] :is(span, p, a, div, h1, h2, h3, h4, li, button, strong, em, time, label, small) {
+  transition: color 0.28s var(--ease-luxury);
+}
+.quiet[data-quiet] :is(text, tspan) {
+  transition: fill 0.28s var(--ease-luxury);
+}
+.quiet[data-quiet="hidden"]
+  :is(span, p, a, div, h1, h2, h3, h4, li, button, strong, em, time, label, small) {
+  color: transparent !important;
+  text-shadow: none !important;
+}
+.quiet[data-quiet="hidden"] :is(text, tspan) {
+  fill: transparent !important;
+}
+/* the identifying corner tag stays readable */
+.quiet[data-quiet="hidden"] > span[aria-hidden] {
+  color: var(--text-tertiary) !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  .quiet[data-quiet] * {
+    transition: none;
+  }
+}
+
 /* route loading bar */
 .route-progress {
   position: fixed;

@@ -20,6 +20,15 @@ import { insights as mockInsights, metricDetails, progressStats, ringStats, trai
 import { DashboardProvider } from "../api/dashboard-context";
 import { useDashboard, errorMessage } from "../api/hooks";
 import { insightToCard, volumeK } from "../api/adapt";
+import { Quiet } from "../components/Quiet";
+import { useProgression } from "../api/settings";
+
+const RING_WIDGET: Record<string, string> = {
+  readiness: "readiness-ring",
+  volume: "weekly-volume",
+  form: "avg-form",
+};
+const PSTAT_WIDGET: Record<string, string> = { week: "weekly-goal", protein: "protein-today" };
 
 export default function Home() {
   const [day, setDay] = useState(todayISO());
@@ -27,6 +36,7 @@ export default function Home() {
   const detailData = detail ? metricDetails[detail] : null;
 
   const { data: dash, error, initialLoading, refetch } = useDashboard();
+  const prog = useProgression();
 
   // live values where the aggregate carries them; the rest stay on the mock shape
   const rings = dash
@@ -74,16 +84,17 @@ export default function Home() {
                 {initialLoading
                   ? [0, 1, 2].map((i) => <Skel key={i} className="aspect-square rounded-[var(--radius-medium)] sm:aspect-auto sm:h-[104px]" />)
                   : rings.map((s) => (
-                      <RingStat
-                        key={s.id}
-                        label={s.label}
-                        value={s.value}
-                        sub={s.sub}
-                        pct={s.pct}
-                        tone={s.tone}
-                        onSelect={metricDetails[s.id] ? () => setDetail(s.id) : undefined}
-                        to={metricDetails[s.id] ? undefined : "/progress"}
-                      />
+                      <Quiet key={s.id} widgetKey={RING_WIDGET[s.id] ?? s.id} label={s.label}>
+                        <RingStat
+                          label={s.label}
+                          value={s.value}
+                          sub={s.sub}
+                          pct={s.pct}
+                          tone={s.tone}
+                          onSelect={metricDetails[s.id] ? () => setDetail(s.id) : undefined}
+                          to={metricDetails[s.id] ? undefined : "/progress"}
+                        />
+                      </Quiet>
                     ))}
               </Reveal>
 
@@ -94,7 +105,9 @@ export default function Home() {
 
               {/* main chart */}
               <Reveal onView delay={0.06}>
-                <TrendChartCard />
+                <Quiet widgetKey="training-volume-chart" label="training volume">
+                  <TrendChartCard />
+                </Quiet>
               </Reveal>
 
               {/* bottom row — progress stats */}
@@ -102,23 +115,26 @@ export default function Home() {
                 {initialLoading
                   ? [0, 1].map((i) => <Skel key={i} className="h-[120px] rounded-[var(--radius-large)]" />)
                   : pstats.map((s) => (
-                      <ProgressStat
-                        key={s.id}
-                        label={s.label}
-                        value={s.value}
-                        delta={s.delta}
-                        pct={s.pct}
-                        tone={s.tone}
-                        onSelect={metricDetails[s.id] ? () => setDetail(s.id) : undefined}
-                      />
+                      <Quiet key={s.id} widgetKey={PSTAT_WIDGET[s.id] ?? s.id} label={s.label}>
+                        <ProgressStat
+                          label={s.label}
+                          value={s.value}
+                          delta={s.delta}
+                          pct={s.pct}
+                          tone={s.tone}
+                          onSelect={metricDetails[s.id] ? () => setDetail(s.id) : undefined}
+                        />
+                      </Quiet>
                     ))}
               </Reveal>
 
               <Reveal onView>
-                <StreakWidget onSelect={() => setDetail("streak")} />
+                <Quiet widgetKey="workout-streak" label="workout streak">
+                  <StreakWidget onSelect={() => setDetail("streak")} />
+                </Quiet>
               </Reveal>
 
-              {insightItems.length > 0 && (
+              {prog.has("insights") && insightItems.length > 0 && (
                 <Reveal onView className="space-y-3">
                   {insightItems.map((i) => (
                     <InsightCard key={i.id} insight={i} />
@@ -135,29 +151,37 @@ export default function Home() {
               </Reveal>
 
               <Reveal onView delay={0.05}>
-                <ActivityList />
+                <Quiet widgetKey="up-next" label="up next">
+                  <ActivityList />
+                </Quiet>
               </Reveal>
 
               <Reveal onView delay={0.1}>
-                <Link
-                  to="/trainer"
-                  className="focus-ring group block ai-card p-4 transition-transform duration-200 hover:-translate-y-0.5"
-                >
-                  <div className="flex items-start gap-3">
-                    <KaiOrb size={40} state="idle" gaze className="mt-0.5" />
-                    <div className="min-w-0">
-                      <div className="label-soft lowercase">kai · your trainer</div>
-                      <p className="mt-1 line-clamp-3 text-[0.86rem] leading-relaxed text-content-secondary">
-                        {kaiMessage}
-                      </p>
+                <Quiet widgetKey="kai-message" label="message from kai">
+                  <Link
+                    to="/trainer"
+                    className="focus-ring group block ai-card p-4 transition-transform duration-200 hover:-translate-y-0.5"
+                  >
+                    <div className="flex items-start gap-3">
+                      <KaiOrb size={40} state="idle" gaze className="mt-0.5" />
+                      <div className="min-w-0">
+                        <div className="label-soft lowercase">kai · your trainer</div>
+                        <p className="mt-1 line-clamp-3 text-[0.86rem] leading-relaxed text-content-secondary">
+                          {kaiMessage}
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                </Link>
+                  </Link>
+                </Quiet>
               </Reveal>
 
-              <Reveal onView delay={0.15}>
-                <GoalsCard />
-              </Reveal>
+              {prog.has("goals") && (
+                <Reveal onView delay={0.15}>
+                  <Quiet widgetKey="goals-card" label="goals">
+                    <GoalsCard />
+                  </Quiet>
+                </Reveal>
+              )}
             </aside>
           </div>
         )}
