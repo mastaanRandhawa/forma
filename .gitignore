@@ -2,7 +2,12 @@ node_modules
 dist
 *.local
 .DS_Store
+*.png
 
+# not part of this repo — the backend lives in its own repository
+backend/
+design-review/
+.claude/
 .agents/
 .playwright-mcp/
-design-review/_palette.png
+skills-lock.json
