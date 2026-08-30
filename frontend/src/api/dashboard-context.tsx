@@ -9,3 +9,12 @@ const DashboardContext = createContext<Dashboard | null>(null);
 
 export const DashboardProvider = DashboardContext.Provider;
 export const useDashboardData = () => useContext(DashboardContext);
+
+/**
+ * Whether the real dashboard aggregate is still loading. Cards use this to show
+ * an empty/skeleton state instead of flashing local placeholder data.
+ */
+const DashboardLoadingContext = createContext<boolean>(false);
+
+export const DashboardLoadingProvider = DashboardLoadingContext.Provider;
+export const useDashboardLoading = () => useContext(DashboardLoadingContext);

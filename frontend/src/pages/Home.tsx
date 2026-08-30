@@ -12,7 +12,7 @@ import { InsightCard } from "../components/dashboard/InsightCard";
 import { GoalsCard } from "../components/dashboard/GoalsCard";
 import { KaiOrb, coachMood } from "../components/KaiOrb";
 import { ActivityList } from "../components/dashboard/ActivityList";
-import { DashboardProvider } from "../api/dashboard-context";
+import { DashboardProvider, DashboardLoadingProvider } from "../api/dashboard-context";
 import { buildLocalDashboard, readinessFromCheckin } from "../api/localDashboard";
 import { useFormaData, hasRecoveryData } from "../lib/localStore";
 import { currentStreak, sessionVolume, volumeInLastDays } from "../lib/fitness";
@@ -52,6 +52,7 @@ export default function Home() {
 
   const localDash = useMemo(() => buildLocalDashboard({ ...data, sessions }), [data, sessions]);
   const dash = API_ENABLED && apiDash.data ? apiDash.data : localDash;
+  const dashLoading = API_ENABLED && apiDash.initialLoading;
 
   const hasRecovery = API_ENABLED
     ? (apiDash.data?.readinessAvailable ?? "unavailable") !== "unavailable"
@@ -102,6 +103,7 @@ export default function Home() {
 
   return (
     <DashboardProvider value={dash}>
+     <DashboardLoadingProvider value={dashLoading}>
       <div className="mx-auto max-w-[1120px]">
         <Reveal>
           <Greeting />
@@ -198,6 +200,7 @@ export default function Home() {
           </aside>
         </div>
       </div>
+     </DashboardLoadingProvider>
     </DashboardProvider>
   );
 }

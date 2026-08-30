@@ -5,6 +5,8 @@ import { Reveal } from "../components/Reveal";
 import { EmptyState } from "../components/EmptyState";
 import { ErrorState } from "../components/ErrorState";
 import { Button, Panel, PillSelector } from "../components/primitives";
+import { ExerciseThumb } from "../components/ExerciseThumb";
+import { repdbThumb } from "../lib/repdb";
 import { useFormaData, startSession } from "../lib/localStore";
 import { sessionVolume } from "../lib/fitness";
 import { startApiSessionFromWorkout, fromKg } from "../lib/lifecycle";
@@ -152,7 +154,7 @@ export default function Workouts() {
                       : ex.target;
                   return (
                     <li key={i} className="pill-row">
-                      <span className="pill-row__dot label-instrument !text-[0.7rem] text-content-tertiary">{i + 1}</span>
+                      <ExerciseThumb src={repdbThumb(name)} alt="" size={30} />
                       <span className="flex-1 text-[0.92rem] text-content-primary">{name}</span>
                       <span className="label-instrument shrink-0">{target}</span>
                     </li>

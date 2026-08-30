@@ -50,3 +50,11 @@ One-time setup:
 Serving from a custom domain instead? Set repo variable `VITE_BASE=/` (or pass it
 in the workflow) so assets resolve from the domain root, and point `WEB_ORIGIN`
 at the domain.
+
+## Credits
+
+Exercise data & illustrations by [RepDB (repdb.co)](https://repdb.co), used under
+the RepDB free-tier licence (commercial in-app use with attribution). Folded into
+the app's own schema by `backend/npm run db:import-repdb`; the compact client
+catalog for the no-backend build is `frontend/src/lib/repdb.catalog.json`
+(regenerate with `node frontend/scripts/build-repdb-catalog.mjs`).
