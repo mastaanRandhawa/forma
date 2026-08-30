@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { PageHeader } from "../components/PageHeader";
 import { Reveal } from "../components/Reveal";
 import { PillSelector } from "../components/primitives";
@@ -32,6 +32,16 @@ export function BodyView({ range = "Today" }: { range?: (typeof RANGE)[number] }
   const [picked, setPicked] = useState<string | null>(null);
   const map = useMuscleMap(range.toLowerCase() as "today" | "week" | "month");
 
+  // Drive the muscle heatmap from the workouts completed in the selected range.
+  // Falls back to the static sample when no muscle-map data is available yet.
+  const activation = useMemo(() => {
+    const rows = map.data?.muscles ?? [];
+    if (rows.length === 0) return muscleActivation;
+    const out: Record<string, number> = {};
+    for (const m of rows) out[m.key] = m.score;
+    return out;
+  }, [map.data]);
+
   const ranked = API_ENABLED
     ? [...(map.data?.muscles ?? [])]
         .sort((a, b) => b.score - a.score)
@@ -55,16 +65,16 @@ export function BodyView({ range = "Today" }: { range?: (typeof RANGE)[number] }
             <PillSelector options={VIEWS} value={view} onChange={setView} />
           </div>
           <BodyMuscles
-            activation={muscleActivation}
+            activation={activation}
             view={view.toLowerCase() as "front" | "back"}
             className="w-full max-w-[280px] [&_svg]:h-auto [&_svg]:w-full"
             onSelect={(_id, name) => setPicked(name)}
           />
           <div className="mt-5 flex items-center gap-4 label-instrument">
             {[
-              ["rest", "#5A3C50"],
-              ["light", "#B36596"],
-              ["heavy", "var(--accent-pink)"],
+              ["rest", "#E5E7EB"],
+              ["light", "#FCA5A5"],
+              ["heavy", "#B91C1C"],
             ].map(([l, c]) => (
               <span key={l} className="flex items-center gap-1.5">
                 <span className="h-2.5 w-2.5 rounded-full" style={{ background: c }} />
