@@ -1,9 +1,13 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
-// Served from https://<user>.github.io/forma/ in production; root in dev.
-export default defineConfig(({ command }) => ({
-  base: command === "build" ? "/forma/" : "/",
+// Deployed at the root of a Cloudflare Pages domain (`*.pages.dev` or a custom
+// domain), so the base is "/". Override with VITE_BASE at build time if the app
+// is ever served from a sub-path again (e.g. GitHub Pages needed "/forma/").
+const base = process.env.VITE_BASE || "/";
+
+export default defineConfig({
+  base,
   plugins: [react()],
   server: { port: 5178, host: true },
   build: {
@@ -16,4 +20,4 @@ export default defineConfig(({ command }) => ({
       },
     },
   },
-}));
+});

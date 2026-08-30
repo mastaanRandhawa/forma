@@ -1,0 +1,3 @@
+# SPA fallback — every unmatched path is handled by the client router.
+# Static assets (/assets/*) are served directly; this only fires when no file matches.
+/*    /index.html   200
