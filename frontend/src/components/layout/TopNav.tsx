@@ -1,6 +1,6 @@
 import { ReactNode, useEffect, useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
-import { LayoutGroup, motion, useReducedMotion } from "motion/react";
+import { AnimatePresence, LayoutGroup, motion, useReducedMotion } from "motion/react";
 import { CoinBalance } from "../CoinBalance";
 
 export type NavItem = { to: string; label: string; icon: ReactNode; end?: boolean };
@@ -17,6 +17,29 @@ function Mark() {
       </defs>
       <path d="M5 23 L16 5 L27 23 L21.5 23 L16 13.5 L10.5 23 Z" fill="url(#forma-mark)" />
       <path d="M16 27 a10 10 0 0 1 -10 -10" stroke="var(--accent-pink)" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+/** Two bars that cross into an X when `open`. */
+function BurgerIcon({ open, reduce }: { open: boolean; reduce: boolean | null }) {
+  const t = reduce ? { duration: 0 } : { duration: 0.24, ease: [0.4, 0, 0.2, 1] as const };
+  return (
+    <svg viewBox="0 0 20 20" className="h-[18px] w-[18px]" aria-hidden>
+      <motion.line
+        x1="3" x2="17" y1="7" y2="7"
+        stroke="currentColor" strokeWidth="1.75" strokeLinecap="round"
+        animate={open ? { rotate: 45, y: 3 } : { rotate: 0, y: 0 }}
+        style={{ originX: "10px", originY: "7px" }}
+        transition={t}
+      />
+      <motion.line
+        x1="3" x2="17" y1="13" y2="13"
+        stroke="currentColor" strokeWidth="1.75" strokeLinecap="round"
+        animate={open ? { rotate: -45, y: -3 } : { rotate: 0, y: 0 }}
+        style={{ originX: "10px", originY: "13px" }}
+        transition={t}
+      />
     </svg>
   );
 }
@@ -49,6 +72,7 @@ function useScrolled(threshold = 10) {
  * bar at the top solidifies into a shorter glass pill — hairline border, deep
  * shadow and blur all easing in together. Wordmark left, primary destinations
  * centered with a spring "magic-move" indicator, wallet + profile right.
+ * On phones the destinations collapse into a burger menu.
  */
 export function TopNav({
   items,
@@ -62,8 +86,25 @@ export function TopNav({
   const loc = useLocation();
   const reduce = useReducedMotion();
   const scrolled = useScrolled();
+  const [menuOpen, setMenuOpen] = useState(false);
   const isActive = (n: NavItem) =>
     n.end ? loc.pathname === n.to : loc.pathname.startsWith(n.to);
+
+  // close the mobile menu on navigation
+  useEffect(() => setMenuOpen(false), [loc.pathname]);
+
+  // close on Escape; lock body scroll while open
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setMenuOpen(false);
+    window.addEventListener("keydown", onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prev;
+    };
+  }, [menuOpen]);
 
   const barState = scrolled
     ? {
@@ -80,6 +121,8 @@ export function TopNav({
         boxShadow:
           "0 0 0 0 rgba(0, 0, 0, 0), inset 0 1px 0 rgba(255, 255, 255, 0)",
       };
+
+  const menuItems = [...items, ...secondary, { to: "/settings", label: "settings", icon: <ProfileGlyph /> }];
 
   return (
     <motion.header
@@ -108,15 +151,15 @@ export function TopNav({
           >
             <Mark />
           </motion.span>
-          <span className="hidden text-[0.95rem] font-medium lowercase tracking-[0.01em] text-content-primary sm:block">
+          <span className="text-[0.95rem] font-medium lowercase tracking-[0.01em] text-content-primary">
             forma
           </span>
         </NavLink>
 
-        {/* center — primary destinations */}
+        {/* center — primary destinations (hidden on phones) */}
         <LayoutGroup id="topnav">
           <nav
-            className="flex items-center gap-0 lg:absolute lg:left-1/2 lg:-translate-x-1/2 lg:gap-0.5"
+            className="hidden items-center gap-0 sm:flex lg:absolute lg:left-1/2 lg:-translate-x-1/2 lg:gap-0.5"
             aria-label="Primary"
           >
             {items.map((n) => {
@@ -171,7 +214,7 @@ export function TopNav({
           </nav>
         </LayoutGroup>
 
-        {/* right — wallet + secondary + profile */}
+        {/* right — wallet + secondary + profile (sm+) / burger (phones) */}
         <div className="relative z-[2] flex shrink-0 items-center gap-1.5">
           {context && (
             <span className="label-instrument mr-1 hidden truncate xl:block">{context}</span>
@@ -201,12 +244,99 @@ export function TopNav({
           <NavLink
             to="/settings"
             aria-label="Profile"
-            className="focus-ring grid h-9 w-9 place-items-center rounded-pill surface-float"
+            className="focus-ring hidden h-9 w-9 place-items-center rounded-pill surface-float sm:grid"
           >
             <span className="text-[0.8rem] font-medium text-content-primary">A</span>
           </NavLink>
+
+          {/* burger — phones only */}
+          <button
+            type="button"
+            onClick={() => setMenuOpen((v) => !v)}
+            aria-label={menuOpen ? "Close menu" : "Open menu"}
+            aria-expanded={menuOpen}
+            className="focus-ring tactile grid h-9 w-9 place-items-center rounded-pill surface-float text-content-primary sm:hidden"
+          >
+            <BurgerIcon open={menuOpen} reduce={reduce} />
+          </button>
         </div>
       </motion.div>
+
+      {/* mobile menu — dropdown sheet under the bar */}
+      <AnimatePresence>
+        {menuOpen && (
+          <motion.div className="sm:hidden" initial="hidden" animate="shown" exit="hidden">
+            <motion.button
+              type="button"
+              aria-label="Close menu"
+              onClick={() => setMenuOpen(false)}
+              className="fixed inset-0 z-30 bg-[rgba(12,6,12,0.5)] backdrop-blur-[2px]"
+              variants={{ hidden: { opacity: 0 }, shown: { opacity: 1 } }}
+              transition={{ duration: 0.2 }}
+            />
+            <motion.nav
+              aria-label="Menu"
+              className="absolute inset-x-4 top-[calc(100%+8px)] z-40 overflow-hidden rounded-[26px] border border-white/10 bg-[color-mix(in_oklab,var(--background)_88%,transparent)] p-2 shadow-[0_30px_70px_-24px_rgba(0,0,0,0.85)] backdrop-blur-xl"
+              variants={{
+                hidden: reduce
+                  ? { opacity: 0 }
+                  : { opacity: 0, y: -10, scale: 0.97 },
+                shown: { opacity: 1, y: 0, scale: 1 },
+              }}
+              transition={reduce ? { duration: 0 } : { type: "spring", stiffness: 380, damping: 32 }}
+            >
+              <div className="mb-2 flex items-center justify-between px-2 pt-1">
+                <span className="label-instrument">menu</span>
+                <CoinBalance />
+              </div>
+              <ul className="space-y-0.5">
+                {menuItems.map((n, i) => {
+                  const active = isActive(n);
+                  return (
+                    <motion.li
+                      key={n.to}
+                      initial={reduce ? false : { opacity: 0, x: -8 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: reduce ? 0 : 0.04 + i * 0.035, duration: 0.2 }}
+                    >
+                      <NavLink
+                        to={n.to}
+                        aria-current={active ? "page" : undefined}
+                        className={`focus-ring tactile flex items-center gap-3 rounded-2xl px-3 py-3 text-[0.95rem] lowercase transition-colors ${
+                          active
+                            ? "surface-recessed text-content-primary"
+                            : "text-content-secondary hover:text-content-primary"
+                        }`}
+                      >
+                        <span
+                          className={active ? "text-[var(--accent-pink)]" : "text-content-tertiary"}
+                          style={
+                            active
+                              ? { filter: "drop-shadow(0 0 7px rgba(213,26,122,0.5))" }
+                              : undefined
+                          }
+                        >
+                          {n.icon}
+                        </span>
+                        {n.label}
+                      </NavLink>
+                    </motion.li>
+                  );
+                })}
+              </ul>
+            </motion.nav>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.header>
+  );
+}
+
+/** Small avatar chip used as the "settings" row glyph in the mobile menu. */
+function ProfileGlyph() {
+  return (
+    <span className="grid h-[19px] w-[19px] place-items-center rounded-full surface-float text-[0.62rem] font-medium text-content-primary">
+      A
+    </span>
   );
 }
