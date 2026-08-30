@@ -7,6 +7,9 @@ import { MetricCard } from "../components/health/MetricCard";
 import { MiniTrend } from "../components/health/MiniTrend";
 import { CountUp } from "../components/health/CountUp";
 import { useFormaData } from "../lib/localStore";
+import { apiSessionToCompleted } from "../lib/lifecycle";
+import { API_ENABLED, useSessionHistory } from "../api/hooks";
+import { NutritionCard } from "../components/NutritionCard";
 import {
   adherence,
   allTimePRs,
@@ -95,7 +98,12 @@ function TrendCurve({ data, unit = "lb" }: { data: number[]; unit?: string }) {
 export default function Progress() {
   const [range, setRange] = useState<(typeof RANGE)[number]>("3M");
   const data = useFormaData();
-  const { sessions, profile } = data;
+  const profile = data.profile;
+  const apiHist = useSessionHistory();
+  const sessions = useMemo(
+    () => (API_ENABLED ? (apiHist.data ?? []).map((s) => apiSessionToCompleted(s, profile.units)) : data.sessions),
+    [apiHist.data, data.sessions, profile.units],
+  );
   const windowDays = RANGE_DAYS[range];
 
   const inRange = useMemo(
@@ -133,6 +141,11 @@ export default function Progress() {
             action={{ label: "start a workout", to: "/workouts" }}
           />
         </Reveal>
+        {API_ENABLED && (
+          <Reveal className="mt-10">
+            <NutritionCard />
+          </Reveal>
+        )}
       </div>
     );
   }
@@ -290,6 +303,12 @@ export default function Progress() {
           )}
         </div>
       </Reveal>
+
+      {API_ENABLED && (
+        <Reveal onView className="mt-14">
+          <NutritionCard />
+        </Reveal>
+      )}
     </div>
   );
 }

@@ -152,3 +152,22 @@ export const useReadiness = () =>
 
 export const useNotifications = () =>
   useResource<T.NotificationList>("notifications", pick(() => api.notifications.list(), demo.demoNotifications));
+
+// ── workout lifecycle (§6) ──────────────────────────────────────────────────
+export const usePlannedWorkouts = () =>
+  useResource<T.Workout[]>("planned-workouts", pick(() => api.workouts.list({ template: "false" }), () => []));
+
+export const useWorkoutTemplates = () =>
+  useResource<T.Workout[]>("workout-templates", pick(() => api.workouts.list({ template: "true" }), () => []));
+
+export const useSessionHistory = () =>
+  useResource<T.WorkoutSession[]>(
+    "session-history",
+    pick(() => api.sessions.list({ status: "completed", take: 40 }), () => []),
+  );
+
+export const useConsistency = (weeks = 13) =>
+  useResource<T.ConsistencyReport | null>(
+    `consistency:${weeks}`,
+    pick(() => api.progress.consistency(weeks), () => null),
+  );

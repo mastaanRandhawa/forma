@@ -12,6 +12,65 @@ local-only demo into a real product. Derived from the product audit (§F, §H, �
 > AI chat/insights, goals, store, notifications. Most of this work does **not**
 > need to be rebuilt. The gaps below are what's actually missing.
 
+> **Implemented so far** (branch `feat/real-data-lifecycle`, migration
+> `20260830120000_adaptation_engine`):
+> §2.1 prescription engine (`services/prescription.ts` + wired into `POST /sessions`),
+> §2.2 deload detection (`services/deload.ts`), §2.3 low-readiness adjustment
+> (`services/readiness.ts` → `readinessAdjustment`), §2.4 program schedule
+> endpoint + `rescheduleMissedWorkouts` worker job, §2.5 substitution scoring,
+> §3.1 `POST /progress/checkin` + readiness wiring, §3.2 `POST /me/health/samples`
+> batch ingest + device error state, §3.3 `GET /me/devices/:provider/connect`
+> stub, §4 `RecommendationAudit` model + exposed on session reads, §5 readiness
+> factor rename / dashboard provenance flags / per-day consistency / AI copy
+> guards. Unit tests: `prescription.test.ts`, `deload.test.ts`.
+>
+> §1 (frontend auth) done: `frontend/src/api/auth.tsx` (AuthProvider +
+> RequireAuth / RedirectIfAuthed, session restore behind a splash), pages
+> `Login` / `Signup` / `ForgotPassword` / `ResetPassword`, `main.tsx` rewired,
+> "sign out" in Settings, onboarding dual-writes to `api.me.onboarding`. Typed
+> client + DTOs extended for every new endpoint; Settings recovery check-in
+> write-throughs to `POST /progress/checkin`. `tsc -b` + `vite build` clean.
+> When `VITE_API_URL` is unset the guard is a no-op, so the Pages build is
+> unchanged.
+>
+> §6 workout lifecycle is wired and **verified end-to-end** against the hosted DB
+> (migration `20260830120000` is applied there): `src/lib/lifecycle.ts` +
+> `localStore` id fields; Workouts "Today"/"History"/"Templates" and ActiveWorkout
+> (start → prescription-seeded targets + `RecommendationAudit`, per-set
+> write-through with lb↔kg conversion, finish → server volume/PRs/trainer comment)
+> now use `api.sessions.*` when `VITE_API_URL` is set, falling back to localStore
+> otherwise. Hooks: `usePlannedWorkouts` / `useWorkoutTemplates` /
+> `useSessionHistory` / `useConsistency`. E2E surfaced and fixed a real backend
+> bug: `finalizeSession` violated `PersonalRecord.setId @unique` when one set was
+> both the top-weight and top-e1RM set (finish 409'd) — now dedupes claimed setIds.
+>
+> **2026-08-30 pt.4** — the rest of the backlog, migration
+> `20260830210000_nutrition_and_oauth` (applied to the hosted DB):
+> - **§5 nutrition** — `NutritionEntry` model + `GET/POST /progress/nutrition`,
+>   `/nutrition/summary`, `DELETE /nutrition/:id`; a logged entry bumps the
+>   "protein today" goal. Web: `NutritionCard` on Progress. Verified E2E.
+> - **§6 Progress / Home** — now derive from `api.sessions.list` (via the
+>   `apiSessionToCompleted` adapter) + `api.dashboard`; Body already used
+>   `api.body.*`. Verified: Progress shows real e1RM / PRs / volume, Home greets
+>   "Alex" with readiness 77 from the check-in.
+> - **§3.3 wearable OAuth** — `services/wearables.ts` (WHOOP + Oura OAuth2 with
+>   refresh + daily fetchers; Garmin flagged unavailable), public
+>   `GET /oauth/:provider/callback`, `GET /me/devices/:provider/connect`
+>   (200 `{configured, authorizeUrl | message}`), `POST …/sync`, `DELETE`,
+>   `syncWearables` worker job (every 4h). Web: Settings "connected devices" with
+>   connect / sync / disconnect + callback query-param feedback. The
+>   not-configured path is verified E2E; live flows need CLIENT_ID/SECRET env.
+> - **openapi.yaml** — new paths + schemas added (99 paths / 66 schemas, parses).
+> - **§3.2 mobile companion** — Expo scaffold in `mobile/` (login → HealthKit /
+>   Health Connect read → `POST /me/health/samples`, plus a background-fetch
+>   task). Not runnable here (needs an Expo dev build); code follows the library
+>   contracts. See `mobile/README.md`.
+> - Fixed the dev-only React `createRoot()`-twice / `removeChild` warning
+>   (`frontend/src/main.tsx` reuses the root across Vite HMR).
+>
+> **Not yet done:** §0 (host the web build so it gets `VITE_API_URL`); register
+> real WHOOP / Oura developer apps; build & ship the mobile app from the scaffold.
+
 ---
 
 ## 0. The one real blocker: deploy the API

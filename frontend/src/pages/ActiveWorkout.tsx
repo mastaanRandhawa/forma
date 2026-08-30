@@ -17,6 +17,14 @@ import {
 } from "../lib/localStore";
 import { detectPRs, sessionVolume } from "../lib/fitness";
 import { ALL_TEMPLATES } from "../lib/program";
+import { API_ENABLED } from "../api/hooks";
+import {
+  abandonApiSession,
+  finishApiSession,
+  fromKg,
+  syncDeleteSet,
+  syncSet,
+} from "../lib/lifecycle";
 
 const EASE = [0.22, 1, 0.36, 1] as const;
 const REST_PRESETS = [60, 90, 120, 180];
@@ -135,6 +143,22 @@ export default function ActiveWorkout() {
   }>(null);
   const elapsed = useElapsed(session?.startedAt ?? new Date().toISOString());
   const priorSessions = useRef(loadData().sessions).current;
+  const units = data.profile.units;
+  const [finishing, setFinishing] = useState(false);
+
+  // debounced write-through of a single cell to the API
+  const syncTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const queueSync = (exi: number, si: number, immediate = false) => {
+    if (!API_ENABLED || !session?.apiId) return;
+    const key = `${exi}:${si}`;
+    clearTimeout(syncTimers.current[key]);
+    const fire = () => {
+      const a = loadData().active;
+      if (a) void syncSet(a, exi, si, units);
+    };
+    if (immediate) fire();
+    else syncTimers.current[key] = setTimeout(fire, 450);
+  };
 
   const liveVolume = useMemo(
     () => (session ? sessionVolume(session.exercises) : 0),
@@ -156,10 +180,12 @@ export default function ActiveWorkout() {
   const setEx = (i: number, fn: (e: LoggedExercise) => LoggedExercise) =>
     updateActive((s) => ({ ...s, exercises: s.exercises.map((e, idx) => (idx === i ? fn(e) : e)) }));
 
-  const setSet = (exi: number, si: number, fn: (set: LoggedSet) => LoggedSet) =>
+  const setSet = (exi: number, si: number, fn: (set: LoggedSet) => LoggedSet, opts?: { immediate?: boolean }) => {
     setEx(exi, (e) => ({ ...e, sets: e.sets.map((set, idx) => (idx === si ? fn(set) : set)) }));
+    queueSync(exi, si, opts?.immediate);
+  };
 
-  const addSet = (exi: number) =>
+  const addSet = (exi: number) => {
     setEx(exi, (e) => {
       const last = e.sets[e.sets.length - 1];
       return {
@@ -167,9 +193,24 @@ export default function ActiveWorkout() {
         sets: [...e.sets, { weight: last?.weight ?? null, reps: last?.reps ?? null, rpe: null, done: false }],
       };
     });
+    const a = loadData().active;
+    if (a) queueSync(exi, (a.exercises[exi]?.sets.length ?? 1) - 1, true);
+  };
 
-  const deleteSet = (exi: number, si: number) =>
-    setEx(exi, (e) => ({ ...e, sets: e.sets.length > 1 ? e.sets.filter((_, idx) => idx !== si) : e.sets }));
+  const deleteSet = (exi: number, si: number) => {
+    const before = loadData().active;
+    if (!before || (before.exercises[exi]?.sets.length ?? 0) <= 1) return;
+    setEx(exi, (e) => ({ ...e, sets: e.sets.filter((_, idx) => idx !== si) }));
+    if (API_ENABLED && before.apiId) {
+      void (async () => {
+        const count = before.exercises[exi]?.sets.length ?? 0;
+        // drop the trailing row server-side, then rewrite the shifted rows
+        await syncDeleteSet(before, exi, count - 1);
+        const after = loadData().active;
+        if (after) for (let i = si; i < (after.exercises[exi]?.sets.length ?? 0); i++) queueSync(exi, i, true);
+      })();
+    }
+  };
 
   const toggleSkip = (exi: number) => setEx(exi, (e) => ({ ...e, skipped: !e.skipped }));
 
@@ -187,19 +228,37 @@ export default function ActiveWorkout() {
     setAddingTo(false);
   };
 
-  const finish = () => {
-    if (!session) return;
+  const finish = async () => {
+    if (!session || finishing) return;
+    setFinishing(true);
     const working = session.exercises.filter((e) => !e.skipped);
-    const prs = detectPRs({ exercises: working }, priorSessions);
-    const volume = sessionVolume(session.exercises);
-    const completed = finishSession(volume, data.profile.units, prs);
+    let prs = detectPRs({ exercises: working }, priorSessions);
+    let volume = sessionVolume(session.exercises);
+    let durationSec = Math.max(0, Math.round((Date.now() - Date.parse(session.startedAt)) / 1000));
+
+    if (API_ENABLED && session.apiId) {
+      // flush any pending cell syncs first
+      for (let e = 0; e < session.exercises.length; e++)
+        for (let s = 0; s < session.exercises[e].sets.length; s++) queueSync(e, s, true);
+      const result = await finishApiSession(session, durationSec);
+      if (result) {
+        volume = fromKg(result.totalVolumeKg, units);
+        durationSec = result.durationSeconds || durationSec;
+        prs = (result.personalRecords ?? []).map(
+          (p) => `${p.exercise?.name ?? "lift"} — ${p.recordType.replace(/_/g, " ")}`,
+        );
+      }
+    }
+
+    finishSession(volume, units, prs, session.apiId);
     setSummary({
-      durationSec: completed?.durationSec ?? 0,
+      durationSec,
       volume,
       prs,
       completed: working.filter((e) => e.sets.some((s) => s.done)).length,
       skipped: session.exercises.filter((e) => e.skipped).length,
     });
+    setFinishing(false);
   };
 
   const completedSets = session
@@ -223,7 +282,9 @@ export default function ActiveWorkout() {
           <Button variant="ghost" onClick={() => setConfirmAbandon(true)}>
             abandon
           </Button>
-          <Button onClick={finish}>finish</Button>
+          <Button onClick={() => void finish()} disabled={finishing}>
+            {finishing ? "finishing…" : "finish"}
+          </Button>
         </div>
       </header>
 
@@ -248,6 +309,14 @@ export default function ActiveWorkout() {
                     ))}
                   </select>
                   <div className="label-instrument mt-0.5">{ex.target}</div>
+                  {ex.prescription && (ex.prescription.weightKg != null || ex.prescription.reps != null) && (
+                    <div className="mt-1 text-[0.78rem] text-[var(--accent-mauve)]">
+                      today:{" "}
+                      {ex.prescription.weightKg != null && `${fromKg(ex.prescription.weightKg, units)} ${units} `}
+                      {ex.prescription.reps != null && `× ${ex.prescription.reps}`}
+                      {ex.prescription.note ? ` · ${ex.prescription.note}` : ""}
+                    </div>
+                  )}
                 </div>
                 <button
                   onClick={() => toggleSkip(exi)}
@@ -300,7 +369,7 @@ export default function ActiveWorkout() {
                               aria-label={s.done ? "Mark set incomplete" : "Complete set"}
                               onClick={() => {
                                 const willBeDone = !s.done;
-                                setSet(exi, si, (set) => ({ ...set, done: willBeDone }));
+                                setSet(exi, si, (set) => ({ ...set, done: willBeDone }), { immediate: true });
                                 if (willBeDone)
                                   updateActive((sess) => ({ ...sess, restEndsAt: Date.now() + 90_000 }));
                               }}
@@ -421,6 +490,8 @@ export default function ActiveWorkout() {
               <div className="mt-5 flex justify-center gap-2.5">
                 <button
                   onClick={() => {
+                    const a = loadData().active;
+                    if (a) void abandonApiSession(a);
                     abandonSession();
                     nav("/workouts");
                   }}

@@ -231,8 +231,81 @@ export interface Equipment {
 export interface DeviceConnection {
   id: string;
   provider: string;
-  status: string;
+  status: string; // "connected" | "disconnected" | "error" | "pending"
   lastSyncAt: ISODate | null;
+  lastError?: string | null;
+  lastErrorAt?: ISODate | null;
+  oauthConnected?: boolean;
+}
+
+// ── nutrition daily log (§5) ───────────────────────────────────────────────
+export interface NutritionEntryInput {
+  date?: string; // YYYY-MM-DD
+  label?: string;
+  calories?: number;
+  proteinG?: number;
+  carbsG?: number;
+  fatG?: number;
+  note?: string;
+}
+export interface NutritionEntry extends NutritionEntryInput {
+  id: string;
+  date: string;
+  createdAt: ISODate;
+}
+export interface NutritionTotals {
+  calories: number;
+  proteinG: number;
+  carbsG: number;
+  fatG: number;
+}
+export interface NutritionDay {
+  date: string;
+  entries: NutritionEntry[];
+  totals: NutritionTotals;
+}
+export interface NutritionDayTotals extends NutritionTotals {
+  date: string;
+}
+
+// ── recovery check-in (§3.1) ────────────────────────────────────────────────
+export interface RecoveryCheckinInput {
+  sleepH?: number;
+  sleepQuality?: number; // 1..5
+  fatigue?: number; // 1..5
+  soreness?: number; // 1..5
+  note?: string;
+  recordedAt?: ISODate;
+}
+export interface RecoveryCheckin extends RecoveryCheckinInput {
+  id: string;
+  recordedAt: ISODate;
+}
+
+// ── mobile health ingest (§3.2) ────────────────────────────────────────────
+export interface HealthSamplesInput {
+  provider: "apple_health" | "health_connect";
+  samples: Array<{
+    type: "sleep" | "hrv" | "resting_hr" | "steps";
+    value: number;
+    unit: string;
+    recordedAt?: ISODate;
+    date?: ISODate;
+    start?: ISODate;
+    end?: ISODate;
+    sourceBundleId?: string;
+  }>;
+}
+
+// ── recommendation provenance (§4) ─────────────────────────────────────────
+export interface RecommendationAudit {
+  id: string;
+  kind: "prescription" | "deload" | "readiness_adjustment" | "swap";
+  subjectId: string;
+  inputs: Record<string, unknown>;
+  rule: string;
+  output: Record<string, unknown>;
+  createdAt: ISODate;
 }
 
 // ── library ─────────────────────────────────────────────────────────────────
@@ -363,6 +436,8 @@ export interface SwapSuggestion {
   name: string;
   equipment: string[];
   difficulty: ExperienceLevel;
+  movementPattern?: string | null;
+  rationale?: string;
   reasons: string[];
   score: number;
 }
@@ -422,6 +497,10 @@ export interface ExercisePerformance {
   formScoreAvg: number | null;
   romAvg: number | null;
   supersetGroup: number | null;
+  prescribedWeightKg?: number | null;
+  prescribedReps?: number | null;
+  prescribedRpe?: number | null;
+  prescriptionAudit?: RecommendationAudit | null;
   exercise: Exercise;
   sets: ExerciseSet[];
 }
@@ -553,6 +632,28 @@ export interface ConsistencyReport {
   currentStreak: number;
   adherence: number;
   weeks: Array<{ week: string; sessions: number; volumeKg: number }>;
+  days?: Array<{ date: string; sessions: number }>;
+}
+
+// ── resolved program schedule (§2.4) ───────────────────────────────────────
+export interface ProgramScheduleDay {
+  programDayId: string;
+  weekIndex: number;
+  dayIndex: number;
+  label: string | null;
+  workoutId: string | null;
+  workoutName: string | null;
+  date: string | null;
+  completedAt: ISODate | null;
+  status: "scheduled" | "completed" | "missed" | "rescheduled";
+}
+export interface ProgramSchedule {
+  programId: string;
+  startDate: string | null;
+  preferredWeekdays: number[];
+  anchored: boolean;
+  days: ProgramScheduleDay[];
+  upcoming: ProgramScheduleDay[];
 }
 export interface FormTrends {
   slug: string | null;
@@ -775,4 +876,8 @@ export interface Dashboard {
   goals: Goal[];
   notificationsUnread: number;
   insights: CoachingInsight[];
+  /** per-metric provenance (§5) — render "—" when unavailable. */
+  readinessAvailable?: "live" | "unavailable" | "computed";
+  formAvailable?: "live" | "unavailable" | "computed";
+  volumeSource?: "computed" | "unavailable";
 }

@@ -1,10 +1,13 @@
-import { useState } from "react";
-import { Link } from "react-router-dom";
-import { Check, Sparkles } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { Check, LogOut, Sparkles } from "lucide-react";
 import { PageHeader } from "../components/PageHeader";
 import { Reveal } from "../components/Reveal";
 import { useSettings, useAppearance, useProgression, PRESETS } from "../api/settings";
 import { addCheckin, latestCheckin, useFormaData } from "../lib/localStore";
+import { API_ENABLED } from "../api/hooks";
+import { api } from "../api/client";
+import { useAuth } from "../api/auth";
 
 function Toggle({
   label,
@@ -207,8 +210,11 @@ function RecoveryGroup() {
         <Slider label="muscle soreness" value={soreness} set={setSoreness} min={1} max={5} />
       </div>
       <button
-        onClick={() => {
+        onClick={async () => {
           addCheckin({ sleepH, sleepQuality, fatigue, soreness });
+          if (API_ENABLED) {
+            await api.progress.checkin({ sleepH, sleepQuality, fatigue, soreness }).catch(() => {});
+          }
           setSaved(true);
           setTimeout(() => setSaved(false), 2000);
         }}
@@ -254,6 +260,173 @@ function GettingStartedGroup() {
   );
 }
 
+const WEARABLES = [
+  { key: "whoop", name: "WHOOP" },
+  { key: "oura", name: "Oura" },
+  { key: "garmin", name: "Garmin" },
+] as const;
+
+function timeAgo(iso: string) {
+  const s = Math.max(0, Math.round((Date.now() - Date.parse(iso)) / 1000));
+  if (s < 90) return "just now";
+  if (s < 3600) return `${Math.round(s / 60)}m ago`;
+  if (s < 86400) return `${Math.round(s / 3600)}h ago`;
+  return `${Math.round(s / 86400)}d ago`;
+}
+
+function DevicesGroup() {
+  const [conns, setConns] = useState<import("../api/types").DeviceConnection[]>([]);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [msg, setMsg] = useState<string | null>(null);
+
+  const load = () => {
+    if (!API_ENABLED) return;
+    api.me.devices().then(setConns).catch(() => {});
+  };
+  useEffect(() => {
+    load();
+    const p = new URLSearchParams(window.location.search);
+    if (p.get("device_connected")) setMsg(`${p.get("device_connected")} connected.`);
+    if (p.get("device_error")) setMsg(`Couldn't connect: ${p.get("device_error")}`);
+    if (p.get("device_connected") || p.get("device_error"))
+      window.history.replaceState({}, "", window.location.pathname);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  if (!API_ENABLED) {
+    return (
+      <Group title="connected devices">
+        <p className="text-[0.83rem] leading-relaxed text-content-secondary">
+          Health sync connects to a running backend. This build has none — use the
+          recovery check-in above for a manual readiness signal.
+        </p>
+      </Group>
+    );
+  }
+
+  const byProvider = Object.fromEntries(conns.map((c) => [c.provider, c]));
+
+  async function connect(key: string) {
+    setBusy(key);
+    setMsg(null);
+    try {
+      const r = await api.me.connectDevice(key as "whoop" | "oura" | "garmin");
+      if (r.authorizeUrl) window.location.href = r.authorizeUrl;
+      else setMsg(r.message ?? `${key} isn't configured on this deployment.`);
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : `${key} isn't available.`);
+    } finally {
+      setBusy(null);
+    }
+  }
+  async function sync(key: string) {
+    setBusy(key);
+    try {
+      const r = await api.me.syncDevice(key);
+      setMsg(`${key}: ${r.ingested} new reading${r.ingested === 1 ? "" : "s"}.`);
+      load();
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : "sync failed");
+    } finally {
+      setBusy(null);
+    }
+  }
+  async function disconnect(key: string) {
+    setBusy(key);
+    await api.me.disconnectDevice(key).catch(() => {});
+    setBusy(null);
+    load();
+  }
+
+  return (
+    <Group title="connected devices">
+      <p className="mb-3 text-[0.83rem] leading-relaxed text-content-secondary">
+        Apple Health &amp; Health Connect sync through the mobile companion app.
+        WHOOP, Oura and Garmin connect here over OAuth.
+      </p>
+
+      <div className="divide-y divide-[var(--line-soft)]">
+        {WEARABLES.map(({ key, name }) => {
+          const c = byProvider[key];
+          const connected = c?.oauthConnected;
+          return (
+            <div key={key} className="flex items-center justify-between py-3 text-[0.88rem]">
+              <div>
+                <div className="text-content-primary">{name}</div>
+                <div className="label-instrument mt-0.5">
+                  {c?.status === "error"
+                    ? `last sync failed${c.lastErrorAt ? ` ${timeAgo(c.lastErrorAt)}` : ""}`
+                    : connected
+                    ? c?.lastSyncAt
+                      ? `synced ${timeAgo(c.lastSyncAt)}`
+                      : "connected"
+                    : "not connected"}
+                </div>
+              </div>
+              <div className="flex gap-1.5">
+                {connected ? (
+                  <>
+                    <button
+                      onClick={() => sync(key)}
+                      disabled={busy === key}
+                      className="focus-ring rounded-pill bg-white/[0.06] px-3 py-1.5 text-[0.76rem] lowercase text-content-primary hover:bg-white/[0.12] disabled:opacity-50"
+                    >
+                      sync
+                    </button>
+                    <button
+                      onClick={() => disconnect(key)}
+                      disabled={busy === key}
+                      className="focus-ring rounded-pill px-3 py-1.5 text-[0.76rem] lowercase text-content-tertiary hover:text-content-secondary disabled:opacity-50"
+                    >
+                      disconnect
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    onClick={() => connect(key)}
+                    disabled={busy === key}
+                    className="focus-ring rounded-pill bg-white/[0.06] px-3 py-1.5 text-[0.76rem] lowercase text-content-primary hover:bg-white/[0.12] disabled:opacity-50"
+                  >
+                    {busy === key ? "…" : "connect"}
+                  </button>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      {msg && <p className="mt-3 text-[0.8rem] text-content-secondary">{msg}</p>}
+    </Group>
+  );
+}
+
+function AccountGroup() {
+  const { user, signOut } = useAuth();
+  const nav = useNavigate();
+  const [busy, setBusy] = useState(false);
+  if (!API_ENABLED) return null;
+  return (
+    <Group title="account">
+      {user && (
+        <p className="mb-3 text-[0.85rem] text-content-secondary">
+          Signed in as <span className="text-content-primary">{user.email}</span>.
+        </p>
+      )}
+      <button
+        onClick={async () => {
+          setBusy(true);
+          await signOut();
+          nav("/login", { replace: true });
+        }}
+        disabled={busy}
+        className="focus-ring tactile inline-flex items-center gap-2 rounded-pill bg-white/[0.06] px-4 py-2 text-[0.82rem] lowercase text-content-primary transition-colors hover:bg-white/[0.12] disabled:opacity-50"
+      >
+        <LogOut size={13} strokeWidth={2.25} /> {busy ? "signing out…" : "sign out"}
+      </button>
+    </Group>
+  );
+}
+
 export default function Settings() {
   return (
     <div className="mx-auto max-w-[1120px]">
@@ -264,6 +437,7 @@ export default function Settings() {
         <GettingStartedGroup />
         <ProfileGroup />
         <RecoveryGroup />
+        <AccountGroup />
 
         <Group title="camera & privacy">
           <p className="mb-2 text-[0.85rem] leading-relaxed text-content-secondary">
@@ -286,13 +460,7 @@ export default function Settings() {
           </div>
         </Group>
 
-        <Group title="connected devices">
-          <p className="text-[0.83rem] leading-relaxed text-content-secondary">
-            Apple Health, Health Connect, WHOOP, Garmin, Oura and Strava sync
-            through the mobile companion app. There's no device connection in the
-            web build — use the recovery check-in above for a manual signal.
-          </p>
-        </Group>
+        <DevicesGroup />
 
         <Group title="about">
           <Link

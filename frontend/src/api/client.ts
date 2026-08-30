@@ -203,6 +203,14 @@ export const api = {
     devices: () => get<T.DeviceConnection[]>("/me/devices"),
     setDevice: (provider: string, status: "connected" | "disconnected") =>
       put<T.DeviceConnection>(`/me/devices/${provider}`, { status }),
+    connectDevice: (provider: "whoop" | "oura" | "garmin") =>
+      get<{ provider: string; configured: boolean; status?: string; message?: string; authorizeUrl?: string }>(
+        `/me/devices/${provider}/connect`,
+      ),
+    syncDevice: (provider: string) => post<{ ingested: number }>(`/me/devices/${provider}/sync`),
+    disconnectDevice: (provider: string) => del<void>(`/me/devices/${provider}`),
+    ingestHealthSamples: (body: T.HealthSamplesInput) =>
+      post<{ received: number; ingested: number; deduped: number }>("/me/health/samples", body),
   },
 
   // trainer
@@ -254,6 +262,7 @@ export const api = {
     activate: (id: string) => post<{ ok: true }>(`/programs/${id}/activate`),
     schedule: (id: string, weekIndex: number, startDate: string) =>
       post<{ scheduled: number; workouts: T.Workout[] }>(`/programs/${id}/schedule`, { weekIndex, startDate }),
+    resolvedSchedule: (id: string) => get<T.ProgramSchedule>(`/programs/${id}/schedule`),
     remove: (id: string) => del<void>(`/programs/${id}`),
   },
 
@@ -294,6 +303,14 @@ export const api = {
     overview: () => get<T.ProgressOverview>("/progress/overview"),
     readiness: () => get<T.ReadinessBreakdown>("/progress/readiness"),
     consistency: (weeks?: number) => get<T.ConsistencyReport>("/progress/consistency", { weeks }),
+    checkin: (body: T.RecoveryCheckinInput) =>
+      post<{ checkin: T.RecoveryCheckin; readiness: T.ReadinessBreakdown }>("/progress/checkin", body),
+    checkins: () => get<T.RecoveryCheckin[]>("/progress/checkin"),
+    nutrition: (date?: string) => get<T.NutritionDay>("/progress/nutrition", { date }),
+    nutritionSummary: (days?: number) => get<{ days: T.NutritionDayTotals[] }>("/progress/nutrition/summary", { days }),
+    addNutrition: (body: T.NutritionEntryInput) =>
+      post<{ entry: T.NutritionEntry; totals: T.NutritionTotals }>("/progress/nutrition", body),
+    deleteNutrition: (id: string) => del<void>(`/progress/nutrition/${id}`),
     formTrends: (q?: { slug?: string; days?: number }) => get<T.FormTrends>("/progress/form-trends", q),
     photos: () => get<T.ProgressPhoto[]>("/progress/photos"),
     registerPhoto: (body: { poseTag?: T.PhotoPose; takenAt?: string; contentType?: string }) =>
