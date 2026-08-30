@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import { ArrowUpRight, CalendarPlus } from "lucide-react";
 import { BodyMuscles } from "../BodyMuscles";
-import { muscleActivation, todayWorkout } from "../../lib/data";
+import { muscleActivation } from "../../lib/data";
 import { useDashboardData } from "../../api/dashboard-context";
 
 /**
@@ -11,7 +11,7 @@ import { useDashboardData } from "../../api/dashboard-context";
  */
 export function SessionCard() {
   const dash = useDashboardData();
-  const workout = dash ? dash.todayWorkout : { name: todayWorkout.name, exercises: todayWorkout.exercises, durationMin: 45 };
+  const workout = dash?.todayWorkout ?? null;
 
   if (!workout) {
     return (
@@ -35,7 +35,7 @@ export function SessionCard() {
 
   return (
     <Link
-      to="/workouts/active"
+      to="/workouts"
       className="metric-card metric-card--link group focus-ring relative flex min-h-[320px] flex-col overflow-hidden"
       data-tone="pink"
       data-variant="vivid"
@@ -72,8 +72,10 @@ export function SessionCard() {
         </div>
       </div>
       <div className="relative z-10 mt-auto pt-5">
-        <div className="label-instrument !text-white/70">trained today</div>
-        <div className="mt-1 text-[0.85rem] lowercase text-white">chest, shoulders · 95%</div>
+        <div className="label-instrument !text-white/70">today's focus</div>
+        <div className="mt-1 text-[0.85rem] lowercase text-white">
+          {(workout.muscles ?? []).join(", ").toLowerCase() || "full body"}
+        </div>
       </div>
     </Link>
   );

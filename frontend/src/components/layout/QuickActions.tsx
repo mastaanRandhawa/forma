@@ -1,34 +1,45 @@
 import { useState } from "react";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { Plus, Dumbbell, UtensilsCrossed, Scale, Droplets, Check } from "lucide-react";
+import { Plus, Dumbbell, Scale, Droplets, Check } from "lucide-react";
 import { DetailDrawer } from "../dashboard/DetailDrawer";
+import { addQuickLog, useFormaData } from "../../lib/localStore";
 
 const EASE = [0.22, 1, 0.36, 1] as const;
 
 type Action = { id: string; label: string; icon: typeof Dumbbell; unit: string; placeholder: string };
 
-const ACTIONS: Action[] = [
-  { id: "workout", label: "log workout", icon: Dumbbell, unit: "min", placeholder: "45" },
-  { id: "meal", label: "add meal", icon: UtensilsCrossed, unit: "kcal", placeholder: "620" },
-  { id: "weight", label: "log weight", icon: Scale, unit: "lb", placeholder: "178" },
-  { id: "water", label: "add water", icon: Droplets, unit: "oz", placeholder: "16" },
-];
-
 /** Floating quick-action menu. Hidden on the active-workout and onboarding views. */
 export function QuickActions() {
   const reduce = useReducedMotion();
   const { pathname } = useLocation();
+  const nav = useNavigate();
+  const { profile } = useFormaData();
   const [open, setOpen] = useState(false);
   const [sheet, setSheet] = useState<Action | null>(null);
   const [val, setVal] = useState("");
   const [toast, setToast] = useState<string | null>(null);
 
+  const ACTIONS: Action[] = [
+    { id: "workout", label: "start workout", icon: Dumbbell, unit: "", placeholder: "" },
+    { id: "weight", label: "log weight", icon: Scale, unit: profile.units, placeholder: profile.units === "kg" ? "80" : "178" },
+    { id: "water", label: "add water", icon: Droplets, unit: "oz", placeholder: "16" },
+  ];
+
   if (pathname.startsWith("/workouts/active") || pathname.startsWith("/onboarding")) return null;
 
   const save = () => {
     if (!sheet) return;
-    setToast(`${sheet.label.replace("log ", "").replace("add ", "")} logged`);
+    if (sheet.id === "workout") {
+      setSheet(null);
+      nav("/workouts");
+      return;
+    }
+    const num = Number(val.replace(",", "."));
+    if (!Number.isNaN(num) && num > 0) {
+      addQuickLog(sheet.id === "weight" ? "bodyweight" : "water", num, sheet.unit);
+      setToast(`${sheet.label.replace("log ", "").replace("add ", "")} saved`);
+    }
     setSheet(null);
     setVal("");
     setTimeout(() => setToast(null), 2200);
@@ -47,8 +58,9 @@ export function QuickActions() {
                 exit={reduce ? { opacity: 0 } : { opacity: 0, y: 8, scale: 0.9 }}
                 transition={{ duration: 0.16, ease: EASE, delay: reduce ? 0 : i * 0.035 }}
                 onClick={() => {
-                  setSheet(a);
                   setOpen(false);
+                  if (a.id === "workout") nav("/workouts");
+                  else setSheet(a);
                 }}
                 className="focus-ring tactile flex items-center gap-2.5 rounded-pill border border-white/10 bg-[rgba(24,13,20,0.94)] py-2 pl-3.5 pr-4 text-[0.84rem] lowercase text-content-primary shadow-[0_16px_36px_-14px_rgba(0,0,0,0.6)] backdrop-blur-md"
               >

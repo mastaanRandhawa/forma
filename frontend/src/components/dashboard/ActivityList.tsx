@@ -1,8 +1,6 @@
 import { Link } from "react-router-dom";
 import { CalendarPlus, Dumbbell, MoreHorizontal } from "lucide-react";
-import { upcomingWorkouts } from "../../lib/data";
-import { useDashboardData } from "../../api/dashboard-context";
-import { API_ENABLED } from "../../api/hooks";
+import { upcomingPlans } from "../../lib/program";
 
 /**
  * ActivityList — the "up next" schedule styled like a transactions feed:
@@ -11,12 +9,11 @@ import { API_ENABLED } from "../../api/hooks";
  * the local schedule preview, or an empty prompt.
  */
 export function ActivityList() {
-  const dash = useDashboardData();
-  const items = API_ENABLED
-    ? dash?.upcomingWorkout
-      ? [{ day: "next", name: dash.upcomingWorkout.name, muscles: dash.upcomingWorkout.muscles }]
-      : []
-    : upcomingWorkouts;
+  const items = upcomingPlans(3).map((u) => ({
+    day: u.when,
+    name: u.plan.name,
+    muscles: u.plan.focus,
+  }));
 
   return (
     <div className="metric-card !p-4" data-tone="mauve" data-variant="glow">

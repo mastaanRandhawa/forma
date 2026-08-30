@@ -1,8 +1,6 @@
-import { useState } from "react";
+import { useMemo } from "react";
 import { Link } from "react-router-dom";
-import { InfiniteDateStrip, todayISO } from "../components/health/InfiniteDateStrip";
 import { Reveal } from "../components/Reveal";
-import { ErrorState } from "../components/ErrorState";
 import { Skel } from "../components/skeleton/Skeleton";
 import { Greeting } from "../components/dashboard/Greeting";
 import { RingStat } from "../components/dashboard/RingStat";
@@ -14,52 +12,80 @@ import { InsightCard } from "../components/dashboard/InsightCard";
 import { GoalsCard } from "../components/dashboard/GoalsCard";
 import { KaiOrb, coachMood } from "../components/KaiOrb";
 import { ActivityList } from "../components/dashboard/ActivityList";
-import { DetailDrawer } from "../components/dashboard/DetailDrawer";
-import { MetricDetailBody } from "../components/dashboard/MetricDetailBody";
-import { insights as mockInsights, metricDetails, progressStats, ringStats, trainerMessage } from "../lib/data";
 import { DashboardProvider } from "../api/dashboard-context";
-import { useDashboard, errorMessage } from "../api/hooks";
-import { insightToCard, volumeK } from "../api/adapt";
+import { buildLocalDashboard, readinessFromCheckin } from "../api/localDashboard";
+import { useFormaData, hasRecoveryData } from "../lib/localStore";
+import { currentStreak, sessionVolume, volumeInLastDays } from "../lib/fitness";
 import { Quiet } from "../components/Quiet";
 import { useProgression } from "../api/settings";
 
-const RING_WIDGET: Record<string, string> = {
-  readiness: "readiness-ring",
-  volume: "weekly-volume",
-  form: "avg-form",
-};
-const PSTAT_WIDGET: Record<string, string> = { week: "weekly-goal", protein: "protein-today" };
+const DAY_MS = 864e5;
+
+/** Volume per weekday (Mon→Sun) for the week starting `weeksAgo` weeks back. */
+function weekVolume(sessions: { finishedAt: string; volume: number }[], weeksAgo: number): number[] {
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+  const monday = new Date(now);
+  const dow = (now.getDay() + 6) % 7; // 0 = Monday
+  monday.setDate(now.getDate() - dow - weeksAgo * 7);
+  const out = new Array(7).fill(0);
+  for (const s of sessions) {
+    const idx = Math.floor((new Date(s.finishedAt).setHours(0, 0, 0, 0) - monday.getTime()) / DAY_MS);
+    if (idx >= 0 && idx < 7) out[idx] += s.volume;
+  }
+  return out;
+}
 
 export default function Home() {
-  const [day, setDay] = useState(todayISO());
-  const [detail, setDetail] = useState<string | null>(null);
-  const detailData = detail ? metricDetails[detail] : null;
-
-  const { data: dash, error, initialLoading, refetch } = useDashboard();
+  const data = useFormaData();
   const prog = useProgression();
+  const dash = useMemo(() => buildLocalDashboard(data), [data]);
 
-  // live values where the aggregate carries them; the rest stay on the mock shape
-  const rings = dash
-    ? [
-        { ...ringStats[0], value: String(dash.readiness), pct: dash.readiness },
-        { ...ringStats[1], value: volumeK(dash.weeklyVolumeKg) },
-        ringStats[2],
-      ]
-    : ringStats;
-  const pstats = dash
-    ? [
-        {
-          ...progressStats[0],
-          value: `${dash.weeklyRing.done} / ${dash.weeklyRing.target}`,
-          pct: dash.weeklyRing.done / Math.max(1, dash.weeklyRing.target),
-        },
-        progressStats[1],
-      ]
-    : progressStats;
-  const insightItems = dash
-    ? dash.insights.map(insightToCard).slice(0, 1)
-    : mockInsights.slice(0, 1);
-  const kaiMessage = dash?.trainerMessage ?? trainerMessage;
+  const units = data.profile.units;
+  const hasRecovery = hasRecoveryData(data);
+  const readiness = readinessFromCheckin(data);
+  const streak = currentStreak(data.sessions);
+  const last7Vol = volumeInLastDays(data.sessions, 7);
+  const hasVolume = data.sessions.length > 0;
+
+  const weekTrained = useMemo(() => {
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+    const dow = (now.getDay() + 6) % 7;
+    const monday = new Date(now);
+    monday.setDate(now.getDate() - dow);
+    const days = new Set(data.sessions.map((s) => new Date(s.finishedAt).setHours(0, 0, 0, 0)));
+    return Array.from({ length: 7 }, (_, i) => days.has(monday.getTime() + i * DAY_MS));
+  }, [data.sessions]);
+
+  const chartSeries = useMemo(
+    () => [
+      { label: "this week", color: "var(--accent-pink)", data: weekVolume(data.sessions, 0) },
+      { label: "last week", color: "var(--accent-blue)", data: weekVolume(data.sessions, 1) },
+    ],
+    [data.sessions],
+  );
+
+  const rings = [
+    hasRecovery
+      ? { id: "readiness", label: "readiness", value: String(readiness), sub: "from your check-in", pct: readiness ?? 0, tone: "pink" as const, to: "/progress" }
+      : { id: "readiness", label: "readiness", value: "—", sub: "log a check-in", pct: 0, tone: "pink" as const, to: "/settings" },
+    hasVolume
+      ? { id: "volume", label: "7-day volume", value: `${(last7Vol / 1000).toFixed(1)}k`, sub: units, pct: Math.min(100, Math.round(last7Vol / 300)), tone: "cyan" as const, to: "/progress" }
+      : { id: "volume", label: "7-day volume", value: "—", sub: "no sessions yet", pct: 0, tone: "cyan" as const, to: "/workouts" },
+    { id: "form", label: "avg form", value: "—", sub: "camera not set up", pct: 0, tone: "lime" as const, to: "/settings" },
+  ];
+
+  const weeklyGoal = { done: dash.weeklyRing.done, target: dash.weeklyRing.target };
+  const avgSessionVol = data.sessions.length
+    ? Math.round(data.sessions.slice(0, 8).reduce((n, s) => n + sessionVolume(s.exercises), 0) / Math.min(8, data.sessions.length))
+    : 0;
+
+  const insight = !hasRecovery
+    ? { id: "recovery", tone: "cyan" as const, icon: "moon" as const, text: "No recovery data yet. Log a quick check-in and Forma can score your readiness before each session.", actions: ["Check in"] }
+    : streak === 0 && data.sessions.length > 0
+    ? { id: "streak", tone: "amber" as const, icon: "activity" as const, text: "Your streak has lapsed. A session today restarts it.", actions: ["Today's plan"] }
+    : null;
 
   return (
     <DashboardProvider value={dash}>
@@ -67,133 +93,97 @@ export default function Home() {
         <Reveal>
           <Greeting />
         </Reveal>
-        <Reveal delay={0.06}>
-          <InfiniteDateStrip value={day} onChange={setDay} />
-        </Reveal>
 
-        {error && !dash ? (
-          <Reveal className="mt-8">
-            <ErrorState message={errorMessage(error)} onRetry={refetch} />
-          </Reveal>
-        ) : (
-          <div className="mt-8 grid gap-4 lg:grid-cols-[minmax(0,1fr)_336px]">
-            {/* ---------------- MAIN ---------------- */}
-            <div className="space-y-4">
-              {/* top row — ring stats (compact squares on mobile) */}
-              <Reveal onView className="grid grid-cols-3 gap-2 sm:gap-3">
-                {initialLoading
-                  ? [0, 1, 2].map((i) => <Skel key={i} className="aspect-square rounded-[var(--radius-medium)] sm:aspect-auto sm:h-[104px]" />)
-                  : rings.map((s) => (
-                      <Quiet key={s.id} widgetKey={RING_WIDGET[s.id] ?? s.id}>
-                        <RingStat
-                          label={s.label}
-                          value={s.value}
-                          sub={s.sub}
-                          pct={s.pct}
-                          tone={s.tone}
-                          onSelect={metricDetails[s.id] ? () => setDetail(s.id) : undefined}
-                          to={metricDetails[s.id] ? undefined : "/progress"}
-                        />
-                      </Quiet>
-                    ))}
-              </Reveal>
-
-              {/* today's session — sits here on mobile, in the sidebar on desktop */}
-              <Reveal onView className="lg:hidden">
-                {initialLoading ? <Skel className="h-[220px] rounded-[var(--radius-large)]" /> : <SessionCard />}
-              </Reveal>
-
-              {/* main chart */}
-              <Reveal onView delay={0.06}>
-                <Quiet widgetKey="training-volume-chart">
-                  <TrendChartCard />
+        <div className="mt-8 grid gap-4 lg:grid-cols-[minmax(0,1fr)_336px]">
+          <div className="space-y-4">
+            <Reveal onView className="grid grid-cols-3 gap-2 sm:gap-3">
+              {rings.map((s) => (
+                <Quiet key={s.id} widgetKey={s.id}>
+                  <RingStat label={s.label} value={s.value} sub={s.sub} pct={s.pct} tone={s.tone} to={s.to} />
                 </Quiet>
-              </Reveal>
+              ))}
+            </Reveal>
 
-              {/* bottom row — progress stats */}
-              <Reveal onView className="grid gap-3 sm:grid-cols-2">
-                {initialLoading
-                  ? [0, 1].map((i) => <Skel key={i} className="h-[120px] rounded-[var(--radius-large)]" />)
-                  : pstats.map((s) => (
-                      <Quiet key={s.id} widgetKey={PSTAT_WIDGET[s.id] ?? s.id}>
-                        <ProgressStat
-                          label={s.label}
-                          value={s.value}
-                          delta={s.delta}
-                          pct={s.pct}
-                          tone={s.tone}
-                          onSelect={metricDetails[s.id] ? () => setDetail(s.id) : undefined}
-                        />
-                      </Quiet>
-                    ))}
-              </Reveal>
+            <Reveal onView className="lg:hidden">
+              <SessionCard />
+            </Reveal>
 
+            <Reveal onView delay={0.06}>
+              <Quiet widgetKey="training-volume-chart">
+                <TrendChartCard series={chartSeries} labels={["mon", "tue", "wed", "thu", "fri", "sat", "sun"]} unit={units} />
+              </Quiet>
+            </Reveal>
+
+            <Reveal onView className="grid gap-3 sm:grid-cols-2">
+              <Quiet widgetKey="weekly-goal">
+                <ProgressStat
+                  label="weekly goal"
+                  value={`${weeklyGoal.done} / ${weeklyGoal.target}`}
+                  delta={weeklyGoal.done >= weeklyGoal.target ? "met" : `${weeklyGoal.target - weeklyGoal.done} to go`}
+                  pct={weeklyGoal.done / Math.max(1, weeklyGoal.target)}
+                  tone="pink"
+                />
+              </Quiet>
+              <Quiet widgetKey="avg-session">
+                <ProgressStat
+                  label="avg session volume"
+                  value={avgSessionVol ? `${(avgSessionVol / 1000).toFixed(1)}k` : "—"}
+                  delta={units}
+                  pct={0}
+                  tone="lime"
+                />
+              </Quiet>
+            </Reveal>
+
+            <Reveal onView>
+              <Quiet widgetKey="workout-streak">
+                <StreakWidget weekTrained={weekTrained} to="/progress" />
+              </Quiet>
+            </Reveal>
+
+            {prog.has("insights") && insight && (
               <Reveal onView>
-                <Quiet widgetKey="workout-streak">
-                  <StreakWidget onSelect={() => setDetail("streak")} />
-                </Quiet>
+                <InsightCard insight={insight} />
               </Reveal>
-
-              {prog.has("insights") && insightItems.length > 0 && (
-                <Reveal onView className="space-y-3">
-                  {insightItems.map((i) => (
-                    <InsightCard key={i.id} insight={i} />
-                  ))}
-                </Reveal>
-              )}
-            </div>
-
-            {/* ---------------- SIDEBAR ---------------- */}
-            <aside className="space-y-4">
-              {/* today's session — featured card with the body map (desktop sidebar) */}
-              <Reveal onView className="hidden lg:block">
-                {initialLoading ? <Skel className="h-[320px] rounded-[var(--radius-large)]" /> : <SessionCard />}
-              </Reveal>
-
-              <Reveal onView delay={0.05}>
-                <Quiet widgetKey="up-next">
-                  <ActivityList />
-                </Quiet>
-              </Reveal>
-
-              <Reveal onView delay={0.1}>
-                <Quiet widgetKey="kai-message">
-                  <Link
-                    to="/trainer"
-                    className="focus-ring group lift block ai-card p-4"
-                  >
-                    <div className="flex items-start gap-3">
-                      <KaiOrb size={40} state={coachMood(dash)} gaze className="mt-0.5" />
-                      <div className="min-w-0">
-                        <div className="label-soft lowercase">kai · your trainer</div>
-                        <p className="mt-1 line-clamp-3 text-[0.86rem] leading-relaxed text-content-secondary">
-                          {kaiMessage}
-                        </p>
-                      </div>
-                    </div>
-                  </Link>
-                </Quiet>
-              </Reveal>
-
-              {prog.has("goals") && (
-                <Reveal onView delay={0.15}>
-                  <Quiet widgetKey="goals-card">
-                    <GoalsCard />
-                  </Quiet>
-                </Reveal>
-              )}
-            </aside>
+            )}
           </div>
-        )}
 
-        <DetailDrawer
-          open={!!detail}
-          onClose={() => setDetail(null)}
-          eyebrow={detailData?.eyebrow ?? ""}
-          title={detailData?.title ?? ""}
-        >
-          {detail && <MetricDetailBody id={detail} onClose={() => setDetail(null)} />}
-        </DetailDrawer>
+          <aside className="space-y-4">
+            <Reveal onView className="hidden lg:block">
+              <SessionCard />
+            </Reveal>
+
+            <Reveal onView delay={0.05}>
+              <Quiet widgetKey="up-next">
+                <ActivityList />
+              </Quiet>
+            </Reveal>
+
+            <Reveal onView delay={0.1}>
+              <Quiet widgetKey="kai-message">
+                <Link to="/trainer" className="focus-ring group lift block ai-card p-4">
+                  <div className="flex items-start gap-3">
+                    <KaiOrb size={40} state={coachMood(dash)} gaze className="mt-0.5" />
+                    <div className="min-w-0">
+                      <div className="label-soft lowercase">kai · your trainer</div>
+                      <p className="mt-1 line-clamp-3 text-[0.86rem] leading-relaxed text-content-secondary">
+                        {dash.trainerMessage}
+                      </p>
+                    </div>
+                  </div>
+                </Link>
+              </Quiet>
+            </Reveal>
+
+            {prog.has("goals") && (
+              <Reveal onView delay={0.15}>
+                <Quiet widgetKey="goals-card">
+                  <GoalsCard />
+                </Quiet>
+              </Reveal>
+            )}
+          </aside>
+        </div>
       </div>
     </DashboardProvider>
   );

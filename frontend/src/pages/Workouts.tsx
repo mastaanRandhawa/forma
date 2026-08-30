@@ -1,61 +1,70 @@
-import { useState } from "react";
-import { Link } from "react-router-dom";
+import { useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { PageHeader } from "../components/PageHeader";
 import { Reveal } from "../components/Reveal";
 import { EmptyState } from "../components/EmptyState";
 import { Button, Panel, PillSelector } from "../components/primitives";
-import { BodyView } from "./Body";
-import { program, todayWorkout, upcomingWorkouts } from "../lib/data";
+import { useFormaData, startSession } from "../lib/localStore";
+import { sessionVolume } from "../lib/fitness";
+import { ALL_TEMPLATES, todayPlan, upcomingPlans, type DayPlan } from "../lib/program";
 
-const TABS = ["Today", "Body", "Calendar", "History", "Templates"] as const;
+const TABS = ["Today", "Calendar", "History", "Templates"] as const;
 
-const calendar = Array.from({ length: 35 }).map((_, i) => {
-  const day = i - 2;
-  return {
-    day,
-    inMonth: day >= 1 && day <= 30,
-    status:
-      [1, 3, 5, 8, 10, 12, 15, 17, 19].includes(day)
-        ? "done"
-        : [22, 24, 26].includes(day)
-        ? "planned"
-        : null,
-  };
-});
-
-const history = [
-  { date: "Mon, Aug 26", name: "Upper Body Push", volume: "24.7k lb", form: 88 },
-  { date: "Sat, Aug 24", name: "Lower Body", volume: "38.1k lb", form: 84 },
-  { date: "Thu, Aug 22", name: "Upper Body Pull", volume: "21.3k lb", form: 90 },
-  { date: "Tue, Aug 20", name: "Full Body + Conditioning", volume: "17.9k lb", form: 82 },
-];
-
-const templates = [
-  { name: "Push A · Chest Focus", meta: "6 exercises, ~50 min" },
-  { name: "Pull A · Width", meta: "6 exercises, ~48 min" },
-  { name: "Legs A · Quad Focus", meta: "7 exercises, ~55 min" },
-  { name: "Full Body Express", meta: "4 exercises, ~30 min" },
-];
-
-const todayExercises = [
-  ["Barbell Bench Press", "4 × 8-10"],
-  ["Incline Dumbbell Press", "4 × 8-10"],
-  ["Cable Fly", "3 × 12-15"],
-  ["Overhead Press", "4 × 8-10"],
-  ["Lateral Raise", "3 × 15"],
-  ["Triceps Rope Pushdown", "3 × 12-15"],
-];
+const fmtDate = (iso: string) =>
+  new Date(iso).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
 
 export default function Workouts() {
   const [tab, setTab] = useState<(typeof TABS)[number]>("Today");
+  const nav = useNavigate();
+  const data = useFormaData();
+  const plan = useMemo(() => todayPlan(data.profile), [data.profile]);
+  const upcoming = useMemo(() => upcomingPlans(3), []);
+
+  const start = (p: DayPlan) => {
+    startSession(p.name, p.exercises);
+    nav("/workouts/active");
+  };
+
+  const calendar = useMemo(() => {
+    const ref = new Date();
+    const year = ref.getFullYear();
+    const month = ref.getMonth();
+    const first = new Date(year, month, 1).getDay();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const trained = new Set(
+      data.sessions
+        .filter((s) => {
+          const d = new Date(s.finishedAt);
+          return d.getFullYear() === year && d.getMonth() === month;
+        })
+        .map((s) => new Date(s.finishedAt).getDate()),
+    );
+    return Array.from({ length: 42 }).map((_, i) => {
+      const day = i - first + 1;
+      const inMonth = day >= 1 && day <= daysInMonth;
+      const dow = new Date(year, month, day).getDay();
+      return {
+        day,
+        inMonth,
+        status: !inMonth
+          ? null
+          : trained.has(day)
+          ? "done"
+          : data.profile.preferredDays.includes(dow) && new Date(year, month, day) >= new Date(new Date().toDateString())
+          ? "planned"
+          : null,
+      };
+    });
+  }, [data.sessions, data.profile.preferredDays]);
+
+  const monthLabel = new Date().toLocaleDateString(undefined, { month: "long", year: "numeric" }).toLowerCase();
 
   return (
     <div className="mx-auto max-w-[1120px]">
-      <PageHeader eyebrow="train" title="plan" ghost="& body">
-        <div className="flex gap-2">
-          <Button variant="ghost">ai generate</Button>
-          <Button variant="ghost">build manually</Button>
-        </div>
+      <PageHeader eyebrow="train" title="plan" ghost="& history">
+        <Button variant="ghost" onClick={() => setTab("Templates")}>
+          browse templates
+        </Button>
       </PageHeader>
 
       <div className="mb-8">
@@ -65,145 +74,147 @@ export default function Workouts() {
       {tab === "Today" && (
         <Reveal key="today" className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_300px]">
           <section className="surface-soft p-6 sm:p-8">
-            <div className="label-instrument">{program.name.toLowerCase()}</div>
-            <h2 className="text-heading mt-2 text-content-primary lowercase">{todayWorkout.name}</h2>
+            <div className="label-instrument">
+              starter template · {data.profile.daysPerWeek ?? 4} days / week
+            </div>
+            <h2 className="text-heading mt-2 text-content-primary lowercase">{plan.name}</h2>
             <p className="mt-1.5 text-[0.9rem] text-content-secondary lowercase">
-              {program.split}, {todayWorkout.duration}
+              {plan.focus.join(", ").toLowerCase()} · ~{data.profile.sessionMin ?? 45} min
             </p>
 
             <ol className="mt-6 space-y-2">
-              {todayExercises.map(([name, scheme], i) => (
-                <li key={name} className="pill-row">
+              {plan.exercises.map((ex, i) => (
+                <li key={ex.name} className="pill-row">
                   <span className="pill-row__dot label-instrument !text-[0.7rem] text-content-tertiary">
                     {i + 1}
                   </span>
-                  <span className="flex-1 text-[0.92rem] text-content-primary">{name}</span>
-                  <span className="label-instrument shrink-0">{scheme}</span>
+                  <span className="flex-1 text-[0.92rem] text-content-primary">{ex.name}</span>
+                  <span className="label-instrument shrink-0">{ex.target}</span>
                 </li>
               ))}
             </ol>
 
             <div className="mt-7 flex gap-3">
-              <Link to="/workouts/active">
-                <Button>start workout →</Button>
-              </Link>
-              <Button variant="ghost">edit plan</Button>
+              <Button onClick={() => start(plan)}>
+                {data.active ? "resume workout →" : "start workout →"}
+              </Button>
             </div>
+            {!data.profile.onboardedAt && (
+              <p className="mt-3 label-instrument">
+                complete <a href="/onboarding" className="underline">setup</a> to tune this to your goal
+              </p>
+            )}
           </section>
 
           <aside>
             <div className="label-soft lowercase">up next</div>
-            {upcomingWorkouts.length === 0 ? (
-              <p className="mt-4 text-[0.86rem] leading-relaxed text-content-tertiary">
-                nothing scheduled. generate a plan or build one to fill your week.
-              </p>
-            ) : (
-              <ul className="mt-4 space-y-5">
-                {upcomingWorkouts.map((w) => (
-                  <li key={w.day}>
-                    <div className="text-[0.95rem] text-content-primary">{w.name}</div>
-                    <div className="label-instrument mt-1">
-                      {w.day.toLowerCase()} · {w.muscles.join(", ").toLowerCase()}
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
+            <ul className="mt-4 space-y-5">
+              {upcoming.map((w, i) => (
+                <li key={i}>
+                  <div className="text-[0.95rem] text-content-primary">{w.plan.name}</div>
+                  <div className="label-instrument mt-1">
+                    {w.when.toLowerCase()} · {w.plan.focus.join(", ").toLowerCase()}
+                  </div>
+                </li>
+              ))}
+            </ul>
           </aside>
         </Reveal>
       )}
 
-      {tab === "Body" && <BodyView />}
-
       {tab === "Calendar" && (
         <Reveal key="cal">
-        <Panel title="august 2026">
-          <div className="grid grid-cols-7 gap-2 text-center">
-            {["s", "m", "t", "w", "t", "f", "s"].map((d, i) => (
-              <div key={i} className="label-instrument pb-2">
-                {d}
-              </div>
-            ))}
-            {calendar.map((c, i) => (
-              <div
-                key={i}
-                className={`aspect-square rounded-[var(--radius-small)] flex flex-col items-center justify-center gap-1 ${
-                  c.inMonth ? "surface-recessed" : "text-content-tertiary"
-                }`}
-              >
-                <span className="tabular-nums text-[0.8rem] text-content-secondary">
-                  {c.inMonth ? c.day : ""}
-                </span>
-                {c.status && (
-                  <span
-                    className="h-1.5 w-1.5 rounded-full"
-                    style={{
-                      background: c.status === "done" ? "var(--accent-pink)" : "transparent",
-                      border: c.status === "planned" ? "1px solid var(--accent-mauve)" : "none",
-                    }}
-                  />
-                )}
-              </div>
-            ))}
-          </div>
-        </Panel>
+          <Panel title={monthLabel}>
+            <div className="grid grid-cols-7 gap-2 text-center">
+              {["s", "m", "t", "w", "t", "f", "s"].map((d, i) => (
+                <div key={i} className="label-instrument pb-2">
+                  {d}
+                </div>
+              ))}
+              {calendar.map((c, i) => (
+                <div
+                  key={i}
+                  className={`aspect-square rounded-[var(--radius-small)] flex flex-col items-center justify-center gap-1 ${
+                    c.inMonth ? "surface-recessed" : "text-content-tertiary"
+                  }`}
+                >
+                  <span className="tabular-nums text-[0.8rem] text-content-secondary">
+                    {c.inMonth ? c.day : ""}
+                  </span>
+                  {c.status && (
+                    <span
+                      className="h-1.5 w-1.5 rounded-full"
+                      style={{
+                        background: c.status === "done" ? "var(--accent-pink)" : "transparent",
+                        border: c.status === "planned" ? "1px solid var(--accent-mauve)" : "none",
+                      }}
+                    />
+                  )}
+                </div>
+              ))}
+            </div>
+            {data.sessions.length === 0 && (
+              <p className="mt-4 label-instrument">
+                pink marks land here once you finish a session
+              </p>
+            )}
+          </Panel>
         </Reveal>
       )}
 
       {tab === "History" && (
         <Reveal key="hist">
-        <Panel title="recent sessions">
-          {history.length === 0 ? (
-            <EmptyState
-              title="no sessions yet"
-              body="your finished workouts land here — volume, form score and the date."
-              action={{ label: "start today's workout", to: "/workouts/active" }}
-            />
-          ) : (
-          <ul className="divide-y divide-[var(--line-soft)]">
-            {history.map((h) => (
-              <li key={h.date} className="flex items-center justify-between py-4 first:pt-0">
-                <div>
-                  <div className="text-[0.95rem] text-content-primary">{h.name}</div>
-                  <div className="label-instrument mt-0.5">{h.date.toLowerCase()}</div>
-                </div>
-                <div className="text-right">
-                  <div className="label-instrument">{h.volume}</div>
-                  <div className="text-[0.78rem] tabular-nums" style={{ color: "var(--accent-lime)" }}>
-                    form {h.form}
-                  </div>
-                </div>
-              </li>
-            ))}
-          </ul>
-          )}
-        </Panel>
+          <Panel title="recent sessions">
+            {data.sessions.length === 0 ? (
+              <EmptyState
+                title="no sessions yet"
+                body="your finished workouts land here — volume, duration and any PRs."
+                action={{ label: "start today's workout", to: "/workouts" }}
+              />
+            ) : (
+              <ul className="divide-y divide-[var(--line-soft)]">
+                {data.sessions.map((h) => (
+                  <li key={h.id} className="flex items-center justify-between py-4 first:pt-0">
+                    <div>
+                      <div className="text-[0.95rem] text-content-primary lowercase">{h.name}</div>
+                      <div className="label-instrument mt-0.5">
+                        {fmtDate(h.finishedAt).toLowerCase()} · {Math.round(h.durationSec / 60)} min
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="label-instrument">
+                        {Math.round(sessionVolume(h.exercises)).toLocaleString()} {h.units}
+                      </div>
+                      {h.prs.length > 0 && (
+                        <div className="text-[0.78rem] tabular-nums" style={{ color: "var(--accent-lime)" }}>
+                          {h.prs.length} pr{h.prs.length > 1 ? "s" : ""}
+                        </div>
+                      )}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Panel>
         </Reveal>
       )}
 
       {tab === "Templates" && (
-        templates.length === 0 ? (
-          <EmptyState
-            title="no templates"
-            body="save a workout as a template and it'll be one tap to start next time."
-            action={{ label: "build a workout", to: "/workouts" }}
-          />
-        ) : (
         <Reveal key="templates" className="grid gap-4 sm:grid-cols-2">
-          {templates.map((t) => (
-            <div
-              key={t.name}
-              className="surface-soft lift flex items-center justify-between p-5"
-            >
+          {ALL_TEMPLATES.map((t) => (
+            <div key={t.name} className="surface-soft flex items-center justify-between p-5">
               <div>
                 <div className="text-[0.95rem] text-content-primary lowercase">{t.name}</div>
-                <div className="label-instrument mt-0.5">{t.meta}</div>
+                <div className="label-instrument mt-0.5">
+                  {t.exercises.length} exercises · {t.focus.join(", ").toLowerCase()}
+                </div>
               </div>
-              <Button variant="ghost">use</Button>
+              <Button variant="ghost" onClick={() => start(t)}>
+                start
+              </Button>
             </div>
           ))}
         </Reveal>
-        )
       )}
     </div>
   );
