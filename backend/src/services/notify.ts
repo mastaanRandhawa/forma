@@ -1,6 +1,8 @@
 import { prisma } from "../prisma.js";
 
-type NotifType = "trainer_message" | "reminder" | "milestone" | "pr" | "check_in" | "weekly_summary";
+type NotifType =
+  | "trainer_message" | "reminder" | "milestone" | "pr"
+  | "check_in" | "weekly_summary" | "feature_unlocked";
 
 const PREF_KEY: Record<NotifType, keyof Awaited<ReturnType<typeof defaultPrefs>>> = {
   trainer_message: "trainerMessages",
@@ -9,6 +11,7 @@ const PREF_KEY: Record<NotifType, keyof Awaited<ReturnType<typeof defaultPrefs>>
   pr: "milestones",
   check_in: "checkIns",
   weekly_summary: "weeklySummary",
+  feature_unlocked: "milestones",
 };
 
 async function defaultPrefs() {

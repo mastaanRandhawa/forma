@@ -2,6 +2,7 @@ import { PrismaClient } from "@prisma/client";
 import { hashPassword } from "../src/lib/auth.js";
 import { EQUIPMENT, MUSCLE_GROUPS, EXERCISES } from "../src/data/library.js";
 import { STORE_ITEMS, ACHIEVEMENTS, GOAL_TEMPLATES } from "../src/data/store.js";
+import { BACKGROUND_PRESETS } from "../src/data/appearance.js";
 
 const prisma = new PrismaClient();
 
@@ -57,7 +58,11 @@ async function main() {
     await prisma.achievement.upsert({ where: { key: a.key }, update: a, create: a });
   }
 
-  console.log(`   ${EQUIPMENT.length} equipment · ${MUSCLE_GROUPS.length} muscles · ${EXERCISES.length} exercises · ${STORE_ITEMS.length} store items`);
+  for (const p of BACKGROUND_PRESETS) {
+    await prisma.backgroundPreset.upsert({ where: { id: p.id as string }, update: p, create: p });
+  }
+
+  console.log(`   ${EQUIPMENT.length} equipment · ${MUSCLE_GROUPS.length} muscles · ${EXERCISES.length} exercises · ${STORE_ITEMS.length} store items · ${BACKGROUND_PRESETS.length} presets`);
 
   // ── demo user matching the web companion's mock data ──────────────────────
   const email = "alex@forma.app";
@@ -110,6 +115,33 @@ async function main() {
         data: { userId: user.id, metricType, value, unit, source: "health_sync" },
       });
     }
+
+    // appearance / disclosure / progression — mid-journey state so the app renders
+    const defaultPreset = BACKGROUND_PRESETS.find((p) => p.isDefault)!;
+    const dg = defaultPreset.glass as { opacity: number; blurPx: number; tint: string };
+    await prisma.userAppearance.create({
+      data: {
+        userId: user.id,
+        presetId: defaultPreset.id as string,
+        backgroundMode: defaultPreset.mode as string,
+        backgroundColor: (defaultPreset.backgroundColor as string) ?? "#170D17",
+        backgroundGradient: defaultPreset.gradient ?? undefined,
+        backgroundDim: (defaultPreset.backgroundDim as number) ?? 0,
+        glassOpacity: dg.opacity,
+        glassBlurPx: Math.round(dg.blurPx),
+        glassTint: dg.tint,
+      },
+    });
+    await prisma.userDisclosure.create({ data: { userId: user.id, mode: "always" } });
+    await prisma.userProgression.create({
+      data: {
+        userId: user.id,
+        tier: "building",
+        unlockedFeatures: ["dashboard", "workouts", "trainer", "body_map", "progress_basic", "goals"],
+        gatingEnabled: true,
+        firstRunAt: new Date(Date.now() - 4 * 86_400_000),
+      },
+    });
   }
 
   console.log("✅ seed complete");

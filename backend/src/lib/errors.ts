@@ -16,3 +16,5 @@ export const unauthorized = (m = "Unauthorized") => new HttpError(401, m, "unaut
 export const forbidden = (m = "Forbidden") => new HttpError(403, m, "forbidden");
 export const notFound = (m = "Not found") => new HttpError(404, m, "not_found");
 export const conflict = (m = "Conflict") => new HttpError(409, m, "conflict");
+export const unprocessable = (m = "Unprocessable entity", d?: unknown) =>
+  new HttpError(422, m, "unprocessable", d);

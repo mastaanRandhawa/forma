@@ -38,12 +38,23 @@ describe("API surface", () => {
   it("every domain router is mounted", async () => {
     const domains = [
       "me", "trainer", "library", "workouts", "programs", "sessions", "progress",
-      "goals", "chat", "store", "body", "dashboard", "notifications", "achievements", "subscription",
+      "goals", "chat", "store", "body", "dashboard", "notifications", "achievements",
+      "subscription", "config/appearance-presets",
     ];
     for (const d of domains) {
       const res = await request(app).get(`/api/v1/${d}`);
-      // mounted routers reject with 401 (auth) or 400/404, never a bare 404 "Route not found"
+      // mounted routers reject with 401 (auth) or 400/404/500, never a bare 404 "Route not found"
       expect(res.body?.error?.message).not.toBe("Route not found");
     }
+  });
+
+  it("PUT /me/settings requires auth", async () => {
+    const res = await request(app).put("/api/v1/me/settings").send({ appearance: { reduceMotion: true } });
+    expect(res.status).toBe(401);
+  });
+
+  it("PUT /me/progression requires auth", async () => {
+    const res = await request(app).put("/api/v1/me/progression").send({ gatingEnabled: false });
+    expect(res.status).toBe(401);
   });
 });

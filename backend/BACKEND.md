@@ -55,24 +55,45 @@ Implements §21 in full plus the web companion + system surfaces.
 - **Derived:** `MuscleActivation` (materialized per session), `PersonalRecord`, `ProgressMetric` (generalized time-series), `BodyMeasurement`, `ProgressPhoto`
 - **Trainer chat:** `ChatMessage` (role, rich content, `viaVoice`, `trainerSnapshot` for QA traceability, `appliedAt`), `CoachingInsight` (T4 log)
 - **Gamification:** `Goal`/`GoalEntry`, `Achievement`/`UserAchievement`, `Wallet`/`WalletTransaction`, `StoreItem`/`UserStoreItem`
-- **System:** `Notification`
+- **First-run experience:** `BackgroundPreset` (seed reference — curated background/glass looks, `isDefault` + `minTier` + `storeItemId` gating), `UserAppearance` (per-user override layer, clamps enforced), `UserDisclosure` (quiet-widget mode + per-widget overrides), `UserProgression` (monotonic `unlockedFeatures`, derived `tier`, `gatingEnabled`)
+- **System:** `Notification` (incl. `feature_unlocked`)
 
 ---
 
 ## 3. API — every endpoint
 
-Base `/api/v1`. All except `/health` and `/auth/*` require `Authorization: Bearer <accessToken>`.
+**Contract:** [`openapi.yaml`](openapi.yaml) (OpenAPI 3.1) is the source of truth.
+Narrative reference + conventions + screen→endpoint map: [`API.md`](API.md).
+Typed client for the web app: [`../frontend/src/api/`](../frontend/src/api).
+When the server runs: `GET /api/v1/docs` (Redoc), `/api/v1/docs/openapi.json`.
+
+Base `/api/v1`. All except `/health`, `/docs/*` and `/auth/*` require `Authorization: Bearer <accessToken>`.
 
 ### Auth — `/auth` (rate-limited)
 `POST /register` · `POST /login` · `POST /refresh` · `POST /logout` · `GET /me`
 `POST /social/:provider` (apple|google) · `POST /forgot-password` · `POST /reset-password`
 
 ### Profile & settings — `/me`
-`GET /` (full bundle) · `PATCH /` · `POST /onboarding` (profile+trainer+equipment+injuries+goals in one call)
-`GET /settings` · `PUT /settings` (camera/privacy S8, units S7)
+`GET /` (full bundle; lazily re-evals progression if stale) · `PATCH /`
+`POST /onboarding` (profile+trainer+equipment+injuries+goals + optional `experience` block — also creates appearance/disclosure/progression rows)
+`GET /settings` · `PUT /settings` — **the bundle**: `{ camera, units, appearance, disclosure, progression }`, deep-merge patch, per-block validation (hex regex, glass/dim clamps, image-host allowlist, widget-override key/enum → 422)
+`PUT /progression` (`gatingEnabled` toggle) · `POST /progression/evaluate` (force re-eval)
 `GET/POST /injuries` · `DELETE /injuries/:id` (O9/S11)
 `GET/PUT /equipment` (O6/S10) · `GET /devices` · `PUT /devices/:provider` (S4/S5)
 `GET /export` (GDPR JSON) · `DELETE /` (account deletion, soft + 30-day purge)
+
+### Config — `/config` (auth optional, cacheable)
+`GET /appearance-presets` — curated presets filtered by the caller's tier + owned themes
+
+### First-run experience (appearance · disclosure · progression)
+The appearance engine (themeable "liquid glass" surface), progressive disclosure
+(quiet widgets until touched) and unlock progression (UI grows as the user earns
+it) all live in the settings bundle. Rules table: `src/data/progression.ts`
+(12 features, `starter→building→established→full`). Engine: `src/services/progression.ts`
+(deterministic counter thresholds; fires `feature_unlocked` notifications; re-evaluated
+after every `POST /sessions/:id/finish` and `POST /achievements/evaluate`).
+`gatingEnabled:false` short-circuits to "everything unlocked". Presets: `src/data/appearance.ts`.
+Full spec + delivery notes: [`docs-appearance-progression.md`](docs-appearance-progression.md).
 
 ### Trainer — `/trainer`
 `GET /` · `PATCH /` · `POST /apply-personality/:storeItemId`
@@ -154,6 +175,7 @@ volume, readiness, streak, recent PRs, active session, goals, unread count, insi
 | Proactive coaching / check-ins | `jobs/dailyNudges`, `services/insights.buildCheckIn`, `/trainer/check-in` |
 | Subscription reconciliation | `modules/subscription.ts` — one entitlement model; receipt verification is stubbed (`TODO`) |
 | Wearable HR streaming | out of scope (needs a realtime channel; `DeviceConnection` tracks pairing) |
+| First-run cognitive load | appearance engine + progressive disclosure + unlock progression, all in `GET/PUT /me/settings`; brand re-themes propagate to every user still on a preset by editing `src/data/appearance.ts` and re-running the idempotent seed |
 
 ---
 
@@ -165,10 +187,11 @@ cp .env.example .env                 # fill JWT secrets
 docker compose up -d                 # Postgres on :5432
 npm install
 npm run prisma:migrate               # first run: name it "init"
-npm run db:seed                      # reference data + demo user
+npm run db:seed                      # reference data + presets + demo user
+npm run db:backfill                  # existing users: default appearance/disclosure rows + run progression once
 npm run dev                          # API  → http://localhost:4000/api/v1
 npm run worker                       # (separate terminal) cron jobs
-npm test                             # contract tests (no DB needed)
+npm test                             # contract + rule-table tests (no DB needed)
 ```
 
 Demo login: `alex@forma.app` / `forma1234`.

@@ -3,6 +3,7 @@ import { prisma } from "../prisma.js";
 import { asyncHandler } from "../lib/http.js";
 import { requireAuth, type AuthedRequest } from "../middleware/auth.js";
 import { evaluateAchievements } from "../services/achievements.js";
+import { evaluateProgression } from "../services/progression.js";
 
 export const achievementsRouter = Router();
 achievementsRouter.use(requireAuth);
@@ -37,6 +38,7 @@ achievementsRouter.post(
   "/evaluate",
   asyncHandler(async (req, res) => {
     await evaluateAchievements(uid(req));
-    res.json({ ok: true });
+    const progression = await evaluateProgression(uid(req)).catch(() => null);
+    res.json({ ok: true, progression });
   }),
 );

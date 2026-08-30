@@ -46,6 +46,9 @@ async function bootstrapUser(userId: string) {
   await prisma.wallet.create({ data: { userId, balance: 100 } });
   await prisma.notificationPreference.create({ data: { userId } });
   await prisma.subscription.create({ data: { userId } });
+  await prisma.userAppearance.create({ data: { userId } });
+  await prisma.userDisclosure.create({ data: { userId } });
+  await prisma.userProgression.create({ data: { userId, unlockedFeatures: ["dashboard", "workouts", "trainer"] } });
   const defaults = STORE_ITEMS.filter((i) => i.isDefault);
   for (const item of defaults) {
     await prisma.userStoreItem.create({ data: { userId, storeItemId: item.id, equipped: true } });

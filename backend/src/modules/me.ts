@@ -5,10 +5,14 @@ import { asyncHandler } from "../lib/http.js";
 import { validate } from "../middleware/validate.js";
 import { requireAuth, type AuthedRequest } from "../middleware/auth.js";
 import { GOAL_TEMPLATES } from "../data/store.js";
+import { SAFETY_WIDGETS } from "../data/progression.js";
+import { getSettingsBundle, applySettingsPatch, settingsPatchSchema } from "../services/settings.js";
+import { ensureProgression, evaluateProgression, setGating } from "../services/progression.js";
 
 export const meRouter = Router();
 meRouter.use(requireAuth);
 const uid = (req: unknown) => (req as AuthedRequest).userId;
+const RE_EVAL_MS = 6 * 60 * 60 * 1000;
 
 const profileSchema = z.object({
   name: z.string().min(1).max(80).optional(),
@@ -27,12 +31,17 @@ const profileSchema = z.object({
   sessionLengthTargetMin: z.number().int().min(10).max(240).optional(),
 });
 
-/** Full profile bundle (S1/S2). */
+/** Full profile bundle (S1/S2). Lazily re-evaluates progression if stale. */
 meRouter.get(
   "/",
   asyncHandler(async (req, res) => {
+    const userId = uid(req);
+    const prog = await ensureProgression(userId);
+    if (Date.now() - prog.lastEvaluatedAt.getTime() > RE_EVAL_MS) {
+      await evaluateProgression(userId).catch(() => {});
+    }
     const user = await prisma.user.findUniqueOrThrow({
-      where: { id: uid(req) },
+      where: { id: userId },
       include: {
         trainer: true,
         wallet: true,
@@ -41,6 +50,7 @@ meRouter.get(
         injuries: { where: { active: true } },
         equipment: { include: { equipment: true } },
         deviceConnections: true,
+        progression: true,
       },
     });
     const { passwordHash, appleSub, googleSub, ...safe } = user;
@@ -58,32 +68,35 @@ meRouter.patch(
   }),
 );
 
-// ── Camera & privacy settings (S8) ────────────────────────────────────────
-meRouter.get("/settings", asyncHandler(async (req, res) => {
-  const u = await prisma.user.findUniqueOrThrow({
-    where: { id: uid(req) },
-    select: { formDataVerbosity: true, saveHighlightClips: true, unitPreference: true, weekStartsMonday: true },
-  });
-  res.json(u);
-}));
+// ── Settings bundle (camera S8 · units S7 · appearance · disclosure · progression) ──
+meRouter.get(
+  "/settings",
+  asyncHandler(async (req, res) => {
+    res.json(await getSettingsBundle(uid(req)));
+  }),
+);
 
 meRouter.put(
   "/settings",
-  validate({
-    body: z.object({
-      formDataVerbosity: z.enum(["minimal", "categorical", "detailed"]).optional(),
-      saveHighlightClips: z.boolean().optional(),
-      unitPreference: z.enum(["metric", "imperial"]).optional(),
-      weekStartsMonday: z.boolean().optional(),
-    }),
-  }),
+  validate({ body: settingsPatchSchema }),
   asyncHandler(async (req, res) => {
-    const u = await prisma.user.update({
-      where: { id: uid(req) },
-      data: req.body,
-      select: { formDataVerbosity: true, saveHighlightClips: true, unitPreference: true, weekStartsMonday: true },
-    });
-    res.json(u);
+    res.json(await applySettingsPatch(uid(req), req.body));
+  }),
+);
+
+// ── Unlock progression ───────────────────────────────────────────────────
+meRouter.post(
+  "/progression/evaluate",
+  asyncHandler(async (req, res) => {
+    res.json(await evaluateProgression(uid(req)));
+  }),
+);
+
+meRouter.put(
+  "/progression",
+  validate({ body: z.object({ gatingEnabled: z.boolean() }) }),
+  asyncHandler(async (req, res) => {
+    res.json(await setGating(uid(req), (req.body as { gatingEnabled: boolean }).gatingEnabled));
   }),
 );
 
@@ -139,14 +152,21 @@ const onboardingSchema = profileSchema.extend({
     .optional(),
   equipmentKeys: z.array(z.string()).optional(),
   injuries: z.array(z.object({ tag: z.string(), note: z.string().optional() })).optional(),
+  experience: z
+    .object({
+      calmMode: z.boolean().optional(),
+      startTier: z.enum(["starter", "building", "established", "full"]).optional(),
+    })
+    .optional(),
 });
 
 meRouter.post(
   "/onboarding",
   validate({ body: onboardingSchema }),
   asyncHandler(async (req, res) => {
-    const { trainer, equipmentKeys, injuries, ...profile } = req.body as z.infer<typeof onboardingSchema>;
+    const { trainer, equipmentKeys, injuries, experience, ...profile } = req.body as z.infer<typeof onboardingSchema>;
     const userId = uid(req);
+    const calmMode = experience?.calmMode ?? false;
 
     await prisma.$transaction(async (tx) => {
       await tx.user.update({ where: { id: userId }, data: { ...profile, onboardingCompletedAt: new Date() } });
@@ -166,7 +186,6 @@ meRouter.post(
         await tx.injuryNote.createMany({ data: injuries.map((i) => ({ ...i, userId })) });
       }
 
-      // seed the standard goal set
       for (const g of GOAL_TEMPLATES) {
         await tx.goal.upsert({
           where: { userId_key: { userId, key: g.key } },
@@ -174,6 +193,50 @@ meRouter.post(
           create: { userId, key: g.key, label: g.label, target: g.target, unit: g.unit, cadence: g.cadence, tone: g.tone },
         });
       }
+
+      // appearance — copy the default preset's values
+      const preset = await tx.backgroundPreset.findFirst({ where: { isDefault: true } });
+      const g = (preset?.glass ?? { opacity: 0.72, blurPx: 18, tint: "#2A1623" }) as { opacity: number; blurPx: number; tint: string };
+      await tx.userAppearance.upsert({
+        where: { userId },
+        update: {},
+        create: {
+          userId,
+          presetId: preset?.id ?? null,
+          backgroundMode: preset?.mode ?? "solid",
+          backgroundColor: preset?.backgroundColor ?? "#170D17",
+          backgroundGradient: preset?.gradient ?? undefined,
+          backgroundImageUrl: preset?.imageUrl ?? null,
+          backgroundDim: preset?.backgroundDim ?? 0,
+          glassOpacity: g.opacity,
+          glassBlurPx: Math.round(g.blurPx),
+          glassTint: g.tint,
+          accentColor: preset?.accentColor ?? null,
+          reduceMotion: calmMode,
+        },
+      });
+
+      // progressive disclosure
+      await tx.userDisclosure.upsert({
+        where: { userId },
+        update: {},
+        create: {
+          userId,
+          mode: calmMode ? "on_interaction" : "always",
+          widgetOverrides: calmMode ? Object.fromEntries(SAFETY_WIDGETS.map((w) => [w, "always"])) : {},
+        },
+      });
+
+      // unlock progression
+      await tx.userProgression.upsert({
+        where: { userId },
+        update: {},
+        create: {
+          userId,
+          unlockedFeatures: ["dashboard", "workouts", "trainer"],
+          gatingEnabled: calmMode ? true : false,
+        },
+      });
     });
 
     res.json({ ok: true });

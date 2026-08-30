@@ -29,6 +29,10 @@ export const STORE_ITEMS: Prisma.StoreItemCreateInput[] = [
   { id: "t-default", category: "theme", name: "Default", detail: "soft frosted bubbles", price: 0, isDefault: true },
   { id: "t-minimal", category: "theme", name: "Minimal", detail: "flat, no borders, tight", price: 100 },
   { id: "t-terminal", category: "theme", name: "Terminal", detail: "mono type, green cursor", price: 120 },
+
+  // premium appearance themes (unlock the matching BackgroundPreset — see src/data/appearance.ts)
+  { id: "t-nebula", category: "theme", name: "Nebula", detail: "violet & wine background theme", price: 200 },
+  { id: "t-oceanic", category: "theme", name: "Oceanic", detail: "deep teal background theme", price: 240 },
 ];
 
 export const ACHIEVEMENTS: Prisma.AchievementCreateInput[] = [

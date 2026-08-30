@@ -224,6 +224,9 @@ model User {
   notificationPrefs   NotificationPreference?
   subscription        Subscription?
   deviceConnections   DeviceConnection[]
+  appearance          UserAppearance?
+  disclosure          UserDisclosure?
+  progression         UserProgression?
 
   @@index([createdAt])
 }
@@ -802,4 +805,67 @@ model DeviceConnection {
   createdAt  DateTime @default(now())
 
   @@unique([userId, provider])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Appearance engine · progressive disclosure · unlock progression
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Curated background/glass presets — backend-owned, changeable via seed without
+/// an app release. `isDefault` seeds new users; changing it re-themes everyone
+/// still on a preset (`UserAppearance.presetId != null`).
+model BackgroundPreset {
+  id              String  @id // slug, e.g. "aurora-plum"
+  name            String
+  mode            String // "solid" | "gradient" | "image"
+  backgroundColor String?
+  gradient        Json? // { angle, stops: [{ color, at }] }
+  imageUrl        String?
+  backgroundDim   Float   @default(0)
+  glass           Json // { opacity, blurPx, tint }
+  accentColor     String?
+  sortOrder       Int     @default(0)
+  isDefault       Boolean @default(false)
+  minTier         String? // null = always available; else gate by progression tier
+  storeItemId     String? // if set, requires owning this StoreItem (category "theme")
+}
+
+/// Per-user appearance override layer. `presetId` set → response mirrors the
+/// live preset values; editing any theme field nulls it.
+model UserAppearance {
+  userId             String   @id
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  presetId           String?
+  backgroundMode     String   @default("solid")
+  backgroundColor    String   @default("#170D17")
+  backgroundGradient Json?
+  backgroundImageUrl String?
+  backgroundDim      Float    @default(0)
+  glassOpacity       Float    @default(0.72) // clamp 0.35..0.95
+  glassBlurPx        Int      @default(18) // clamp 0..40
+  glassTint          String   @default("#2A1623")
+  accentColor        String?
+  reduceMotion       Boolean  @default(false)
+  updatedAt          DateTime @updatedAt
+}
+
+/// Progressive-disclosure preferences. Pure storage — the client computes
+/// effective visibility as `widgetOverrides[key] ?? mode`.
+model UserDisclosure {
+  userId          String   @id
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  mode            String   @default("always") // "always" | "on_interaction"
+  widgetOverrides Json     @default("{}")
+  updatedAt       DateTime @updatedAt
+}
+
+/// Unlock progression. `unlockedFeatures` is additive and monotonic — never revoked.
+model UserProgression {
+  userId           String   @id
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tier             String   @default("starter") // starter | building | established | full
+  unlockedFeatures String[] @default([])
+  gatingEnabled    Boolean  @default(true) // false = user chose "show me everything"
+  firstRunAt       DateTime @default(now())
+  lastEvaluatedAt  DateTime @default(now())
 }

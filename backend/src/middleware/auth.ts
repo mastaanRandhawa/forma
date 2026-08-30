@@ -19,3 +19,18 @@ export function requireAuth(req: Request, _res: Response, next: NextFunction) {
     next(unauthorized("Invalid or expired token"));
   }
 }
+
+/** Populates userId when a valid token is present, but never rejects. */
+export function optionalAuth(req: Request, _res: Response, next: NextFunction) {
+  const header = req.header("authorization");
+  if (header?.startsWith("Bearer ")) {
+    try {
+      const payload = verifyAccessToken(header.slice(7));
+      (req as AuthedRequest).userId = payload.sub;
+      (req as AuthedRequest).userEmail = payload.email;
+    } catch {
+      /* ignore — treat as anonymous */
+    }
+  }
+  next();
+}

@@ -8,6 +8,7 @@ import { notFound, badRequest } from "../lib/errors.js";
 import { finalizeSession } from "../services/session.js";
 import { evaluateAchievements } from "../services/achievements.js";
 import { generateInsights } from "../services/insights.js";
+import { evaluateProgression } from "../services/progression.js";
 import { sessionComment } from "../services/ai.js";
 import { notify } from "../services/notify.js";
 
@@ -241,16 +242,18 @@ sessionsRouter.post(
       finalized.trainerComment = comment;
     }
 
-    // derived-layer follow-ups — best-effort, never block the response
+    // derived-layer follow-ups — best-effort, never block the response.
+    // achievements first (they feed progression's prCount / achievementCount).
     await Promise.allSettled([
-      evaluateAchievements(userId),
       generateInsights(userId),
       ...finalized.personalRecords.map((pr) =>
         notify(userId, "pr", "New personal record", `${pr.exercise.name} — ${pr.recordType.replace(/_/g, " ")}`, "/progress"),
       ),
     ]);
+    await evaluateAchievements(userId).catch(() => {});
+    const progression = await evaluateProgression(userId).catch(() => null);
 
-    res.json(finalized);
+    res.json(Object.assign(finalized, { progression }));
   }),
 );
 

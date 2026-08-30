@@ -12,6 +12,8 @@ const schema = z.object({
   WEB_ORIGIN: z.string().default("http://localhost:5178"),
   ANTHROPIC_API_KEY: z.string().optional().default(""),
   AI_MODEL: z.string().default("claude-sonnet-5"),
+  // hosts allowed for user-supplied appearance background images (comma-separated)
+  APPEARANCE_IMAGE_HOSTS: z.string().default("storage.local,cdn.forma.app"),
 });
 
 const parsed = schema.safeParse(process.env);
