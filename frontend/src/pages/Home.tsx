@@ -160,7 +160,7 @@ export default function Home() {
                 <Quiet widgetKey="kai-message">
                   <Link
                     to="/trainer"
-                    className="focus-ring group block ai-card p-4 transition-transform duration-200 hover:-translate-y-0.5"
+                    className="focus-ring group lift block ai-card p-4"
                   >
                     <div className="flex items-start gap-3">
                       <KaiOrb size={40} state={coachMood(dash)} gaze className="mt-0.5" />

@@ -192,26 +192,29 @@ textarea,
   .tactile:hover { filter: none; }
 }
 
-/* lift — cards, tiles and list rows that rise toward the pointer. Opt-in so
-   it never lands on a Motion-controlled element. */
+/* lift — cards, tiles and list rows. Hover feedback is edge + depth only:
+   no vertical translate, so nothing shifts and there's no sub-pixel jitter
+   on blurred / backdrop-filtered surfaces. */
 .lift.lift {
   transition:
     color var(--dur-hover) var(--ease-luxury),
     background-color var(--dur-hover) var(--ease-luxury),
     border-color var(--dur-hover) var(--ease-luxury),
-    transform var(--dur-hover) var(--ease-luxury),
-    box-shadow var(--dur-hover) var(--ease-luxury);
+    box-shadow var(--dur-hover) var(--ease-luxury),
+    filter var(--dur-hover) var(--ease-luxury);
 }
-.lift:hover { transform: translateY(-3px); }
-.lift:active { transform: translateY(-1px) scale(0.996); }
+.lift:hover {
+  border-color: rgba(255, 255, 255, 0.22);
+  box-shadow: 0 24px 48px -28px rgba(30, 5, 24, 0.6);
+}
+.lift:active { filter: brightness(0.97); }
 
-/* icon nudge — a chevron / arrow that eases forward when its .group is hovered */
-.nudge-x,
-.nudge-up {
+/* icon nudge — a chevron / arrow that eases forward (horizontal only) when
+   its .group is hovered */
+.nudge-x {
   transition: transform var(--dur-hover) var(--ease-luxury);
 }
 .group:hover .nudge-x { transform: translateX(3px); }
-.group:hover .nudge-up { transform: translate(2px, -2px); }
 
 @media (prefers-reduced-motion: reduce) {
   .animate-rise,
@@ -224,8 +227,7 @@ textarea,
   .lift,
   .lift:hover,
   .lift:active,
-  .nudge-x,
-  .nudge-up {
+  .nudge-x {
     transition: none !important;
     transform: none !important;
     filter: none !important;

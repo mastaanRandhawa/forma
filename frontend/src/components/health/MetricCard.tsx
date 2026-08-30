@@ -210,7 +210,7 @@ export function MetricCard({
       )}
 
       {interactive && (
-        <span className="pointer-events-none absolute -bottom-1 right-0 z-10 flex items-center gap-1 text-[0.72rem] text-content-tertiary opacity-0 transition-all duration-200 group-hover:-translate-x-0 group-hover:opacity-100">
+        <span className="pointer-events-none absolute -bottom-1 right-0 z-10 flex items-center gap-1 text-[0.72rem] text-content-tertiary opacity-0 transition-opacity duration-200 group-hover:opacity-100">
           details <ChevronRight size={13} strokeWidth={2.25} className="transition-transform duration-200 group-hover:translate-x-0.5" />
         </span>
       )}

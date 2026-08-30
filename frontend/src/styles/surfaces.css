@@ -205,8 +205,9 @@
     inset 0 1px 0 rgba(255, 255, 255, 0.14);
   overflow: hidden;
   transition:
-    transform var(--dur-hover) var(--ease-luxury),
-    box-shadow var(--dur-hover) var(--ease-luxury);
+    box-shadow var(--dur-hover) var(--ease-luxury),
+    border-color var(--dur-hover) var(--ease-luxury),
+    filter var(--dur-hover) var(--ease-luxury);
 }
 
 .metric-card[data-tone="pink"] { --tone-color: #d1519a; }
@@ -245,19 +246,20 @@
 .metric-card--link {
   cursor: pointer;
 }
+/* hover feedback is depth + edge only — no lift, so the layout never moves */
 .metric-card--link:hover {
-  transform: translateY(-2px);
+  border-color: rgba(255, 255, 255, 0.2);
   box-shadow:
-    0 34px 62px -24px rgba(30, 5, 24, 0.72),
-    inset 0 1px 0 rgba(255, 255, 255, 0.22);
+    0 30px 58px -26px rgba(30, 5, 24, 0.7),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
 }
 .metric-card[data-variant="vivid"].metric-card--link:hover {
   box-shadow:
-    0 34px 66px -20px color-mix(in srgb, var(--tone-color) 48%, transparent),
+    0 30px 60px -24px color-mix(in srgb, var(--tone-color) 46%, transparent),
     inset 0 1px 0 rgba(255, 255, 255, 0.26);
 }
 .metric-card--link:active {
-  transform: translateY(0) scale(0.994);
+  filter: brightness(0.97);
 }
 
 .metric-card__label {

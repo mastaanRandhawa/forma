@@ -59,7 +59,7 @@ export function SessionCard() {
 
       <div className="relative z-10 flex items-start justify-between">
         <span className="metric-card__label !text-white">today's session</span>
-        <span className="metric-card__action !h-8 !w-8 !bg-white/20 !text-white transition-transform duration-200 group-hover:translate-x-0.5 group-hover:-translate-y-0.5">
+        <span className="metric-card__action !h-8 !w-8 !bg-white/20 !text-white">
           <ArrowUpRight size={16} strokeWidth={2.25} />
         </span>
       </div>

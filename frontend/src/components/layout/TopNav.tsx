@@ -151,8 +151,8 @@ export function TopNav({
         >
           <motion.span
             className="grid place-items-center"
-            whileHover={reduce ? undefined : { rotate: -8, scale: 1.06 }}
-            transition={{ type: "spring", stiffness: 400, damping: 15 }}
+            whileHover={reduce ? undefined : { scale: 1.05 }}
+            transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
           >
             <Mark />
           </motion.span>
