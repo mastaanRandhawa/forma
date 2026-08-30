@@ -15,11 +15,20 @@ const BASE_URL =
   "http://localhost:4000/api/v1";
 
 // ── token store ─────────────────────────────────────────────────────────────
+// Bearer model: a short-lived access token + an opaque, rotating refresh token.
+// The API and web app are served from different origins (GitHub Pages ⇄ API
+// host), which makes an HttpOnly refresh cookie a blocked third-party cookie in
+// modern browsers — so the refresh token is held client-side. Every
+// authenticated request carries an explicit `Authorization` header, so there is
+// no ambient-credential / CSRF surface. Server-side, each session is a DB row
+// that can be revoked (see backend middleware/auth.ts), which is the real
+// control — a stolen token stops working the moment its session is revoked.
 const ACCESS_KEY = "forma.access";
 const REFRESH_KEY = "forma.refresh";
 
 let accessToken: string | null = safeGet(ACCESS_KEY);
 let refreshToken: string | null = safeGet(REFRESH_KEY);
+let restoreAttempted = false;
 const listeners = new Set<(authed: boolean) => void>();
 
 function safeGet(k: string) {
@@ -31,24 +40,32 @@ function safeGet(k: string) {
 }
 function persist() {
   try {
-    if (accessToken) localStorage.setItem(ACCESS_KEY, accessToken);
-    else localStorage.removeItem(ACCESS_KEY);
-    if (refreshToken) localStorage.setItem(REFRESH_KEY, refreshToken);
-    else localStorage.removeItem(REFRESH_KEY);
+    accessToken ? localStorage.setItem(ACCESS_KEY, accessToken) : localStorage.removeItem(ACCESS_KEY);
+    refreshToken ? localStorage.setItem(REFRESH_KEY, refreshToken) : localStorage.removeItem(REFRESH_KEY);
   } catch {
     /* private mode — tokens stay in memory only */
   }
 }
 function setTokens(t: T.Tokens | null) {
+  const was = !!accessToken;
   accessToken = t?.accessToken ?? null;
-  refreshToken = t?.refreshToken ?? null;
+  refreshToken = t?.refreshToken ?? refreshToken ?? null; // refresh may be omitted on plain rotation errors
+  if (!t) refreshToken = null;
   persist();
-  for (const l of listeners) l(!!accessToken);
+  if (was !== !!accessToken) for (const l of listeners) l(!!accessToken);
 }
 
 export const session = {
   isAuthenticated: () => !!accessToken,
   getRefreshToken: () => refreshToken,
+  /** Re-establish auth state on app boot: refresh if we hold a refresh token. */
+  async restore(): Promise<boolean> {
+    restoreAttempted = true;
+    if (accessToken) return true;
+    if (!refreshToken) return false;
+    return doRefresh();
+  },
+  hasRestored: () => restoreAttempted,
   /** Subscribe to auth changes (login / logout / refresh failure). */
   onChange(fn: (authed: boolean) => void) {
     listeners.add(fn);
@@ -85,26 +102,27 @@ let refreshInFlight: Promise<boolean> | null = null;
 
 async function doRefresh(): Promise<boolean> {
   if (!refreshToken) return false;
-  if (!refreshInFlight) refreshInFlight = (async () => {
-    try {
-      const res = await fetch(`${BASE_URL}/auth/refresh`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ refreshToken }),
-      });
-      if (!res.ok) {
+  if (!refreshInFlight)
+    refreshInFlight = (async () => {
+      try {
+        const res = await fetch(`${BASE_URL}/auth/refresh`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ refreshToken }),
+        });
+        if (!res.ok) {
+          setTokens(null);
+          return false;
+        }
+        setTokens((await res.json()) as T.Tokens);
+        return true;
+      } catch {
         setTokens(null);
         return false;
+      } finally {
+        refreshInFlight = null;
       }
-      setTokens((await res.json()) as T.Tokens);
-      return true;
-    } catch {
-      setTokens(null);
-      return false;
-    } finally {
-      refreshInFlight = null;
-    }
-  })();
+    })();
   return refreshInFlight;
 }
 
@@ -146,19 +164,36 @@ const patch = <R>(p: string, body?: unknown) => request<R>(p, { method: "PATCH",
 const del = <R>(p: string, body?: unknown) => request<R>(p, { method: "DELETE", body });
 
 // ── auth ────────────────────────────────────────────────────────────────────
+interface RegisterInput {
+  email: string;
+  password: string;
+  firstName?: string;
+  lastName?: string;
+  name?: string;
+  rememberMe?: boolean;
+}
+
 export const auth = {
-  async register(email: string, password: string, name?: string) {
-    const s = await request<T.AuthSession>("/auth/register", { method: "POST", body: { email, password, name }, auth: false });
+  async register(input: RegisterInput) {
+    const s = await request<T.AuthSession>("/auth/register", { method: "POST", body: input, auth: false });
     setTokens(s);
     return s;
   },
-  async login(email: string, password: string) {
-    const s = await request<T.AuthSession>("/auth/login", { method: "POST", body: { email, password }, auth: false });
+  async login(email: string, password: string, rememberMe = false) {
+    const s = await request<T.AuthSession>("/auth/login", {
+      method: "POST",
+      body: { email, password, rememberMe },
+      auth: false,
+    });
     setTokens(s);
     return s;
   },
-  async social(provider: "apple" | "google", identityToken: string, name?: string) {
-    const s = await request<T.AuthSession>(`/auth/social/${provider}`, { method: "POST", body: { identityToken, name }, auth: false });
+  async social(provider: "apple" | "google", identityToken: string, name?: string, rememberMe = false) {
+    const s = await request<T.AuthSession>(`/auth/social/${provider}`, {
+      method: "POST",
+      body: { identityToken, name, rememberMe },
+      auth: false,
+    });
     setTokens(s);
     return s;
   },
@@ -166,8 +201,20 @@ export const auth = {
     request<{ ok: boolean; devToken?: string }>("/auth/forgot-password", { method: "POST", body: { email }, auth: false }),
   resetPassword: (token: string, password: string) =>
     request<{ ok: boolean }>("/auth/reset-password", { method: "POST", body: { token, password }, auth: false }),
+  verifyEmail: (token: string) =>
+    request<{ ok: boolean }>("/auth/verify-email", { method: "POST", body: { token }, auth: false }),
+  resendVerification: () =>
+    request<{ ok: boolean; alreadyVerified?: boolean; throttled?: boolean; devVerificationToken?: string }>(
+      "/auth/resend-verification",
+      { method: "POST" },
+    ),
   async logout() {
-    if (refreshToken) await request("/auth/logout", { method: "POST", body: { refreshToken }, auth: false }).catch(() => {});
+    if (refreshToken)
+      await request("/auth/logout", { method: "POST", body: { refreshToken }, auth: false }).catch(() => {});
+    setTokens(null);
+  },
+  async logoutAll() {
+    await request("/auth/logout-all", { method: "POST" }).catch(() => {});
     setTokens(null);
   },
   me: () => get<T.User>("/auth/me"),
@@ -180,6 +227,7 @@ export const api = {
   // config — appearance presets (auth optional; more presets when signed in)
   config: {
     appearancePresets: () => request<T.BackgroundPreset[]>("/config/appearance-presets", { auth: session.isAuthenticated() }),
+    auth: () => request<T.AuthConfig>("/config/auth", { auth: false }),
   },
 
   // me
@@ -194,7 +242,20 @@ export const api = {
       setGating: (gatingEnabled: boolean) => put<T.ProgressionResult>("/me/progression", { gatingEnabled }),
     },
     export: () => get<unknown>("/me/export"),
-    deleteAccount: () => del<void>("/me", { confirm: true }),
+    deleteAccount: (password?: string) => del<void>("/me", { confirm: true, password }),
+
+    // ── account & security ──
+    changePassword: (currentPassword: string, newPassword: string) =>
+      put<{ ok: true }>("/me/password", { currentPassword, newPassword }),
+    changeEmail: (newEmail: string, currentPassword: string) =>
+      post<{ ok: true; devToken?: string }>("/me/email/change", { newEmail, currentPassword }),
+    confirmEmailChange: (token: string) =>
+      post<{ ok: true; email: string }>("/me/email/change/confirm", { token }),
+    sessions: () => get<T.SessionInfo[]>("/me/sessions"),
+    revokeSession: (id: string) => del<void>(`/me/sessions/${id}`),
+    revokeOtherSessions: () => del<{ ok: true; revoked: number }>("/me/sessions"),
+    connectedAccounts: () => get<T.ConnectedAccounts>("/me/connected-accounts"),
+    unlinkAccount: (provider: "google" | "apple") => del<void>(`/me/connected-accounts/${provider}`),
     injuries: () => get<T.InjuryNote[]>("/me/injuries"),
     addInjury: (tag: string, note?: string) => post<T.InjuryNote>("/me/injuries", { tag, note }),
     deleteInjury: (id: string) => del<void>(`/me/injuries/${id}`),

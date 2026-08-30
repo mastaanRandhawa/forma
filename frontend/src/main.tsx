@@ -23,6 +23,8 @@ const Login = lazy(() => import("./pages/Login"));
 const Signup = lazy(() => import("./pages/Signup"));
 const ForgotPassword = lazy(() => import("./pages/ForgotPassword"));
 const ResetPassword = lazy(() => import("./pages/ResetPassword"));
+const VerifyEmail = lazy(() => import("./pages/VerifyEmail"));
+const AccountSecurity = lazy(() => import("./pages/AccountSecurity"));
 
 const gated = (feature: FeatureKey, el: React.ReactNode) => <FeatureGate feature={feature}>{el}</FeatureGate>;
 
@@ -38,6 +40,7 @@ const router = createBrowserRouter([
   { path: "/signup", element: bare(<RedirectIfAuthed><Signup /></RedirectIfAuthed>) },
   { path: "/forgot-password", element: bare(<RedirectIfAuthed><ForgotPassword /></RedirectIfAuthed>) },
   { path: "/reset-password", element: bare(<ResetPassword />) },
+  { path: "/verify-email", element: bare(<VerifyEmail />) },
   {
     path: "/onboarding",
     element: bare(
@@ -64,6 +67,7 @@ const router = createBrowserRouter([
       { path: "/store", element: gated("store", <Store />) },
       { path: "/exercise-library", element: <ExerciseLibrary /> },
       { path: "/settings", element: <Settings /> },
+      { path: "/settings/security", element: <AccountSecurity /> },
       { path: "*", element: <Navigate to="/dashboard" replace /> },
     ],
   },

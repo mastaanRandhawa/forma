@@ -3,48 +3,108 @@ import { Link, useNavigate } from "react-router-dom";
 import { auth } from "../api/client";
 import { useAuth } from "../api/auth";
 import { useAction } from "../api/hooks";
-import { AuthShell, Field, SubmitButton, FormError } from "./auth-shared";
+import {
+  AuthShell,
+  Field,
+  PasswordField,
+  PasswordStrength,
+  Checkbox,
+  SubmitButton,
+  AuthNotice,
+  OAuthButtons,
+  mapAuthError,
+  passwordMeetsPolicy,
+} from "./auth-shared";
 
 export default function Signup() {
   const nav = useNavigate();
   const { setUser } = useAuth();
-  const [name, setName] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const { run, pending, error } = useAction((e: string, p: string, n: string) => auth.register(e, p, n));
+  const [confirm, setConfirm] = useState("");
+  const [terms, setTerms] = useState(false);
+  const [touched, setTouched] = useState(false);
+  const { run, pending, error } = useAction(
+    (body: Parameters<typeof auth.register>[0]) => auth.register(body),
+  );
 
-  const weak = password.length > 0 && password.length < 8;
+  const weak = password.length > 0 && !passwordMeetsPolicy(password);
+  const mismatch = confirm.length > 0 && confirm !== password;
+  const canSubmit = !weak && !mismatch && terms && !!password && !!email;
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
-    if (weak) return;
-    const s = await run(email.trim(), password, name.trim());
+    setTouched(true);
+    if (!canSubmit) return;
+    const s = await run({
+      email: email.trim(),
+      password,
+      firstName: firstName.trim() || undefined,
+      lastName: lastName.trim() || undefined,
+    });
     if (!s) return;
     setUser(s.user);
-    nav("/onboarding", { replace: true });
+    nav("/verify-email", { replace: true });
   }
 
   return (
     <AuthShell
       title="Create your account"
-      subtitle="Then we'll set up your training in about a minute."
-      footer={<>Already have an account? <Link className="text-content-primary underline underline-offset-4" to="/login">Sign in</Link></>}
+      subtitle="Then verify your email and we'll set up your training."
+      footer={
+        <>
+          Already have an account?{" "}
+          <Link className="text-content-primary underline underline-offset-4" to="/login">
+            Sign in
+          </Link>
+        </>
+      }
     >
-      <form onSubmit={onSubmit} className="space-y-3.5">
-        <Field label="name" type="text" autoComplete="name" required value={name} onChange={(e) => setName(e.target.value)} />
-        <Field label="email" type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
+      <form onSubmit={onSubmit} className="space-y-3.5" noValidate>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="first name" autoComplete="given-name" required value={firstName} onChange={(e) => setFirstName(e.target.value)} />
+          <Field label="last name" autoComplete="family-name" required value={lastName} onChange={(e) => setLastName(e.target.value)} />
+        </div>
         <Field
-          label="password"
-          type="password"
+          label="email"
+          type="email"
+          autoComplete="email"
+          required
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+        />
+        <PasswordField
           autoComplete="new-password"
           required
-          minLength={8}
           value={password}
           onChange={(e) => setPassword(e.target.value)}
         />
-        {weak && <p className="text-[0.78rem] text-content-tertiary">At least 8 characters.</p>}
-        <SubmitButton pending={pending}>Create account</SubmitButton>
-        <FormError error={error} />
+        <PasswordStrength value={password} />
+        <PasswordField
+          label="confirm password"
+          autoComplete="new-password"
+          required
+          value={confirm}
+          onChange={(e) => setConfirm(e.target.value)}
+        />
+        {mismatch && <p className="text-[0.75rem] text-[var(--accent-pink)]">Passwords don't match.</p>}
+
+        <Checkbox label={<>I agree to the </>} checked={terms} onChange={setTerms}>
+          <a href="/terms" className="underline underline-offset-4">Terms</a> and{" "}
+          <a href="/privacy" className="underline underline-offset-4">Privacy Policy</a>.
+        </Checkbox>
+        {touched && !terms && (
+          <p className="text-[0.75rem] text-[var(--accent-pink)]">Please accept the Terms to continue.</p>
+        )}
+
+        <SubmitButton pending={pending} disabled={touched && !canSubmit}>
+          Create account
+        </SubmitButton>
+        {error && <AuthNotice variant="error">{mapAuthError(error).message}</AuthNotice>}
+
+        <OAuthButtons />
       </form>
     </AuthShell>
   );

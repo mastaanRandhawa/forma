@@ -15,10 +15,52 @@ export interface ApiError {
 
 export interface Tokens {
   accessToken: string;
-  refreshToken: string;
+  /** Only returned to native clients (X-Client-Platform: native). Web uses the httpOnly cookie. */
+  refreshToken?: string;
 }
 export interface AuthSession extends Tokens {
   user: User;
+  /** dev-only convenience: the email-verification token, when NODE_ENV !== production */
+  devVerificationToken?: string;
+}
+
+export type AuthErrorCode =
+  | "invalid_credentials"
+  | "account_locked"
+  | "account_inactive"
+  | "email_not_verified"
+  | "session_expired"
+  | "csrf_failed"
+  | "too_many_requests"
+  | "token_invalid"
+  | "token_expired"
+  | "reset_link_expired"
+  | "no_password"
+  | "last_credential"
+  | "conflict"
+  | "bad_request";
+
+export interface SessionInfo {
+  id: string;
+  current: boolean;
+  userAgent: string | null;
+  ip: string | null;
+  createdAt: ISODate;
+  lastSeenAt: ISODate;
+  expiresAt: ISODate;
+}
+
+export interface ConnectedAccounts {
+  password: boolean;
+  google: boolean;
+  apple: boolean;
+}
+
+export interface AuthConfig {
+  providers: { google: boolean; apple: boolean };
+  googleClientId: string | null;
+  appleClientId: string | null;
+  passwordPolicy: { minLength: number; classesRequired: number };
 }
 
 // ── enums ───────────────────────────────────────────────────────────────────
@@ -66,6 +108,9 @@ export interface User {
   trainingFrequencyTarget: number | null;
   sessionLengthTargetMin: number | null;
   onboardingCompletedAt: ISODate | null;
+  emailVerified: boolean;
+  emailVerifiedAt?: ISODate | null;
+  role: "user" | "admin";
   formDataVerbosity: FormDataVerbosity;
   saveHighlightClips: boolean;
   createdAt: ISODate;
@@ -341,6 +386,22 @@ export interface Exercise {
   supportsCameraTracking: boolean;
   alternativeSlugs: string[];
   muscles?: ExerciseMuscleLink[];
+
+  // ── enrichment layer (RepDB — repdb.co) — all optional / nullable ──────────
+  source?: string; // "native" | "repdb"
+  externalId?: string | null;
+  description?: string | null;
+  formTips?: string[];
+  bodyPart?: string | null;
+  forceType?: string | null; // "push" | "pull" | "static" | "dynamic"
+  mechanic?: string | null; // "compound" | "isolation"
+  discipline?: string | null; // "strength" | "stretching" | "cardio" | ...
+  isUnilateral?: boolean | null;
+  isBodyweight?: boolean | null;
+  metValue?: number | null;
+  trainingGoals?: string[];
+  imageStartUrl?: string | null;
+  imageEndUrl?: string | null;
 }
 
 export interface ExerciseDetail extends Exercise {

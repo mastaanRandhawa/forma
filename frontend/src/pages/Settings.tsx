@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Check, LogOut, Sparkles } from "lucide-react";
+import { Check, LogOut, ShieldCheck, Sparkles } from "lucide-react";
 import { PageHeader } from "../components/PageHeader";
 import { Reveal } from "../components/Reveal";
 import { useSettings, useAppearance, useProgression, PRESETS } from "../api/settings";
@@ -406,23 +406,32 @@ function AccountGroup() {
   const [busy, setBusy] = useState(false);
   if (!API_ENABLED) return null;
   return (
-    <Group title="account">
+    <Group title="account & security">
       {user && (
         <p className="mb-3 text-[0.85rem] text-content-secondary">
-          Signed in as <span className="text-content-primary">{user.email}</span>.
+          Signed in as <span className="text-content-primary">{user.email}</span>
+          {!user.emailVerified && (
+            <span className="label-instrument" style={{ color: "var(--accent-amber)" }}> · email unverified</span>
+          )}
+          .
         </p>
       )}
-      <button
-        onClick={async () => {
-          setBusy(true);
-          await signOut();
-          nav("/login", { replace: true });
-        }}
-        disabled={busy}
-        className="focus-ring tactile inline-flex items-center gap-2 rounded-pill bg-white/[0.06] px-4 py-2 text-[0.82rem] lowercase text-content-primary transition-colors hover:bg-white/[0.12] disabled:opacity-50"
-      >
-        <LogOut size={13} strokeWidth={2.25} /> {busy ? "signing out…" : "sign out"}
-      </button>
+      <div className="flex flex-wrap gap-2">
+        <Link to="/settings/security" className="focus-ring tactile inline-flex items-center gap-2 rounded-pill bg-white/[0.06] px-4 py-2 text-[0.82rem] lowercase text-content-primary transition-colors hover:bg-white/[0.12]">
+          <ShieldCheck size={13} strokeWidth={2.25} /> email, password, sessions
+        </Link>
+        <button
+          onClick={async () => {
+            setBusy(true);
+            await signOut();
+            nav("/login", { replace: true });
+          }}
+          disabled={busy}
+          className="focus-ring tactile inline-flex items-center gap-2 rounded-pill bg-white/[0.06] px-4 py-2 text-[0.82rem] lowercase text-content-primary transition-colors hover:bg-white/[0.12] disabled:opacity-50"
+        >
+          <LogOut size={13} strokeWidth={2.25} /> {busy ? "signing out…" : "sign out"}
+        </button>
+      </div>
     </Group>
   );
 }
@@ -474,6 +483,17 @@ export default function Settings() {
             <li>Privacy Policy</li>
             <li>Terms of Service</li>
             <li>Help & Support</li>
+            <li className="normal-case">
+              Exercise data &amp; illustrations by{" "}
+              <a
+                href="https://repdb.co"
+                target="_blank"
+                rel="noreferrer"
+                className="underline hover:text-content-primary"
+              >
+                RepDB (repdb.co)
+              </a>
+            </li>
           </ul>
         </Group>
       </div>
