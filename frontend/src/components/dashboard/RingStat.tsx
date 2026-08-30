@@ -40,12 +40,16 @@ export function RingStat({
 
   const inner = (
     <>
-      <div className="relative z-10 min-w-0">
-        <div className="metric-card__label truncate">{label}</div>
-        <div className="metric-numeral mt-1.5 text-[1.55rem] text-content-primary">{value}</div>
-        {sub && <div className="num mt-0.5 truncate text-[0.72rem] text-content-tertiary">{sub}</div>}
+      <div className="relative z-10 min-w-0 sm:flex-1">
+        <div className="metric-card__label line-clamp-2 text-center text-[0.72rem] leading-tight sm:truncate sm:text-left sm:text-[0.9rem]">
+          {label}
+        </div>
+        <div className="metric-numeral mt-1.5 hidden text-[1.55rem] text-content-primary sm:block">{value}</div>
+        {sub && (
+          <div className="num mt-0.5 hidden truncate text-[0.72rem] text-content-tertiary sm:block">{sub}</div>
+        )}
       </div>
-      <div className="relative z-10 shrink-0">
+      <div className="relative z-10 mt-auto shrink-0 sm:mt-0">
         <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="-rotate-90">
           <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="rgba(255,255,255,0.09)" strokeWidth={sw} />
           <circle
@@ -69,8 +73,10 @@ export function RingStat({
     </>
   );
 
+  // mobile: a compact square — just the label + ring. sm+: the full row with value + sub.
   const cls =
-    "metric-card metric-card--link group focus-ring !flex-row items-center justify-between gap-3 !rounded-[var(--radius-medium)] !p-4";
+    "metric-card metric-card--link group focus-ring flex aspect-square flex-col items-center justify-between gap-2 !rounded-[var(--radius-medium)] !p-3 " +
+    "sm:!flex-row sm:aspect-auto sm:items-center sm:justify-between sm:gap-3 sm:!p-4";
 
   if (onSelect) {
     return (

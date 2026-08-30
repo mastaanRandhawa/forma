@@ -388,3 +388,12 @@
     transform: none;
   }
 }
+
+/* =========================================================================
+   body-muscles map — the library draws a dark slate outline around every
+   individual muscle. Drop it so the map reads as clean colour blocks in the
+   Forma palette; the background silhouette still gives the body its shape.
+   ========================================================================= */
+.body-muscles .body-chart-muscle {
+  stroke: none;
+}
