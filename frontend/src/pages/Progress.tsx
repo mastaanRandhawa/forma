@@ -1,6 +1,8 @@
 import { useMemo, useRef, useState } from "react";
 import { PageHeader } from "../components/PageHeader";
 import { Reveal } from "../components/Reveal";
+import { EmptyState } from "../components/EmptyState";
+import { useProgressOverview } from "../api/hooks";
 import { PillSelector } from "../components/primitives";
 import { MetricCard } from "../components/health/MetricCard";
 import { MiniTrend } from "../components/health/MiniTrend";
@@ -88,11 +90,20 @@ export default function Progress() {
   const [range, setRange] = useState<(typeof RANGE)[number]>("3M");
   const loading = useFakeLoad("progress-cards", 700);
   const [lift, setLift] = useState(strengthSeries[0]);
+  const overview = useProgressOverview();
+  const summary = overview.data?.summary ?? progressSummary;
 
   const grid = useMemo(
     () => Array.from({ length: 91 }).map(() => Math.random()),
     []
   );
+
+  const prs: string[][] = [
+    ["Bench Press", "195 lb × 3", "Aug 12"],
+    ["Back Squat", "285 lb × 2", "Aug 05"],
+    ["Deadlift", "365 lb × 1", "Jul 29"],
+    ["Overhead Press", "135 lb × 5", "Jul 22"],
+  ];
 
   return (
     <div className="mx-auto max-w-[1120px]">
@@ -105,7 +116,7 @@ export default function Progress() {
         <span className="label-instrument mr-2" style={{ color: "var(--accent-cyan)" }}>
           8-week summary
         </span>
-        {progressSummary}
+        {summary}
       </Reveal>
 
       {/* primary strength number as a graphic object */}
@@ -202,22 +213,26 @@ export default function Progress() {
 
         <div>
           <div className="label-soft lowercase">personal records</div>
-          <ul className="mt-4 divide-y divide-[var(--line-soft)]">
-            {[
-              ["Bench Press", "195 lb × 3", "Aug 12"],
-              ["Back Squat", "285 lb × 2", "Aug 05"],
-              ["Deadlift", "365 lb × 1", "Jul 29"],
-              ["Overhead Press", "135 lb × 5", "Jul 22"],
-            ].map(([l, detail, date]) => (
-              <li key={l} className="flex items-center justify-between py-3 first:pt-0">
-                <div>
-                  <div className="text-[0.92rem] text-content-primary lowercase">{l}</div>
-                  <div className="label-instrument mt-0.5">{detail}</div>
-                </div>
-                <span className="label-instrument">{date.toLowerCase()}</span>
-              </li>
-            ))}
-          </ul>
+          {prs.length === 0 ? (
+            <EmptyState
+              className="mt-4"
+              title="no prs yet"
+              body="beat a previous best on any lift and it lands here automatically."
+              action={{ label: "start a workout", to: "/workouts" }}
+            />
+          ) : (
+            <ul className="mt-4 divide-y divide-[var(--line-soft)]">
+              {prs.map(([l, detail, date]) => (
+                <li key={l} className="flex items-center justify-between py-3 first:pt-0">
+                  <div>
+                    <div className="text-[0.92rem] text-content-primary lowercase">{l}</div>
+                    <div className="label-instrument mt-0.5">{detail}</div>
+                  </div>
+                  <span className="label-instrument">{date.toLowerCase()}</span>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       </Reveal>
     </div>

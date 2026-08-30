@@ -1,11 +1,16 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { Coins, Mic, Sparkles, Palette, MessageSquare, Check, Lock } from "lucide-react";
 import { PageHeader } from "../components/PageHeader";
 import { Reveal } from "../components/Reveal";
 import { PillSelector } from "../components/primitives";
-import { storeItems, wallet, type StoreCategory, type StoreItem } from "../lib/data";
+import { EmptyState } from "../components/EmptyState";
+import { ErrorState } from "../components/ErrorState";
+import { Skel } from "../components/skeleton/Skeleton";
+import { type StoreCategory, type StoreItem } from "../lib/data";
 import { useWalletBalance, walletStore } from "../lib/wallet";
+import { useStoreItems, useWallet, API_ENABLED, errorMessage } from "../api/hooks";
+import { api } from "../api";
 
 const TABS = ["all", "voices", "styles", "looks", "themes"] as const;
 const TAB_TO_CAT: Record<string, StoreCategory | null> = {
@@ -35,32 +40,48 @@ const EASE = [0.22, 1, 0.36, 1] as const;
 export default function Store() {
   const reduce = useReducedMotion();
   const [tab, setTab] = useState<(typeof TABS)[number]>("all");
-  const [items, setItems] = useState<StoreItem[]>(storeItems);
+  const catalogue = useStoreItems();
+  const walletRes = useWallet();
+  const [items, setItems] = useState<StoreItem[]>([]);
+  const [seeded, setSeeded] = useState(false);
   const balance = useWalletBalance();
   const [toast, setToast] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!seeded && catalogue.data) {
+      setItems(catalogue.data as StoreItem[]);
+      setSeeded(true);
+    }
+  }, [catalogue.data, seeded]);
 
   const shown = useMemo(() => {
     const cat = TAB_TO_CAT[tab];
     return cat ? items.filter((i) => i.category === cat) : items;
   }, [items, tab]);
 
-  function buy(item: StoreItem) {
+  async function buy(item: StoreItem) {
     if (item.owned || balance < item.price) return;
     walletStore.spend(item.price);
     setItems((list) => list.map((i) => (i.id === item.id ? { ...i, owned: true } : i)));
     setToast(`${item.name} unlocked`);
     setTimeout(() => setToast(null), 2200);
+    if (API_ENABLED) {
+      await api.store.buy(item.id).catch(() => {});
+      catalogue.refetch();
+    }
   }
 
-  function equip(item: StoreItem) {
+  async function equip(item: StoreItem) {
     if (!item.owned) return;
     setItems((list) =>
-      list.map((i) =>
-        i.category === item.category ? { ...i, equipped: i.id === item.id } : i
-      )
+      list.map((i) => (i.category === item.category ? { ...i, equipped: i.id === item.id } : i)),
     );
     setToast(`${item.name} equipped`);
     setTimeout(() => setToast(null), 1800);
+    if (API_ENABLED) {
+      await api.store.equip(item.id).catch(() => {});
+      catalogue.refetch();
+    }
   }
 
   return (
@@ -78,21 +99,39 @@ export default function Store() {
         Spend coins to change how Kai sounds, coaches and looks. You earn coins from
         finished workouts, streaks and hit goals.
       </p>
-      <div className="num mt-3 flex flex-wrap gap-x-4 gap-y-1 text-[0.76rem] text-content-tertiary">
-        <span className="text-[var(--accent-lime)]">+{wallet.earnedThisWeek} this week</span>
-        {wallet.recent.map((r) => (
-          <span key={r.label}>
-            {r.label} <span className="text-[var(--accent-lime)]">+{r.amount}</span>
-          </span>
-        ))}
-      </div>
+      {walletRes.data && (
+        <div className="num mt-3 flex flex-wrap gap-x-4 gap-y-1 text-[0.76rem] text-content-tertiary">
+          <span className="text-[var(--accent-lime)]">+{walletRes.data.earnedThisWeek} this week</span>
+          {walletRes.data.recent.map((r) => (
+            <span key={r.id}>
+              {r.label} <span className="text-[var(--accent-lime)]">+{r.amount}</span>
+            </span>
+          ))}
+        </div>
+      )}
 
       <div className="mt-7">
         <PillSelector options={TABS} value={tab} onChange={setTab} />
       </div>
 
-      <Reveal onView key={tab} className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {shown.map((item) => {
+      {catalogue.initialLoading ? (
+        <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {[0, 1, 2, 3, 4, 5].map((i) => (
+            <Skel key={i} className="h-[168px] rounded-[var(--radius-medium)]" />
+          ))}
+        </div>
+      ) : catalogue.error && items.length === 0 ? (
+        <ErrorState className="mt-6" message={errorMessage(catalogue.error)} onRetry={catalogue.refetch} />
+      ) : shown.length === 0 ? (
+        <EmptyState
+          className="mt-6"
+          title="nothing here yet"
+          body="new voices, personalities, looks and chat themes land in the store as they're released."
+          icon={<Sparkles size={18} strokeWidth={1.75} />}
+        />
+      ) : (
+        <Reveal onView key={tab} className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {shown.map((item) => {
           const Icon = CAT_ICON[item.category];
           const affordable = balance >= item.price;
           return (
@@ -166,8 +205,9 @@ export default function Store() {
               </div>
             </div>
           );
-        })}
-      </Reveal>
+          })}
+        </Reveal>
+      )}
 
       <AnimatePresence>
         {toast && (

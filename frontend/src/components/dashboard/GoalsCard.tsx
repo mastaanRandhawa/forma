@@ -2,10 +2,16 @@ import { Link } from "react-router-dom";
 import { Plus, ChevronRight } from "lucide-react";
 import { GoalWidget } from "./GoalWidget";
 import { EmptyState } from "../EmptyState";
-import { goals } from "../../lib/data";
+import { ErrorState } from "../ErrorState";
+import { Skel } from "../skeleton/Skeleton";
+import { useGoals, errorMessage } from "../../api/hooks";
+import { goalToWidget } from "../../api/adapt";
 
 /** Dashboard goals block — the active goals with progress, links to /goals. */
 export function GoalsCard() {
+  const { data, error, initialLoading, refetch } = useGoals();
+  const goals = (data ?? []).filter((g) => g.active);
+
   return (
     <div className="metric-card !p-5" data-tone="pink" data-variant="glow">
       <div className="relative z-10">
@@ -19,7 +25,15 @@ export function GoalsCard() {
           </Link>
         </div>
 
-        {goals.length === 0 ? (
+        {initialLoading ? (
+          <div className="space-y-2.5">
+            {[0, 1, 2].map((i) => (
+              <Skel key={i} className="h-[72px] rounded-2xl" />
+            ))}
+          </div>
+        ) : error ? (
+          <ErrorState message={errorMessage(error)} onRetry={refetch} className="!py-6" />
+        ) : goals.length === 0 ? (
           <EmptyState
             title="no goals yet"
             body="set a target for steps, protein, sleep or training frequency."
@@ -27,8 +41,8 @@ export function GoalsCard() {
           />
         ) : (
           <div className="space-y-2.5">
-            {goals.slice(0, 3).map((g) => (
-              <GoalWidget key={g.id} goal={g} />
+            {goals.slice(0, 3).map((g, i) => (
+              <GoalWidget key={g.id} goal={goalToWidget(g, i)} />
             ))}
             <Link
               to="/goals"

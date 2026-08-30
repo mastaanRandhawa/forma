@@ -1,12 +1,18 @@
 import { motion, useReducedMotion } from "motion/react";
 import { Flame } from "lucide-react";
 import { streakData } from "../../lib/data";
+import { useDashboardData } from "../../api/dashboard-context";
 
 const DAYS = ["m", "t", "w", "t", "f", "s", "s"];
 
 /** Streak card — flame + day count + this-week target row. */
 export function StreakWidget({ onSelect }: { onSelect?: () => void }) {
   const reduce = useReducedMotion();
+  const dash = useDashboardData();
+  const days = dash?.streakDays ?? streakData.days;
+  const best = Math.max(days, streakData.best);
+  const weekDone = dash?.weeklyRing.done ?? streakData.weekDone;
+  const weekTarget = dash?.weeklyRing.target ?? streakData.weekTarget;
   const Wrap = onSelect ? "button" : "div";
 
   return (
@@ -30,15 +36,17 @@ export function StreakWidget({ onSelect }: { onSelect?: () => void }) {
         </div>
 
         <div className="mt-4 flex items-baseline gap-2">
-          <span className="metric-card__value text-[2.6rem]">{streakData.days}</span>
-          <span className="metric-card__unit">days · best {streakData.best}</span>
+          <span className="metric-card__value text-[2.6rem]">{days}</span>
+          <span className="metric-card__unit">
+            {days === 0 ? "start one today" : `days · best ${best}`}
+          </span>
         </div>
 
         <div className="mt-4">
           <div className="mb-1.5 flex items-center justify-between">
             <span className="label-instrument">this week</span>
             <span className="num text-[0.72rem] text-content-tertiary">
-              {streakData.weekDone} / {streakData.weekTarget}
+              {weekDone} / {weekTarget}
             </span>
           </div>
           <div className="flex gap-1.5">

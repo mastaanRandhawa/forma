@@ -1,26 +1,31 @@
 import { user } from "../../lib/data";
+import { useDashboardData } from "../../api/dashboard-context";
 
 /** Time-of-day greeting + one contextual nudge. Makes the dashboard feel personal. */
 export function Greeting() {
+  const dash = useDashboardData();
   const h = new Date().getHours();
   const part =
-    h < 5 ? "Still up" : h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : h < 22 ? "Good evening" : "Winding down";
+    dash?.greeting ??
+    (h < 5 ? "Still up" : h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : h < 22 ? "Good evening" : "Winding down");
+  const name = dash?.user?.name ?? user.name;
 
   const nudge =
-    h < 12
+    dash?.trainerMessage ??
+    (h < 12
       ? "Recovery looks good. You're cleared to train hard today."
       : h < 17
         ? "3,200 steps left to your daily goal, and today's session is still open."
         : h < 22
           ? "You're 18g short of your protein target. One more meal should cover it."
-          : "Your average bedtime is in 40 minutes.";
+          : "Your average bedtime is in 40 minutes.");
 
   return (
     <header className="mb-6">
       <h1 className="text-[1.5rem] font-light leading-tight text-content-primary sm:text-[1.75rem]">
-        {part}, {user.name}
+        {part}, {name}
       </h1>
-      <p className="mt-1 text-[0.9rem] text-content-secondary">{nudge}</p>
+      <p className="mt-1 line-clamp-2 text-[0.9rem] text-content-secondary">{nudge}</p>
     </header>
   );
 }

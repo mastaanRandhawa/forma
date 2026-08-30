@@ -1,0 +1,778 @@
+/**
+ * Forma API — DTOs.  Hand-kept in sync with backend/openapi.yaml.
+ * When the backend changes the contract, regenerate/adjust this file.
+ *
+ * Conventions: metric units (kg / cm), ISO-8601 UTC date strings, opaque CUID ids,
+ * form scores & readiness 0–100, muscle activation 0–1, RPE 1–10.
+ */
+
+// ── shared ──────────────────────────────────────────────────────────────────
+export type ISODate = string;
+
+export interface ApiError {
+  error: { code: string; message: string; details?: unknown };
+}
+
+export interface Tokens {
+  accessToken: string;
+  refreshToken: string;
+}
+export interface AuthSession extends Tokens {
+  user: User;
+}
+
+// ── enums ───────────────────────────────────────────────────────────────────
+export type UnitPreference = "metric" | "imperial";
+export type FitnessGoal =
+  | "build_muscle" | "lose_fat" | "get_stronger" | "general_fitness" | "athletic_performance" | "maintain";
+export type ExperienceLevel = "beginner" | "intermediate" | "advanced";
+export type TrainingLocation = "gym" | "home" | "both";
+export type MuscleRegion = "upper" | "lower" | "core";
+export type MuscleRole = "primary" | "secondary" | "stabilizer";
+export type WorkoutSource = "ai_generated" | "manual" | "template" | "program";
+export type SessionStatus = "in_progress" | "completed" | "abandoned";
+export type TrackingMode = "camera" | "manual";
+export type PersonalRecordType = "max_weight" | "max_1rm_estimate" | "max_reps" | "max_volume";
+export type ProgressMetricType =
+  | "bodyweight" | "measurement" | "form_score_aggregate" | "volume_aggregate"
+  | "readiness" | "sleep" | "hrv" | "resting_hr" | "steps" | "protein" | "calories";
+export type ProgressMetricSource = "manual_entry" | "health_sync" | "computed";
+export type PhotoPose = "front" | "side" | "back";
+export type ChatRole = "user" | "trainer";
+export type GoalCadence = "daily" | "weekly";
+export type StoreCategory = "voice" | "personality" | "look" | "theme";
+export type FormDataVerbosity = "minimal" | "categorical" | "detailed";
+export type InsightCategory = "recovery" | "volume" | "form" | "consistency" | "nutrition" | "strength";
+export type SupersetType = "straight" | "superset" | "circuit";
+export type NotificationType =
+  | "trainer_message" | "reminder" | "milestone" | "pr" | "check_in" | "weekly_summary";
+export type SubscriptionStatus = "active" | "inactive" | "grace" | "cancelled";
+
+// ── user / trainer ──────────────────────────────────────────────────────────
+export interface User {
+  id: string;
+  email: string;
+  name: string;
+  authProvider: "email" | "apple" | "google";
+  unitPreference: UnitPreference;
+  weekStartsMonday: boolean;
+  dateOfBirth: ISODate | null;
+  biologicalSex: string | null;
+  heightCm: number | null;
+  weightKg: number | null;
+  fitnessGoal: FitnessGoal | null;
+  experienceLevel: ExperienceLevel | null;
+  trainingLocation: TrainingLocation | null;
+  trainingFrequencyTarget: number | null;
+  sessionLengthTargetMin: number | null;
+  onboardingCompletedAt: ISODate | null;
+  formDataVerbosity: FormDataVerbosity;
+  saveHighlightClips: boolean;
+  createdAt: ISODate;
+  trainer?: Trainer;
+  wallet?: Wallet;
+}
+
+export interface UserFull extends User {
+  subscription: Subscription;
+  notificationPrefs: NotificationPreference;
+  injuries: InjuryNote[];
+  equipment: Array<{ equipment: Equipment }>;
+  deviceConnections: DeviceConnection[];
+}
+
+export interface ProfilePatch {
+  name?: string;
+  dateOfBirth?: ISODate;
+  biologicalSex?: "male" | "female" | "other" | "prefer_not_to_say";
+  heightCm?: number;
+  weightKg?: number;
+  unitPreference?: UnitPreference;
+  weekStartsMonday?: boolean;
+  fitnessGoal?: FitnessGoal;
+  experienceLevel?: ExperienceLevel;
+  trainingLocation?: TrainingLocation;
+  trainingFrequencyTarget?: number;
+  sessionLengthTargetMin?: number;
+}
+
+export interface OnboardingPayload extends ProfilePatch {
+  trainer?: TrainerPatch;
+  equipmentKeys?: string[];
+  injuries?: Array<{ tag: string; note?: string }>;
+  /** calmMode → quiet widgets + reduced motion + gating on; false → power-user defaults. */
+  experience?: { calmMode?: boolean; startTier?: Tier };
+}
+
+// ── settings bundle (GET/PUT /me/settings) ──────────────────────────────────
+export type DisclosureMode = "always" | "on_interaction";
+
+export interface BackgroundGradient {
+  angle: number;
+  stops: Array<{ color: string; at: number }>;
+}
+export interface GlassSettings {
+  opacity: number; // 0.35..0.95
+  blurPx: number; // 0..40
+  tint: string;
+}
+export interface AppearanceSettings {
+  presetId: string | null;
+  backgroundMode: "solid" | "gradient" | "image";
+  backgroundColor: string;
+  backgroundGradient: BackgroundGradient | null;
+  backgroundImageUrl: string | null;
+  backgroundDim: number; // 0..1
+  glass: GlassSettings;
+  accentColor: string; // resolved — brand default when unset
+  reduceMotion: boolean;
+  updatedAt: ISODate;
+}
+export interface DisclosureSettings {
+  mode: DisclosureMode;
+  widgetOverrides: Record<string, DisclosureMode>;
+}
+export interface CameraSettings {
+  formDataVerbosity: FormDataVerbosity;
+  saveHighlightClips: boolean;
+}
+export interface UnitSettings {
+  unitPreference: UnitPreference;
+  weekStartsMonday: boolean;
+}
+export interface ProgressionState {
+  tier: Tier;
+  unlockedFeatures: FeatureKey[];
+  gatingEnabled: boolean;
+  nextUnlock: NextUnlock | null;
+}
+export interface SettingsBundle {
+  camera: CameraSettings;
+  units: UnitSettings;
+  appearance: AppearanceSettings;
+  disclosure: DisclosureSettings;
+  progression: ProgressionState;
+}
+export interface SettingsPatch {
+  camera?: Partial<CameraSettings>;
+  units?: Partial<UnitSettings>;
+  appearance?: Partial<{
+    presetId: string | null;
+    backgroundMode: "solid" | "gradient" | "image";
+    backgroundColor: string;
+    backgroundGradient: BackgroundGradient | null;
+    backgroundImageUrl: string | null;
+    backgroundDim: number;
+    glass: GlassSettings;
+    accentColor: string | null;
+    reduceMotion: boolean;
+  }>;
+  disclosure?: Partial<DisclosureSettings>;
+}
+
+// ── unlock progression ─────────────────────────────────────────────────────
+export type Tier = "starter" | "building" | "established" | "full";
+export type FeatureKey =
+  | "dashboard" | "workouts" | "trainer" | "body_map" | "progress_basic" | "goals"
+  | "programs" | "progress_advanced" | "achievements" | "store" | "insights" | "voice_chat";
+
+export interface NextUnlock {
+  feature: FeatureKey;
+  requirement: string;
+  progress: { current: number; target: number };
+}
+export interface ProgressionResult extends ProgressionState {
+  newlyUnlocked: FeatureKey[];
+}
+
+// ── appearance presets (GET /config/appearance-presets) ─────────────────────
+export interface BackgroundPreset {
+  id: string;
+  name: string;
+  mode: "solid" | "gradient" | "image";
+  backgroundColor: string | null;
+  gradient: BackgroundGradient | null;
+  imageUrl: string | null;
+  backgroundDim: number;
+  glass: GlassSettings;
+  accentColor: string | null;
+  isDefault: boolean;
+  premium: boolean;
+}
+
+export interface Trainer {
+  id: string;
+  name: string;
+  avatarId: string;
+  voiceId: string;
+  equippedThemeId: string;
+  motivationLevel: number;
+  coachingDirectness: number;
+  formStrictness: number;
+  speakingFrequency: number;
+  coachingDetail: number;
+  humor: number;
+}
+export type TrainerPatch = Partial<Omit<Trainer, "id">>;
+
+export interface InjuryNote {
+  id: string;
+  tag: string;
+  note: string | null;
+  active: boolean;
+  createdAt: ISODate;
+}
+export interface Equipment {
+  id: string;
+  key: string;
+  name: string;
+  icon: string | null;
+}
+export interface DeviceConnection {
+  id: string;
+  provider: string;
+  status: string;
+  lastSyncAt: ISODate | null;
+}
+
+// ── library ─────────────────────────────────────────────────────────────────
+export interface MuscleGroup {
+  id: string;
+  key: string;
+  name: string;
+  plainName: string;
+  region: MuscleRegion;
+  meshRegionId: string | null;
+  parentGroupId: string | null;
+}
+
+export interface ExerciseMuscleLink {
+  role: MuscleRole;
+  weight: number;
+  muscleGroup: MuscleGroup;
+}
+
+export interface Exercise {
+  id: string;
+  slug: string;
+  name: string;
+  aliases: string[];
+  category: string;
+  movementPattern: string | null;
+  equipment: string[];
+  difficulty: ExperienceLevel;
+  instructions: string[];
+  commonMistakes: string[];
+  aiFormTips: string[];
+  videoAssetRef: string | null;
+  supportsCameraTracking: boolean;
+  alternativeSlugs: string[];
+  muscles?: ExerciseMuscleLink[];
+}
+
+export interface ExerciseDetail extends Exercise {
+  alternatives: Array<{ slug: string; name: string; equipment: string[] }>;
+}
+
+export interface ExerciseHistory {
+  exercise: { slug: string; name: string };
+  personalRecords: PersonalRecord[];
+  history: Array<{
+    date: ISODate;
+    sessionId: string;
+    formScoreAvg: number | null;
+    sets: Array<{ weightKg: number | null; reps: number | null; rpe: number | null; isPersonalRecord: boolean }>;
+  }>;
+}
+
+// ── workouts / programs ─────────────────────────────────────────────────────
+export interface WorkoutExercise {
+  id: string;
+  exerciseId: string;
+  order: number;
+  targetSets: number;
+  targetRepsMin: number | null;
+  targetRepsMax: number | null;
+  targetWeightKg: number | null;
+  targetRestSec: number | null;
+  notes: string | null;
+  supersetGroup: number | null;
+  supersetType: SupersetType;
+  exercise: Exercise;
+}
+
+export interface Workout {
+  id: string;
+  userId: string;
+  name: string;
+  source: WorkoutSource;
+  isTemplate: boolean;
+  scheduledDate: ISODate | null;
+  estimatedDurationMin: number | null;
+  targetMuscleKeys: string[];
+  notes: string | null;
+  createdAt: ISODate;
+  exercises: WorkoutExercise[];
+}
+
+export interface WorkoutInput {
+  name: string;
+  source?: WorkoutSource;
+  isTemplate?: boolean;
+  scheduledDate?: ISODate;
+  estimatedDurationMin?: number;
+  targetMuscleKeys?: string[];
+  notes?: string;
+  exercises?: Array<{
+    exerciseId: string;
+    order: number;
+    targetSets: number;
+    targetRepsMin?: number;
+    targetRepsMax?: number;
+    targetWeightKg?: number;
+    targetRestSec?: number;
+    notes?: string;
+  }>;
+}
+
+export interface GenerateWorkoutInput {
+  focus: string[];
+  durationMin?: number;
+  equipmentKeys?: string[];
+  difficulty?: ExperienceLevel;
+  scheduledDate?: ISODate;
+  save?: boolean;
+}
+
+export interface GeneratedPlan {
+  name: string;
+  estimatedDurationMin: number;
+  exercises: Array<{
+    exerciseId: string;
+    slug: string;
+    name: string;
+    sets: number;
+    repsMin: number;
+    repsMax: number;
+    restSec: number;
+  }>;
+}
+
+export interface SwapSuggestion {
+  slug: string;
+  name: string;
+  equipment: string[];
+  difficulty: ExperienceLevel;
+  reasons: string[];
+  score: number;
+}
+export interface SwapSuggestionsResult {
+  original: { slug: string; name: string };
+  recommended: SwapSuggestion[];
+  all: SwapSuggestion[];
+}
+
+export interface Program {
+  id: string;
+  name: string;
+  structureType: "linear" | "undulating" | "split_defined";
+  durationWeeks: number;
+  generatedBy: WorkoutSource;
+  active: boolean;
+  createdAt: ISODate;
+  days: ProgramDay[];
+}
+export interface ProgramDay {
+  id: string;
+  weekIndex: number;
+  dayIndex: number;
+  label: string | null;
+  workoutId: string | null;
+  workout?: Workout;
+}
+export interface GenerateProgramInput {
+  split?: "full_body" | "upper_lower" | "ppl";
+  daysPerWeek?: number;
+  durationWeeks?: number;
+  sessionLengthMin?: number;
+  equipmentKeys?: string[];
+  name?: string;
+  activate?: boolean;
+}
+
+// ── sessions ────────────────────────────────────────────────────────────────
+export interface ExerciseSet {
+  id: string;
+  setNumber: number;
+  weightKg: number | null;
+  reps: number | null;
+  rpe: number | null;
+  restSecondsTaken: number | null;
+  isWarmup: boolean;
+  completedAt: ISODate | null;
+  formScore: number | null;
+  romValue: number | null;
+  isPersonalRecord: boolean;
+}
+
+export interface ExercisePerformance {
+  id: string;
+  exerciseId: string;
+  order: number;
+  formScoreAvg: number | null;
+  romAvg: number | null;
+  supersetGroup: number | null;
+  exercise: Exercise;
+  sets: ExerciseSet[];
+}
+
+export interface MuscleActivation {
+  id: string;
+  muscleGroupId: string;
+  role: MuscleRole;
+  activationScore: number;
+  muscleGroup: MuscleGroup;
+}
+
+export interface WorkoutSession {
+  id: string;
+  userId: string;
+  workoutId: string | null;
+  name: string;
+  startedAt: ISODate;
+  endedAt: ISODate | null;
+  status: SessionStatus;
+  trackingMode: TrackingMode;
+  totalVolumeKg: number;
+  durationSeconds: number;
+  caloriesEstimate: number | null;
+  trainerComment: string | null;
+  performances: ExercisePerformance[];
+  muscleActivations?: MuscleActivation[];
+  personalRecords?: PersonalRecord[];
+  /** present on the response of POST /sessions/:id/finish */
+  progression?: ProgressionResult | null;
+}
+
+export interface SetLogInput {
+  weightKg?: number | null;
+  reps?: number | null;
+  rpe?: number | null;
+  restSecondsTaken?: number;
+  isWarmup?: boolean;
+  formScore?: number | null;
+  romValue?: number | null;
+  completed?: boolean;
+}
+
+export interface FormAnalysisInput {
+  performanceId: string;
+  setNumber: number;
+  reps: Array<{
+    repIndex: number;
+    jointAngleSnapshot: Record<string, number>;
+    romValue?: number;
+    tempoSeconds?: number;
+    detectedFaults?: Array<{ type: string; severity: number }>;
+    overallRepScore?: number;
+  }>;
+}
+
+// ── progress ────────────────────────────────────────────────────────────────
+export interface PersonalRecord {
+  id: string;
+  exerciseId: string;
+  recordType: PersonalRecordType;
+  value: number;
+  previousValue: number | null;
+  achievedAt: ISODate;
+  exercise?: Exercise;
+}
+
+export interface ProgressMetric {
+  id: string;
+  metricType: ProgressMetricType;
+  key: string | null;
+  value: number;
+  unit: string;
+  recordedAt: ISODate;
+  source: ProgressMetricSource;
+}
+export interface ProgressMetricInput {
+  metricType: ProgressMetricType;
+  key?: string;
+  value: number;
+  unit: string;
+  recordedAt?: ISODate;
+  source?: ProgressMetricSource;
+}
+
+export interface BodyMeasurementInput {
+  weightKg?: number;
+  bodyFatPct?: number;
+  chestCm?: number;
+  waistCm?: number;
+  hipsCm?: number;
+  thighCm?: number;
+  armCm?: number;
+  recordedAt?: ISODate;
+}
+export interface BodyMeasurement extends BodyMeasurementInput {
+  id: string;
+}
+
+export interface ProgressPhoto {
+  id: string;
+  assetRef: string;
+  poseTag: PhotoPose;
+  takenAt: ISODate;
+}
+export interface ProgressPhotoUpload {
+  photo: ProgressPhoto;
+  upload: { method: string; url: string; headers: Record<string, string> };
+}
+
+export interface ReadinessBreakdown {
+  score: number;
+  recommendation: string;
+  factors: Array<{ label: string; value: string; fraction: number }>;
+}
+
+export interface StrengthSeries {
+  slug: string;
+  series: Array<{ date: string; e1rm: number }>;
+}
+export interface ProgressOverview {
+  summary: string;
+  sessions: number;
+  totalVolumeKg: number;
+  personalRecords: number;
+}
+export interface ConsistencyReport {
+  target: number;
+  currentStreak: number;
+  adherence: number;
+  weeks: Array<{ week: string; sessions: number; volumeKg: number }>;
+}
+export interface FormTrends {
+  slug: string | null;
+  samples: number;
+  series: Array<{ date: string; formScore: number }>;
+}
+
+// ── body ────────────────────────────────────────────────────────────────────
+export interface MuscleMapEntry {
+  key: string;
+  name: string;
+  region: string;
+  score: number;
+  role: MuscleRole;
+}
+export interface MuscleMap {
+  range: "today" | "week" | "month";
+  muscles: MuscleMapEntry[];
+}
+export interface MuscleLoad {
+  key: string;
+  name: string;
+  region: string;
+  load: number;
+}
+export interface MuscleBalance {
+  mostTrained: MuscleLoad[];
+  undertrained: MuscleLoad[];
+}
+export interface MuscleDetail {
+  key: string;
+  name: string;
+  anatomicalName: string;
+  region: string;
+  sessionsHit: number;
+  totalLoad: number;
+  activitySeries: Array<{ date: string; score: number }>;
+  recentExercises: Array<{
+    name: string;
+    slug: string;
+    date: ISODate;
+    sets: number;
+    topSet: { weightKg: number | null; reps: number | null };
+  }>;
+  allExercises: Array<{ name: string; slug: string; role?: MuscleRole }>;
+}
+
+// ── chat / insights ─────────────────────────────────────────────────────────
+export interface ChatMessage {
+  id: string;
+  role: ChatRole;
+  content: string;
+  richContent: Record<string, unknown> | null;
+  viaVoice: boolean;
+  trainerSnapshot: Record<string, unknown> | null;
+  appliedAt: ISODate | null;
+  createdAt: ISODate;
+}
+export interface ChatTurn {
+  userMessage: ChatMessage;
+  trainerMessage: ChatMessage;
+}
+
+export interface CoachingInsight {
+  id: string;
+  category: InsightCategory;
+  title: string;
+  body: string;
+  actions: string[];
+  dataRefs: Record<string, unknown> | null;
+  sparkline: number[] | null;
+  proactive: boolean;
+  dismissedAt: ISODate | null;
+  createdAt: ISODate;
+}
+
+export interface CheckIn {
+  prompt: string;
+  options: string[];
+  topic: "injury" | "soreness" | "energy";
+}
+
+export interface TrainerCatalogue {
+  voices: StoreItem[];
+  avatars: StoreItem[];
+  themes: StoreItem[];
+  personalities: StoreItem[];
+}
+
+// ── goals / achievements ────────────────────────────────────────────────────
+export interface Goal {
+  id: string;
+  key: string;
+  label: string;
+  target: number;
+  unit: string;
+  cadence: GoalCadence;
+  tone: string;
+  active: boolean;
+}
+export interface GoalWithProgress extends Goal {
+  current: number;
+  completed: boolean;
+  periodKey: string;
+}
+export interface GoalInput {
+  key: string;
+  label: string;
+  target: number;
+  unit: string;
+  cadence: GoalCadence;
+  tone?: string;
+}
+
+export interface AchievementProgress {
+  key: string;
+  title: string;
+  detail: string;
+  icon: string;
+  targetValue: number | null;
+  progress: number;
+  unlockedAt: ISODate | null;
+}
+
+// ── store / wallet ──────────────────────────────────────────────────────────
+export interface Wallet {
+  id: string;
+  balance: number;
+}
+export interface WalletTransaction {
+  id: string;
+  type: "earn" | "spend";
+  amount: number;
+  label: string;
+  createdAt: ISODate;
+}
+export interface WalletSummary {
+  balance: number;
+  earnedThisWeek: number;
+  recent: WalletTransaction[];
+}
+export interface StoreItem {
+  id: string;
+  category: StoreCategory;
+  name: string;
+  detail: string;
+  price: number;
+  swatch: string | null;
+  isDefault: boolean;
+  style: { directness: number; warmth: number; detail: number; intensity: number; humor: number } | null;
+  owned?: boolean;
+  equipped?: boolean;
+}
+
+// ── notifications ───────────────────────────────────────────────────────────
+export interface Notification {
+  id: string;
+  type: NotificationType;
+  title: string;
+  body: string;
+  deepLink: string | null;
+  readAt: ISODate | null;
+  createdAt: ISODate;
+}
+export interface NotificationList {
+  items: Notification[];
+  unreadCount: number;
+}
+export interface NotificationPreference {
+  workoutReminders: boolean;
+  restTimerAlerts: boolean;
+  trainerMessages: boolean;
+  milestones: boolean;
+  weeklySummary: boolean;
+  checkIns: boolean;
+  reminderTime: string;
+  quietHoursStart: string | null;
+  quietHoursEnd: string | null;
+}
+
+// ── subscription ────────────────────────────────────────────────────────────
+export interface Subscription {
+  plan: string;
+  status: SubscriptionStatus;
+  store: "app_store" | "play_store" | null;
+  currentPeriodEnd: ISODate | null;
+}
+export interface Plan {
+  id: string;
+  name: string;
+  price: number;
+  interval: string | null;
+  features: string[];
+}
+export interface SubscriptionState extends Subscription {
+  entitled: boolean;
+  plans: Plan[];
+}
+
+// ── dashboard ───────────────────────────────────────────────────────────────
+export interface WorkoutSummaryCard {
+  name: string;
+  durationMin: number | null;
+  exercises: number;
+  muscles: string[];
+}
+export interface Dashboard {
+  greeting: string;
+  user: { name: string };
+  trainerName: string;
+  trainerMessage: string;
+  todayWorkout: WorkoutSummaryCard | null;
+  upcomingWorkout: WorkoutSummaryCard | null;
+  activeSessionId: string | null;
+  weeklyRing: { done: number; target: number };
+  weeklyVolumeKg: number;
+  readiness: number;
+  streakDays: number;
+  recentPRs: Array<{ lift: string; recordType: string; value: number; previousValue: number | null }>;
+  goals: Goal[];
+  notificationsUnread: number;
+  insights: CoachingInsight[];
+}

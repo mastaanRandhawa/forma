@@ -4,28 +4,35 @@ import { PageHeader } from "../components/PageHeader";
 import { Reveal } from "../components/Reveal";
 import { GoalWidget } from "../components/dashboard/GoalWidget";
 import { EmptyState } from "../components/EmptyState";
-import { useFakeLoad } from "../lib/motion";
-import { goals as seedGoals, type Goal, type GoalTone } from "../lib/data";
+import { ErrorState } from "../components/ErrorState";
+import { type Goal, type GoalTone } from "../lib/data";
+import { useGoals, useAction, API_ENABLED, errorMessage } from "../api/hooks";
+import { goalToWidget } from "../api/adapt";
+import { api } from "../api";
 
-const TEMPLATES: { label: string; unit: string; max: number; tone: GoalTone; cadence: "daily" | "weekly" }[] = [
-  { label: "Daily steps", unit: "steps", max: 10000, tone: "cyan", cadence: "daily" },
-  { label: "Protein", unit: "g", max: 160, tone: "lime", cadence: "daily" },
-  { label: "Sleep", unit: "h", max: 8, tone: "violet", cadence: "daily" },
-  { label: "Water", unit: "oz", max: 100, tone: "cyan", cadence: "daily" },
-  { label: "Weekly workouts", unit: "sessions", max: 5, tone: "pink", cadence: "weekly" },
-  { label: "Running distance", unit: "mi", max: 15, tone: "amber", cadence: "weekly" },
+const TEMPLATES: { label: string; key: string; unit: string; max: number; tone: GoalTone; cadence: "daily" | "weekly" }[] = [
+  { label: "Daily steps", key: "steps", unit: "steps", max: 10000, tone: "cyan", cadence: "daily" },
+  { label: "Protein", key: "protein", unit: "g", max: 160, tone: "lime", cadence: "daily" },
+  { label: "Sleep", key: "sleep", unit: "h", max: 8, tone: "violet", cadence: "daily" },
+  { label: "Water", key: "water", unit: "oz", max: 100, tone: "cyan", cadence: "daily" },
+  { label: "Weekly workouts", key: "weekly_workouts", unit: "sessions", max: 5, tone: "pink", cadence: "weekly" },
+  { label: "Running distance", key: "running", unit: "mi", max: 15, tone: "amber", cadence: "weekly" },
 ];
 
 export default function Goals() {
-  const loading = useFakeLoad("goals", 500);
-  const [goals, setGoals] = useState<Goal[]>(seedGoals);
+  const { data, error, initialLoading, refetch } = useGoals();
+  const [local, setLocal] = useState<Goal[]>([]); // optimistically-added, not yet in the fetched set
   const [picking, setPicking] = useState(false);
+  const addGoal = useAction(api.goals.upsert);
 
-  const add = (t: (typeof TEMPLATES)[number]) => {
-    setGoals((g) => [
+  const fetched = (data ?? []).filter((g) => g.active).map((g, i) => goalToWidget(g, i));
+  const goals = [...fetched, ...local];
+
+  const add = async (t: (typeof TEMPLATES)[number]) => {
+    setLocal((g) => [
       ...g,
       {
-        id: `${t.label}-${Date.now()}`,
+        id: `${t.key}-${Date.now()}`,
         label: t.label,
         value: 0,
         max: t.max,
@@ -37,6 +44,11 @@ export default function Goals() {
       },
     ]);
     setPicking(false);
+    if (API_ENABLED) {
+      await addGoal.run({ key: t.key, label: t.label, target: t.max, unit: t.unit, cadence: t.cadence, tone: t.tone });
+      refetch();
+      setLocal([]);
+    }
   };
 
   const active = goals.filter((g) => g.value < g.max);
@@ -58,7 +70,7 @@ export default function Goals() {
         <Reveal className="mb-8 grid gap-2 sm:grid-cols-2">
           {TEMPLATES.map((t) => (
             <button
-              key={t.label}
+              key={t.key}
               onClick={() => add(t)}
               className="focus-ring tactile lift flex items-center justify-between rounded-2xl border border-white/[0.07] bg-white/[0.03] px-4 py-3 text-left hover:border-white/20"
             >
@@ -71,12 +83,14 @@ export default function Goals() {
         </Reveal>
       )}
 
-      {loading ? (
+      {initialLoading ? (
         <div className="space-y-2.5">
           {[0, 1, 2].map((i) => (
             <div key={i} className="skeleton h-[76px] rounded-2xl" />
           ))}
         </div>
+      ) : error && goals.length === 0 ? (
+        <ErrorState message={errorMessage(error)} onRetry={refetch} />
       ) : goals.length === 0 ? (
         <EmptyState
           title="no goals yet"
@@ -85,14 +99,22 @@ export default function Goals() {
         />
       ) : (
         <div className="space-y-8">
-          <Reveal as="section" onView>
-            <div className="label-instrument mb-3">in progress · {active.length}</div>
-            <div className="space-y-2.5">
-              {active.map((g) => (
-                <GoalWidget key={g.id} goal={g} />
-              ))}
-            </div>
-          </Reveal>
+          {active.length > 0 ? (
+            <Reveal as="section" onView>
+              <div className="label-instrument mb-3">in progress · {active.length}</div>
+              <div className="space-y-2.5">
+                {active.map((g) => (
+                  <GoalWidget key={g.id} goal={g} />
+                ))}
+              </div>
+            </Reveal>
+          ) : (
+            <EmptyState
+              title="everything's done"
+              body="every goal is complete for this period. add another target or take the win."
+              action={{ label: "add a goal", onClick: () => setPicking(true) }}
+            />
+          )}
           {done.length > 0 && (
             <Reveal as="section" onView delay={0.05}>
               <div className="label-instrument mb-3" style={{ color: "var(--accent-lime)" }}>

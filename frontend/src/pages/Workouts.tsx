@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { PageHeader } from "../components/PageHeader";
 import { Reveal } from "../components/Reveal";
+import { EmptyState } from "../components/EmptyState";
 import { Button, Panel, PillSelector } from "../components/primitives";
 import { BodyView } from "./Body";
 import { program, todayWorkout, upcomingWorkouts } from "../lib/data";
@@ -92,16 +93,22 @@ export default function Workouts() {
 
           <aside>
             <div className="label-soft lowercase">up next</div>
-            <ul className="mt-4 space-y-5">
-              {upcomingWorkouts.map((w) => (
-                <li key={w.day}>
-                  <div className="text-[0.95rem] text-content-primary">{w.name}</div>
-                  <div className="label-instrument mt-1">
-                    {w.day.toLowerCase()} · {w.muscles.join(", ").toLowerCase()}
-                  </div>
-                </li>
-              ))}
-            </ul>
+            {upcomingWorkouts.length === 0 ? (
+              <p className="mt-4 text-[0.86rem] leading-relaxed text-content-tertiary">
+                nothing scheduled. generate a plan or build one to fill your week.
+              </p>
+            ) : (
+              <ul className="mt-4 space-y-5">
+                {upcomingWorkouts.map((w) => (
+                  <li key={w.day}>
+                    <div className="text-[0.95rem] text-content-primary">{w.name}</div>
+                    <div className="label-instrument mt-1">
+                      {w.day.toLowerCase()} · {w.muscles.join(", ").toLowerCase()}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
           </aside>
         </Reveal>
       )}
@@ -146,6 +153,13 @@ export default function Workouts() {
       {tab === "History" && (
         <Reveal key="hist">
         <Panel title="recent sessions">
+          {history.length === 0 ? (
+            <EmptyState
+              title="no sessions yet"
+              body="your finished workouts land here — volume, form score and the date."
+              action={{ label: "start today's workout", to: "/workouts/active" }}
+            />
+          ) : (
           <ul className="divide-y divide-[var(--line-soft)]">
             {history.map((h) => (
               <li key={h.date} className="flex items-center justify-between py-4 first:pt-0">
@@ -162,11 +176,19 @@ export default function Workouts() {
               </li>
             ))}
           </ul>
+          )}
         </Panel>
         </Reveal>
       )}
 
       {tab === "Templates" && (
+        templates.length === 0 ? (
+          <EmptyState
+            title="no templates"
+            body="save a workout as a template and it'll be one tap to start next time."
+            action={{ label: "build a workout", to: "/workouts" }}
+          />
+        ) : (
         <Reveal key="templates" className="grid gap-4 sm:grid-cols-2">
           {templates.map((t) => (
             <div
@@ -181,6 +203,7 @@ export default function Workouts() {
             </div>
           ))}
         </Reveal>
+        )
       )}
     </div>
   );

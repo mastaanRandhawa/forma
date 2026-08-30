@@ -5,7 +5,11 @@ import { PillSelector } from "../components/primitives";
 import { BarProgress } from "../components/health/ProgressIndicator";
 import { MiniTrend } from "../components/health/MiniTrend";
 import { BodyMuscles } from "../components/BodyMuscles";
+import { EmptyState } from "../components/EmptyState";
+import { ErrorState } from "../components/ErrorState";
+import { Skel } from "../components/skeleton/Skeleton";
 import { muscleActivation, rankedMuscles } from "../lib/data";
+import { useMuscleMap, API_ENABLED, errorMessage } from "../api/hooks";
 
 const VIEWS = ["Front", "Back"] as const;
 const RANGE = ["Today", "Week", "Month"] as const;
@@ -26,6 +30,13 @@ export default function Body() {
 export function BodyView({ range = "Today" }: { range?: (typeof RANGE)[number] }) {
   const [view, setView] = useState<(typeof VIEWS)[number]>("Front");
   const [picked, setPicked] = useState<string | null>(null);
+  const map = useMuscleMap(range.toLowerCase() as "today" | "week" | "month");
+
+  const ranked = API_ENABLED
+    ? [...(map.data?.muscles ?? [])]
+        .sort((a, b) => b.score - a.score)
+        .map((m) => ({ name: m.name, pct: Math.round(m.score * 100), trend: [] as number[] }))
+    : rankedMuscles;
 
   return (
     <>
@@ -69,22 +80,41 @@ export function BodyView({ range = "Today" }: { range?: (typeof RANGE)[number] }
         <div className="space-y-10">
           <Reveal onView delay={0.06}>
             <div className="label-soft lowercase">ranked · {range.toLowerCase()}</div>
-            <ul className="mt-4 space-y-4">
-              {rankedMuscles.map((m) => (
-                <li key={m.name} className="flex items-center gap-4">
-                  <span className="w-28 text-[0.9rem] text-content-primary lowercase">{m.name}</span>
-                  <BarProgress
-                    fraction={m.pct / 100}
-                    color="var(--accent-mauve)"
-                    height={8}
-                    className="flex-1"
-                    ariaLabel={`${m.name} ${m.pct} percent`}
-                  />
-                  <span className="w-10 text-right label-instrument tabular-nums">{m.pct}%</span>
-                  <MiniTrend data={m.trend} mode="dots" color="var(--accent-cyan)" width={60} height={20} />
-                </li>
-              ))}
-            </ul>
+            {map.initialLoading ? (
+              <div className="mt-4 space-y-4">
+                {[0, 1, 2, 3, 4].map((i) => (
+                  <Skel key={i} className="h-5 rounded-md" />
+                ))}
+              </div>
+            ) : map.error && ranked.length === 0 ? (
+              <ErrorState className="mt-4" message={errorMessage(map.error)} onRetry={map.refetch} />
+            ) : ranked.length === 0 ? (
+              <EmptyState
+                className="mt-4"
+                title="nothing trained yet"
+                body="finish a session and your worked muscles will rank here by load."
+                action={{ label: "start training", to: "/workouts" }}
+              />
+            ) : (
+              <ul className="mt-4 space-y-4">
+                {ranked.map((m) => (
+                  <li key={m.name} className="flex items-center gap-4">
+                    <span className="w-28 text-[0.9rem] text-content-primary lowercase">{m.name}</span>
+                    <BarProgress
+                      fraction={m.pct / 100}
+                      color="var(--accent-mauve)"
+                      height={8}
+                      className="flex-1"
+                      ariaLabel={`${m.name} ${m.pct} percent`}
+                    />
+                    <span className="w-10 text-right label-instrument tabular-nums">{m.pct}%</span>
+                    {m.trend.length > 0 && (
+                      <MiniTrend data={m.trend} mode="dots" color="var(--accent-cyan)" width={60} height={20} />
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
           </Reveal>
 
           <Reveal onView delay={0.1} className="grid gap-8 sm:grid-cols-2">
