@@ -32,9 +32,14 @@ export default function SettingsLayout() {
               <ChevronLeft size={14} strokeWidth={2} /> settings
             </Link>
           )}
-          <Suspense fallback={<SettingsPanelSkeleton rows={6} />}>
-            <Outlet />
-          </Suspense>
+          {/* Key the panel (not the rail) so switching subsections gives a
+              light entrance transition while the nav rail and any already-
+              mounted panels stay put. */}
+          <div key={pathname} className="animate-rise">
+            <Suspense fallback={<SettingsPanelSkeleton rows={6} />}>
+              <Outlet />
+            </Suspense>
+          </div>
         </div>
       </div>
     </div>

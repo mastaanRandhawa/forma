@@ -1,4 +1,4 @@
-import { Outlet, useLocation } from "react-router-dom";
+import { Outlet, useLocation, useNavigation } from "react-router-dom";
 import { Suspense, useEffect, useState } from "react";
 import { House, Dumbbell, MessageSquare, Apple, Library } from "lucide-react";
 import { API_ENABLED } from "../api/hooks";
@@ -31,31 +31,16 @@ const SECONDARY: NavItem[] = [
   { to: "/exercise-library", label: "Exercise library", icon: <Library {...ICON} /> },
 ];
 
-const LOAD_MS = 380;
-const seen = new Set<string>();
-
 export function AppShell() {
   const location = useLocation();
-  const pinned =
-    typeof window !== "undefined" && window.location.search.includes("skel");
-  // only gate the FIRST visit to a route; repeat navigation is instant.
-  const [phase, setPhase] = useState<"loading" | "ready">(
-    seen.has(location.pathname) ? "ready" : "loading"
-  );
-
-  useEffect(() => {
-    if (pinned) return;
-    if (seen.has(location.pathname)) {
-      setPhase("ready");
-      return;
-    }
-    seen.add(location.pathname);
-    setPhase("loading");
-    const t = setTimeout(() => setPhase("ready"), LOAD_MS);
-    return () => clearTimeout(t);
-  }, [location.pathname, pinned]);
-
-  const showSkeleton = pinned || phase === "loading";
+  const navigation = useNavigation();
+  // Remount (and re-run the entrance animation) only when the top-level section
+  // changes — navigating between subsections of the same area (e.g. Settings
+  // panels) keeps the shared layout, nav rail and already-loaded panels mounted.
+  const section = location.pathname.split("/")[1] || "dashboard";
+  // The only genuine wait now is a code-split chunk that hasn't downloaded yet;
+  // Suspense handles that. The top progress bar reflects router loader work.
+  const showSkeleton = navigation.state === "loading";
 
   // pay the daily check-in bonus once per calendar day (idempotent)
   useEffect(() => {
@@ -71,15 +56,11 @@ export function AppShell() {
       <TopNav items={NAV} secondary={SECONDARY} />
 
       <main className="relative mx-auto w-full max-w-[1040px] px-5 pb-28 pt-28 sm:px-8 sm:pt-32">
-        {showSkeleton ? (
-          <PageSkeleton pathname={location.pathname} />
-        ) : (
-          <div key={location.pathname} className="animate-rise">
-            <Suspense fallback={<PageSkeleton pathname={location.pathname} />}>
-              <Outlet />
-            </Suspense>
-          </div>
-        )}
+        <div key={section} className="animate-rise">
+          <Suspense fallback={<PageSkeleton pathname={location.pathname} />}>
+            <Outlet />
+          </Suspense>
+        </div>
       </main>
 
       <QuickActions />

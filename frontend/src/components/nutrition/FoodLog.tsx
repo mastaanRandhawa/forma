@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Plus, ChevronLeft, ChevronRight, Trash2, Pencil, Calendar,
   CopyPlus, Sparkles, Utensils,
@@ -12,7 +12,7 @@ import { BarProgress, RingProgress } from "../health/ProgressIndicator";
 import { DetailDrawer } from "../dashboard/DetailDrawer";
 import { Skel } from "../skeleton/Skeleton";
 import { api } from "../../api/client";
-import { errorMessage } from "../../api/hooks";
+import { errorMessage, invalidateResource, useResource } from "../../api/hooks";
 import type { FoodDay, FoodLogEntry, MealType, NutritionGoalInput } from "../../api/types";
 import {
   MEALS, MEAL_LABEL, fmtDay, todayISO, addDaysISO, sourceLabel, round, mealForNow,
@@ -25,29 +25,24 @@ const TABS = ["today", "trends"] as const;
 export default function FoodLog() {
   const [tab, setTab] = useState<(typeof TABS)[number]>("today");
   const [date, setDate] = useState(todayISO());
-  const [day, setDay] = useState<FoodDay | null>(null);
-  const [error, setError] = useState<Error | null>(null);
-  const [loading, setLoading] = useState(true);
+
+  // Cached per day — revisiting Nutrition or stepping back to a day you already
+  // opened paints instantly instead of flashing a skeleton and re-fetching.
+  const dayRes = useResource<FoodDay>(`food:day:${date}`, () => api.food.day(date));
+  const day = dayRes.data;
+  const error = dayRes.error;
+  const loading = dayRes.initialLoading;
+  const load = dayRes.refetch;
+  // mutation endpoints return the fresh day — write it straight through, and
+  // drop the derived trends summary so it recomputes next time it's opened.
+  const setDay = (d: FoodDay) => {
+    dayRes.mutate(d);
+    invalidateResource("food:summary");
+  };
 
   const [add, setAdd] = useState<{ open: boolean; meal: MealType }>({ open: false, meal: "breakfast" });
   const [edit, setEdit] = useState<FoodLogEntry | null>(null);
   const [goalOpen, setGoalOpen] = useState(false);
-
-  const load = useCallback(() => {
-    let cancelled = false;
-    setLoading(true);
-    setError(null);
-    api.food
-      .day(date)
-      .then((d) => !cancelled && setDay(d))
-      .catch((e) => !cancelled && setError(e instanceof Error ? e : new Error(String(e))))
-      .finally(() => !cancelled && setLoading(false));
-    return () => {
-      cancelled = true;
-    };
-  }, [date]);
-
-  useEffect(load, [load]);
 
   const isToday = date === todayISO();
 
@@ -583,17 +578,13 @@ function AttributionNote() {
 /* ── trends ────────────────────────────────────────────────────────────────── */
 
 function Trends() {
-  const [data, setData] = useState<{ date: string; calories: number; protein: number }[] | null>(null);
-  const [err, setErr] = useState<Error | null>(null);
+  const res = useResource<{ date: string; calories: number; protein: number }[]>(
+    "food:summary:14",
+    () => api.food.summary(14).then((r) => r.days),
+  );
+  const data = res.data;
 
-  useEffect(() => {
-    api.food
-      .summary(14)
-      .then((r) => setData(r.days))
-      .catch((e) => setErr(e instanceof Error ? e : new Error(String(e))));
-  }, []);
-
-  if (err) return <ErrorState message={errorMessage(err)} />;
+  if (res.error) return <ErrorState message={errorMessage(res.error)} />;
   if (!data) return <Skel className="h-52 w-full" />;
   if (data.length === 0)
     return (
