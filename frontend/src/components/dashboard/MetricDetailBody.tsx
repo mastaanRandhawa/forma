@@ -3,11 +3,21 @@ import { ArrowRight } from "lucide-react";
 import { MiniBars } from "../health/MiniBars";
 import { MiniTrend } from "../health/MiniTrend";
 import { metricDetails } from "../../lib/data";
+import type { MetricDetail } from "../../lib/progressMetrics";
 
 /** Body content for the DetailDrawer — headline, full chart, contributing
- *  factors, and one recommendation. Keyed by metric id. */
-export function MetricDetailBody({ id, onClose }: { id: string; onClose: () => void }) {
-  const d = metricDetails[id];
+ *  factors, and one recommendation. Pass a real-data `detail` object, or fall
+ *  back to the static copy keyed by metric id. */
+export function MetricDetailBody({
+  id,
+  detail,
+  onClose,
+}: {
+  id: string;
+  detail?: MetricDetail;
+  onClose: () => void;
+}) {
+  const d = detail ?? metricDetails[id];
   if (!d) return null;
 
   return (

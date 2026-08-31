@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Reveal } from "../components/Reveal";
 import { Skel } from "../components/skeleton/Skeleton";
@@ -16,7 +16,16 @@ import { DashboardProvider, DashboardLoadingProvider } from "../api/dashboard-co
 import { buildLocalDashboard, readinessFromCheckin } from "../api/localDashboard";
 import { useFormaData, hasRecoveryData, latestCheckin } from "../lib/localStore";
 import { DailyCheckinCard } from "../components/health/DailyCheckin";
-import { currentStreak, sessionVolume, volumeInLastDays } from "../lib/fitness";
+import {
+  adherence,
+  consistencyDays,
+  currentStreak,
+  sessionVolume,
+  volumeInLastDays,
+} from "../lib/fitness";
+import { buildMetricDetails } from "../lib/progressMetrics";
+import { DetailDrawer } from "../components/dashboard/DetailDrawer";
+import { MetricDetailBody } from "../components/dashboard/MetricDetailBody";
 import { apiSessionToCompleted } from "../lib/lifecycle";
 import { Quiet } from "../components/Quiet";
 import { useProgression, usePrefs } from "../api/settings";
@@ -65,6 +74,20 @@ export default function Home() {
   const last7Vol = volumeInLastDays(sessions, 7);
   const hasVolume = sessions.length > 0;
 
+  const [detail, setDetail] = useState<string | null>(null);
+  const details = useMemo(
+    () => buildMetricDetails(sessions, data, data.profile),
+    [sessions, data],
+  );
+  const activeDays91 = useMemo(
+    () => consistencyDays(sessions, 91).filter((c) => c > 0).length,
+    [sessions],
+  );
+  const adh13 = data.profile.daysPerWeek ? adherence(sessions, data.profile.daysPerWeek, 13) : null;
+  const consistencyPct =
+    adh13 != null ? Math.round(adh13 * 100) : Math.min(100, Math.round((activeDays91 / 91) * 100));
+  const consistencyValue = adh13 != null ? `${Math.round(adh13 * 100)}%` : String(activeDays91);
+
   const weekTrained = useMemo(() => {
     const now = new Date();
     now.setHours(0, 0, 0, 0);
@@ -85,12 +108,14 @@ export default function Home() {
 
   const rings = [
     hasRecovery
-      ? { id: "readiness", label: "readiness", value: String(readiness), sub: "from your check-in", pct: readiness ?? 0, tone: "pink" as const, to: "/progress" }
-      : { id: "readiness", label: "readiness", value: "—", sub: "log a check-in", pct: 0, tone: "pink" as const, to: "/progress" },
+      ? { id: "readiness", label: "readiness", value: String(readiness), sub: "from your check-in", pct: readiness ?? 0, tone: "pink" as const, to: "/progress#recovery" }
+      : { id: "readiness", label: "readiness", value: "—", sub: "log a check-in", pct: 0, tone: "pink" as const, to: "/progress#recovery" },
     hasVolume
       ? { id: "volume", label: "7-day volume", value: `${(last7Vol / 1000).toFixed(1)}k`, sub: units, pct: Math.min(100, Math.round(last7Vol / 300)), tone: "cyan" as const, to: "/progress" }
       : { id: "volume", label: "7-day volume", value: "—", sub: "no sessions yet", pct: 0, tone: "cyan" as const, to: "/workouts" },
-    { id: "form", label: "avg form", value: "—", sub: "camera not set up", pct: 0, tone: "lime" as const, to: "/settings/privacy" },
+    hasVolume
+      ? { id: "consistency", label: "consistency", value: consistencyValue, sub: "last 13 weeks", pct: consistencyPct, tone: "lime" as const, to: "/progress#consistency" }
+      : { id: "consistency", label: "consistency", value: "—", sub: "no sessions yet", pct: 0, tone: "lime" as const, to: "/workouts" },
   ];
 
   const weeklyGoal = { done: dash.weeklyRing.done, target: dash.weeklyRing.target };
@@ -115,11 +140,22 @@ export default function Home() {
         <div className="mt-8 grid gap-4 lg:grid-cols-[minmax(0,1fr)_336px]">
           <div className="space-y-4">
             <Reveal onView className="grid grid-cols-3 gap-2 sm:gap-3">
-              {rings.map((s) => (
-                <Quiet key={s.id} widgetKey={s.id}>
-                  <RingStat label={s.label} value={s.value} sub={s.sub} pct={s.pct} tone={s.tone} to={s.to} />
-                </Quiet>
-              ))}
+              {rings.map((s) => {
+                const d = details[s.id];
+                return (
+                  <Quiet key={s.id} widgetKey={s.id}>
+                    <RingStat
+                      label={s.label}
+                      value={s.value}
+                      sub={s.sub}
+                      pct={s.pct}
+                      tone={s.tone}
+                      to={d ? undefined : s.to}
+                      onSelect={d ? () => setDetail(s.id) : undefined}
+                    />
+                  </Quiet>
+                );
+              })}
             </Reveal>
 
             {prefs.recovery.manualCheckins && !checkedInToday && (
@@ -208,6 +244,17 @@ export default function Home() {
             )}
           </aside>
         </div>
+
+        <DetailDrawer
+          open={!!detail}
+          onClose={() => setDetail(null)}
+          eyebrow={detail ? details[detail]?.eyebrow ?? "" : ""}
+          title={detail ? details[detail]?.title ?? "" : ""}
+        >
+          {detail && details[detail] && (
+            <MetricDetailBody id={detail} detail={details[detail]} onClose={() => setDetail(null)} />
+          )}
+        </DetailDrawer>
       </div>
      </DashboardLoadingProvider>
     </DashboardProvider>

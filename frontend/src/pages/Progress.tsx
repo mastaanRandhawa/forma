@@ -1,4 +1,5 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useLocation } from "react-router-dom";
 import { PageHeader } from "../components/PageHeader";
 import { TrainingTabs } from "../components/layout/TrainingTabs";
 import { Reveal } from "../components/Reveal";
@@ -30,8 +31,8 @@ const RANGE_DAYS: Record<(typeof RANGE)[number], number> = { "1M": 30, "3M": 91,
 
 function TrendCurve({ data, unit = "lb" }: { data: number[]; unit?: string }) {
   const color = "var(--accent-pink)";
-  const w = 560;
-  const h = 220;
+  const w = 620;
+  const h = 150;
   const pad = 16;
   const svgRef = useRef<SVGSVGElement>(null);
   const [hover, setHover] = useState<number | null>(null);
@@ -161,6 +162,13 @@ export default function Progress() {
   );
   const windowDays = RANGE_DAYS[range];
 
+  const { hash } = useLocation();
+  useEffect(() => {
+    if (!hash) return;
+    const el = document.getElementById(hash.slice(1));
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [hash]);
+
   const inRange = useMemo(
     () => sessions.filter((s) => Date.parse(s.finishedAt) >= Date.now() - windowDays * 864e5),
     [sessions, windowDays],
@@ -222,7 +230,34 @@ export default function Progress() {
         last 13 weeks{adh != null ? `, ${Math.round(adh * 100)}% of your ${profile.daysPerWeek}-day target` : ""}.
       </Reveal>
 
-      <RecoverySection />
+      {/* training counts — headline numbers first */}
+      <Reveal onView className="mt-8 grid gap-4 sm:grid-cols-3">
+        <MetricCard
+          tone="amber"
+          label="workouts / month"
+          value={String(workoutsThisMonth(sessions))}
+          unit="sessions"
+          className="min-h-[168px]"
+          viz={<MiniTrend data={weeklyVol.map((v) => v || 0.01)} mode="pulses" color="var(--accent-amber)" fill height={54} />}
+        />
+        <MetricCard
+          tone="cyan"
+          label="avg weekly volume"
+          value={(avgWeeklyVolume(sessions) / 1000).toFixed(1)}
+          unit={`k ${profile.units}`}
+          revealDelay={0.08}
+          className="min-h-[168px]"
+          viz={<MiniTrend data={weeklyVol.map((v) => v || 0.01)} mode="curve" color="var(--accent-cyan)" fill height={54} />}
+        />
+        <MetricCard
+          tone="mauve"
+          label="longest streak"
+          value={String(longestStreak(sessions))}
+          unit="days"
+          revealDelay={0.16}
+          className="min-h-[168px]"
+        />
+      </Reveal>
 
       {/* strength */}
       <Reveal onView delay={0.05} className="mt-12">
@@ -234,7 +269,7 @@ export default function Progress() {
             body="log weight and reps on a working set and its strength curve appears here."
           />
         ) : (
-          <div className="mt-4 grid gap-10 lg:grid-cols-[minmax(0,1fr)_260px] lg:items-center">
+          <div className="mt-4 grid gap-8 lg:grid-cols-[minmax(0,1fr)_220px] lg:items-start">
             <div>
               <div className="flex flex-wrap gap-1.5">
                 {liftNames.slice(0, 6).map((n) => (
@@ -263,12 +298,12 @@ export default function Progress() {
               <div className="label-instrument mt-2">{activeLift?.toLowerCase()} · estimated 1rm</div>
             </div>
 
-            <div className="flex flex-col items-center text-center">
-              <div className="local-glow" style={{ width: 240, height: 240 }} />
+            <div className="relative flex flex-col items-center text-center lg:pt-8">
+              <div className="local-glow absolute -top-4 left-1/2 -translate-x-1/2" style={{ width: 170, height: 170 }} />
               <CountUp
                 value={liftSeries.length ? liftSeries[liftSeries.length - 1].e1rm : 0}
                 className="metric-numeral text-content-primary"
-                style={{ fontSize: "3.6rem" }}
+                style={{ fontSize: "2.8rem" }}
               />
               <div className="label-instrument mt-1">{profile.units} estimated 1rm</div>
               {liftSeries.length >= 2 && (
@@ -282,38 +317,9 @@ export default function Progress() {
         )}
       </Reveal>
 
-      {/* training counts */}
-      <Reveal onView className="mt-14 grid gap-4 sm:grid-cols-3">
-        <MetricCard
-          tone="amber"
-          label="workouts / month"
-          value={String(workoutsThisMonth(sessions))}
-          unit="sessions"
-          className="min-h-[168px]"
-          viz={<MiniTrend data={weeklyVol.map((v) => v || 0.01)} mode="pulses" color="var(--accent-amber)" fill height={54} />}
-        />
-        <MetricCard
-          tone="cyan"
-          label="avg weekly volume"
-          value={(avgWeeklyVolume(sessions) / 1000).toFixed(1)}
-          unit={`k ${profile.units}`}
-          revealDelay={0.08}
-          className="min-h-[168px]"
-          viz={<MiniTrend data={weeklyVol.map((v) => v || 0.01)} mode="curve" color="var(--accent-cyan)" fill height={54} />}
-        />
-        <MetricCard
-          tone="mauve"
-          label="longest streak"
-          value={String(longestStreak(sessions))}
-          unit="days"
-          revealDelay={0.16}
-          className="min-h-[168px]"
-        />
-      </Reveal>
-
       {/* consistency + PRs */}
       <Reveal onView className="mt-14 grid gap-10 sm:grid-cols-2">
-        <div>
+        <div id="consistency" className="scroll-mt-24">
           <div className="label-soft lowercase">consistency · last 13 weeks</div>
           <div className="mt-4 grid grid-cols-[repeat(13,1fr)] grid-flow-col gap-1.5" style={{ gridTemplateRows: "repeat(7, 1fr)" }}>
             {consistency.map((count, i) => (
@@ -363,6 +369,10 @@ export default function Progress() {
           )}
         </div>
       </Reveal>
+
+      <div id="recovery" className="scroll-mt-24">
+        <RecoverySection />
+      </div>
 
       {API_ENABLED && (
         <Reveal onView className="mt-14">
