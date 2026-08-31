@@ -15,8 +15,9 @@ import { api } from "../../api/client";
 import { errorMessage } from "../../api/hooks";
 import type { FoodDay, FoodLogEntry, MealType, NutritionGoalInput } from "../../api/types";
 import {
-  MEALS, MEAL_LABEL, fmtDay, todayISO, addDaysISO, sourceLabel, round,
+  MEALS, MEAL_LABEL, fmtDay, todayISO, addDaysISO, sourceLabel, round, mealForNow,
 } from "../../lib/food";
+import { MiniCalendar } from "./MiniCalendar";
 import { AddFoodSheet } from "./AddFoodSheet";
 
 const TABS = ["today", "trends"] as const;
@@ -74,19 +75,15 @@ export default function FoodLog() {
             <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
               <div className="space-y-6">
                 <DaySummary day={day} onAdjust={() => setGoalOpen(true)} />
-                {MEALS.map((meal) => (
-                  <MealSection
-                    key={meal}
-                    meal={meal}
-                    day={day}
-                    onAdd={() => setAdd({ open: true, meal })}
-                    onEdit={setEdit}
-                    onDelete={async (id) => {
-                      const r = await api.food.deleteLog(id).catch(() => null);
-                      if (r) setDay(r.day);
-                    }}
-                  />
-                ))}
+                <LogCard
+                  day={day}
+                  onAdd={(meal) => setAdd({ open: true, meal })}
+                  onEdit={setEdit}
+                  onDelete={async (id) => {
+                    const r = await api.food.deleteLog(id).catch(() => null);
+                    if (r) setDay(r.day);
+                  }}
+                />
               </div>
               <aside className="space-y-6">
                 <QuickActions
@@ -168,17 +165,7 @@ function DateNav({
         <span className="ml-2 text-[1rem] lowercase text-content-primary">{fmtDay(date)}</span>
       </div>
       <div className="flex items-center gap-2">
-        <label className="focus-ring tactile inline-flex h-9 items-center gap-1.5 rounded-pill bg-white/[0.06] px-3 text-[0.8rem] lowercase text-content-secondary hover:text-content-primary">
-          <Calendar size={13} strokeWidth={1.9} />
-          <input
-            type="date"
-            value={date}
-            max={addDaysISO(todayISO(), 1)}
-            onChange={(e) => e.target.value && onPick(e.target.value)}
-            className="bg-transparent text-content-primary outline-none [color-scheme:dark]"
-            aria-label="Pick a date"
-          />
-        </label>
+        <MiniCalendar value={date} max={addDaysISO(todayISO(), 1)} onPick={onPick} />
         {date !== todayISO() && (
           <button
             onClick={onToday}
@@ -272,70 +259,86 @@ function DaySummary({ day, onAdjust }: { day: FoodDay; onAdjust: () => void }) {
   );
 }
 
-/* ── meal section ──────────────────────────────────────────────────────────── */
+/* ── the log — one card, meals grouped inside ─────────────────────────────── */
 
-function MealSection({
-  meal, day, onAdd, onEdit, onDelete,
+function LogCard({
+  day, onAdd, onEdit, onDelete,
 }: {
-  meal: MealType;
   day: FoodDay;
-  onAdd: () => void;
+  onAdd: (meal: MealType) => void;
   onEdit: (e: FoodLogEntry) => void;
   onDelete: (id: string) => void;
 }) {
-  const entries = day.meals[meal] ?? [];
-  const kcal = Math.round(day.mealTotals[meal]?.calories ?? 0);
+  const total = day.meals && Object.values(day.meals).reduce((n, l) => n + (l?.length ?? 0), 0);
 
   return (
     <section className="surface-soft p-5 sm:p-6">
       <header className="flex items-center justify-between">
-        <h2 className="label-soft lowercase">{MEAL_LABEL[meal]}</h2>
-        <span className="label-instrument tabular-nums">{kcal} kcal</span>
+        <h2 className="label-soft lowercase">log food</h2>
+        <button
+          onClick={() => onAdd(mealForNow())}
+          className="focus-ring tactile inline-flex items-center gap-1.5 rounded-pill bg-white/[0.08] px-3.5 py-2 text-[0.8rem] lowercase text-content-primary hover:bg-white/[0.14]"
+        >
+          <Plus size={13} strokeWidth={2.25} /> add food
+        </button>
       </header>
 
-      {entries.length > 0 ? (
-        <ul className="mt-3 divide-y divide-[var(--line-soft)]">
-          {entries.map((e) => (
-            <li key={e.id} className="group flex items-center gap-3 py-2.5">
-              <button
-                onClick={() => onEdit(e)}
-                className="focus-ring min-w-0 flex-1 text-left"
-              >
-                <span className="block truncate text-[0.9rem] text-content-primary">
-                  {e.foodName}
-                  {e.brand && <span className="text-content-tertiary"> · {e.brand}</span>}
-                </span>
-                <span className="label-instrument">
-                  {formatQty(e)} · {Math.round(e.calories)} kcal · {round(e.protein)}p
-                </span>
-              </button>
-              <button
-                onClick={() => onEdit(e)}
-                aria-label={`Edit ${e.foodName}`}
-                className="focus-ring text-content-tertiary opacity-0 transition-opacity hover:text-content-secondary group-hover:opacity-100"
-              >
-                <Pencil size={13} strokeWidth={1.9} />
-              </button>
-              <button
-                onClick={() => onDelete(e.id)}
-                aria-label={`Delete ${e.foodName}`}
-                className="focus-ring text-content-tertiary hover:text-[var(--accent-amber)]"
-              >
-                <Trash2 size={13} strokeWidth={1.9} />
-              </button>
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <p className="mt-3 text-[0.82rem] text-content-tertiary">nothing logged yet</p>
+      {total === 0 && (
+        <p className="mt-4 text-[0.85rem] text-content-tertiary">
+          nothing logged for {fmtDay(day.date)} yet. search a food, scan a barcode, or add it manually.
+        </p>
       )}
 
-      <button
-        onClick={onAdd}
-        className="focus-ring tactile mt-3 inline-flex items-center gap-1.5 rounded-pill bg-white/[0.06] px-3.5 py-2 text-[0.8rem] lowercase text-content-primary hover:bg-white/[0.12]"
-      >
-        <Plus size={13} strokeWidth={2.25} /> add food
-      </button>
+      <div className="mt-3 divide-y divide-[var(--line-soft)]">
+        {MEALS.map((meal) => {
+          const entries = day.meals[meal] ?? [];
+          if (entries.length === 0) return null;
+          const kcal = Math.round(day.mealTotals[meal]?.calories ?? 0);
+          return (
+            <div key={meal} className="py-3 first:pt-1">
+              <div className="mb-1 flex items-center justify-between">
+                <span className="label-instrument">{MEAL_LABEL[meal]}</span>
+                <span className="label-instrument tabular-nums">{kcal} kcal</span>
+              </div>
+              <ul>
+                {entries.map((e) => (
+                  <li key={e.id} className="group flex items-center gap-3 py-1.5">
+                    <button onClick={() => onEdit(e)} className="focus-ring min-w-0 flex-1 text-left">
+                      <span className="block truncate text-[0.9rem] text-content-primary">
+                        {e.foodName}
+                        {e.brand && <span className="text-content-tertiary"> · {e.brand}</span>}
+                      </span>
+                      <span className="label-instrument">
+                        {formatQty(e)} · {Math.round(e.calories)} kcal · {round(e.protein)}p
+                      </span>
+                    </button>
+                    <button
+                      onClick={() => onEdit(e)}
+                      aria-label={`Edit ${e.foodName}`}
+                      className="focus-ring text-content-tertiary opacity-0 transition-opacity hover:text-content-secondary group-hover:opacity-100"
+                    >
+                      <Pencil size={13} strokeWidth={1.9} />
+                    </button>
+                    <button
+                      onClick={() => onDelete(e.id)}
+                      aria-label={`Delete ${e.foodName}`}
+                      className="focus-ring text-content-tertiary hover:text-[var(--accent-amber)]"
+                    >
+                      <Trash2 size={13} strokeWidth={1.9} />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+              <button
+                onClick={() => onAdd(meal)}
+                className="focus-ring mt-1 inline-flex items-center gap-1 text-[0.76rem] lowercase text-content-tertiary hover:text-content-secondary"
+              >
+                <Plus size={11} strokeWidth={2.25} /> add to {MEAL_LABEL[meal]}
+              </button>
+            </div>
+          );
+        })}
+      </div>
     </section>
   );
 }
