@@ -19,28 +19,74 @@ export interface Resource<D> {
   data: D | null;
   error: Error | null;
   loading: boolean;
-  /** true only on the very first load (not on refetch) */
+  /** true only on the very first load (not on refetch / background revalidation) */
   initialLoading: boolean;
   refetch: () => void;
+  /** write a known-fresh value straight into state + cache (e.g. the object a
+   *  mutation endpoint returns) so no follow-up GET is needed */
+  mutate: (data: D) => void;
+}
+
+/**
+ * Process-wide stale-while-revalidate cache for `useResource`, keyed by the
+ * resource `key`. Navigating away from and back to a screen re-mounts its hooks;
+ * seeding `data` from here means the screen paints its last-known content
+ * immediately instead of flashing a skeleton and re-fetching every time.
+ *
+ * A cached entry newer than `STALE_MS` is served as-is with no network call. An
+ * older entry is still shown instantly, then refreshed in the background.
+ * `refetch()` and `invalidateResource()` force a foreground reload.
+ */
+const STALE_MS = 30_000;
+interface CacheEntry<D> {
+  data: D;
+  at: number;
+}
+const resourceCache = new Map<string, CacheEntry<unknown>>();
+
+/** Drop cached resources so their next read re-fetches. Pass a prefix like
+ *  `"session-"` to clear a family, or nothing to clear everything (e.g. on
+ *  logout / after a mutation that invalidates many screens). */
+export function invalidateResource(prefix?: string): void {
+  if (!prefix) {
+    resourceCache.clear();
+    return;
+  }
+  for (const k of resourceCache.keys()) if (k.startsWith(prefix)) resourceCache.delete(k);
 }
 
 /** Run `fetcher` on mount and whenever `key` changes; expose load state. */
 export function useResource<D>(key: string, fetcher: () => Promise<D>): Resource<D> {
-  const [data, setData] = useState<D | null>(null);
+  const cached = resourceCache.get(key) as CacheEntry<D> | undefined;
+  const [data, setData] = useState<D | null>(cached ? cached.data : null);
   const [error, setError] = useState<Error | null>(null);
-  const [loading, setLoading] = useState(true);
-  const seenRef = useRef(false);
+  const [loading, setLoading] = useState(!cached);
+  const seenRef = useRef(!!cached);
+  const keyRef = useRef(key);
   const fetcherRef = useRef(fetcher);
   fetcherRef.current = fetcher;
 
-  const run = useCallback(() => {
+  // `key` changed between renders (e.g. a range switch) — re-seed synchronously
+  // from that key's cache so we never render another key's data or a stale null.
+  if (keyRef.current !== key) {
+    keyRef.current = key;
+    const next = resourceCache.get(key) as CacheEntry<D> | undefined;
+    setData(next ? next.data : null);
+    setLoading(!next);
+    setError(null);
+    seenRef.current = !!next;
+  }
+
+  const run = useCallback((background: boolean) => {
+    const k = keyRef.current;
     let cancelled = false;
-    setLoading(true);
+    if (!background) setLoading(true);
     setError(null);
     Promise.resolve()
       .then(fetcherRef.current)
       .then((d) => {
         if (cancelled) return;
+        resourceCache.set(k, { data: d, at: Date.now() });
         setData(d);
         seenRef.current = true;
       })
@@ -49,7 +95,7 @@ export function useResource<D>(key: string, fetcher: () => Promise<D>): Resource
         setError(e instanceof Error ? e : new Error(String(e)));
       })
       .finally(() => {
-        if (!cancelled) setLoading(false);
+        if (!cancelled && !background) setLoading(false);
       });
     return () => {
       cancelled = true;
@@ -57,17 +103,28 @@ export function useResource<D>(key: string, fetcher: () => Promise<D>): Resource
   }, []);
 
   useEffect(() => {
-    const cancel = run();
-    return cancel;
+    const entry = resourceCache.get(key) as CacheEntry<D> | undefined;
+    // Fresh cache hit — nothing to do, the seeded state is already correct.
+    if (entry && Date.now() - entry.at < STALE_MS) return;
+    // Stale hit → revalidate quietly; miss → foreground load with a skeleton.
+    return run(!!entry);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key]);
+
+  const mutate = useCallback((d: D) => {
+    resourceCache.set(keyRef.current, { data: d, at: Date.now() });
+    seenRef.current = true;
+    setData(d);
+    setError(null);
+  }, []);
 
   return {
     data,
     error,
     loading,
     initialLoading: loading && !seenRef.current,
-    refetch: run,
+    refetch: () => run(false),
+    mutate,
   };
 }
 

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Smartphone } from "lucide-react";
 import { api } from "../../api/client";
-import { API_ENABLED } from "../../api/hooks";
+import { API_ENABLED, useResource } from "../../api/hooks";
 import { usePrefs, useSettings } from "../../api/settings";
 import { Section } from "../../components/settings/ui";
 import { Toggle } from "../../components/settings/Toggle";
@@ -84,15 +84,14 @@ export default function Connections() {
 }
 
 function ConnectionsLive() {
-  const [conns, setConns] = useState<DeviceConnection[]>([]);
+  // Cached across navigation — re-opening Settings won't refetch or clear the list.
+  const devices = useResource<DeviceConnection[]>("me-devices", () => api.me.devices());
+  const conns = devices.data ?? [];
+  const load = devices.refetch;
   const [busy, setBusy] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
 
-  const load = () => {
-    api.me.devices().then(setConns).catch(() => {});
-  };
   useEffect(() => {
-    load();
     const p = new URLSearchParams(window.location.search);
     if (p.get("device_connected")) setMsg(`${p.get("device_connected")} connected.`);
     if (p.get("device_error")) setMsg(`Couldn't connect: ${p.get("device_error")}`);

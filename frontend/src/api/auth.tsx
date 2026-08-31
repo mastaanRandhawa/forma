@@ -20,7 +20,7 @@ import {
 } from "react";
 import { Navigate, useLocation } from "react-router-dom";
 import { auth as authClient, session as tokenStore } from "./client";
-import { API_ENABLED } from "./hooks";
+import { API_ENABLED, invalidateResource } from "./hooks";
 import type { User } from "./types";
 
 type Status = "loading" | "authed" | "unverified" | "anon";
@@ -125,6 +125,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch {
       /* private mode */
     }
+    // drop every cached API resource so the next account starts clean
+    invalidateResource();
   };
 
   const signOut = useCallback(async () => {

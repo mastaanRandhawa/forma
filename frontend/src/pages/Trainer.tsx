@@ -80,8 +80,10 @@ export default function Trainer() {
   const equippedLook = useEquippedItem("avatar");
   const mood = coachMood(buildLocalDashboard(formaData));
 
-  const [thread, setThread] = useState<Msg[]>([]);
-  const [seeded, setSeeded] = useState(false);
+  // Seed straight from cached history so re-entering the page keeps the thread
+  // on screen instead of flashing empty while the effect below re-runs.
+  const [thread, setThread] = useState<Msg[]>(() => (history.data ?? []).map(toMsg));
+  const [seeded, setSeeded] = useState(history.data != null);
   const [draft, setDraft] = useState("");
   const [typing, setTyping] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
