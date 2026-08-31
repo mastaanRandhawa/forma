@@ -5,7 +5,15 @@ import { CoinBalance } from "../CoinBalance";
 import { useProgression } from "../../api/settings";
 import type { FeatureKey } from "../../api/types";
 
-export type NavItem = { to: string; label: string; icon: ReactNode; end?: boolean; feature?: FeatureKey };
+export type NavItem = {
+  to: string;
+  label: string;
+  icon: ReactNode;
+  end?: boolean;
+  feature?: FeatureKey;
+  /** extra path prefixes that should also mark this item active */
+  match?: string[];
+};
 
 /** Small geometric wordmark glyph — a soft chevron cut from the pink gradient. */
 function Mark() {
@@ -91,7 +99,8 @@ export function TopNav({
   const { has } = useProgression();
   const [menuOpen, setMenuOpen] = useState(false);
   const isActive = (n: NavItem) =>
-    n.end ? loc.pathname === n.to : loc.pathname.startsWith(n.to);
+    (n.end ? loc.pathname === n.to : loc.pathname.startsWith(n.to)) ||
+    (n.match?.some((m) => loc.pathname.startsWith(m)) ?? false);
   // gated destinations drop out of the nav until unlocked (less on screen early)
   const visibleItems = items.filter((n) => !n.feature || has(n.feature));
 

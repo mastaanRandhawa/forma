@@ -14,6 +14,7 @@ const ActiveWorkout = lazy(() => import("./pages/ActiveWorkout"));
 const Trainer = lazy(() => import("./pages/Trainer"));
 const Body = lazy(() => import("./pages/Body"));
 const Progress = lazy(() => import("./pages/Progress"));
+const Nutrition = lazy(() => import("./pages/Nutrition"));
 const Goals = lazy(() => import("./pages/Goals"));
 const Store = lazy(() => import("./pages/Store"));
 const ExerciseLibrary = lazy(() => import("./pages/ExerciseLibrary"));
@@ -71,6 +72,8 @@ const router = createBrowserRouter([
       { path: "/trainer", element: <Trainer /> },
       { path: "/body", element: gated("body_map", <Body />) },
       { path: "/progress", element: gated("progress_basic", <Progress />) },
+      { path: "/training", element: <Navigate to="/workouts" replace /> },
+      { path: "/nutrition", element: <Nutrition /> },
       { path: "/goals", element: gated("goals", <Goals />) },
       { path: "/store", element: gated("store", <Store />) },
       { path: "/exercise-library", element: <ExerciseLibrary /> },

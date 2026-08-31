@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { PageHeader } from "../components/PageHeader";
+import { TrainingTabs } from "../components/layout/TrainingTabs";
 import { Reveal } from "../components/Reveal";
 import { PillSelector } from "../components/primitives";
 import { BarProgress } from "../components/health/ProgressIndicator";
@@ -18,6 +19,7 @@ export default function Body() {
   const [range, setRange] = useState<(typeof RANGE)[number]>("Today");
   return (
     <div className="mx-auto max-w-[1120px]">
+      <TrainingTabs className="mb-6" />
       <PageHeader eyebrow="body" title="muscle" ghost="map">
         <PillSelector options={RANGE} value={range} onChange={setRange} />
       </PageHeader>

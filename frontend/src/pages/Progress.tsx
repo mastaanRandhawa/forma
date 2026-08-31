@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState } from "react";
 import { PageHeader } from "../components/PageHeader";
+import { TrainingTabs } from "../components/layout/TrainingTabs";
 import { Reveal } from "../components/Reveal";
 import { EmptyState } from "../components/EmptyState";
 import { PillSelector } from "../components/primitives";
@@ -187,6 +188,7 @@ export default function Progress() {
   if (!hasData) {
     return (
       <div className="mx-auto max-w-[1120px]">
+        <TrainingTabs className="mb-6" />
         <PageHeader eyebrow="progress" title="your" ghost="trends" />
         <Reveal className="mt-6">
           <EmptyState
@@ -207,6 +209,7 @@ export default function Progress() {
 
   return (
     <div className="mx-auto max-w-[1120px]">
+      <TrainingTabs className="mb-6" />
       <PageHeader eyebrow="progress" title="your" ghost="trends">
         <PillSelector options={RANGE} value={range} onChange={setRange} />
       </PageHeader>
