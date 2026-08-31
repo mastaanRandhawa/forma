@@ -14,7 +14,7 @@ export const epley1RM = (weight: number, reps: number): number =>
   reps <= 0 ? 0 : Math.round(weight * (1 + reps / 30));
 
 export const setVolume = (s: LoggedSet): number =>
-  s.done && s.weight && s.reps ? s.weight * s.reps : 0;
+  s.done && !s.warmup && s.weight && s.reps ? s.weight * s.reps : 0;
 
 export const exerciseVolume = (e: LoggedExercise): number =>
   e.sets.reduce((sum, s) => sum + setVolume(s), 0);
@@ -132,7 +132,7 @@ export function bestByExercise(sessions: CompletedSession[]): Map<string, Exerci
   for (const s of ordered) {
     for (const e of s.exercises) {
       for (const set of e.sets) {
-        if (!set.done || !set.weight || !set.reps) continue;
+        if (!set.done || set.warmup || !set.weight || !set.reps) continue;
         const cur = map.get(e.name) ?? { maxWeight: 0, max1RM: 0, maxSetVolume: 0 };
         map.set(e.name, {
           maxWeight: Math.max(cur.maxWeight, set.weight),
@@ -184,7 +184,7 @@ export function allTimePRs(sessions: CompletedSession[]): PRRow[] {
   for (const s of sessions) {
     for (const e of s.exercises) {
       for (const set of e.sets) {
-        if (!set.done || !set.weight || !set.reps) continue;
+        if (!set.done || set.warmup || !set.weight || !set.reps) continue;
         const oneRm = epley1RM(set.weight, set.reps);
         const cur = rows.get(e.name);
         if (!cur || oneRm > cur._1rm) {
@@ -216,6 +216,33 @@ export function strengthSeriesFor(sessions: CompletedSession[], exercise: string
       return best ? { date: s.finishedAt.slice(0, 10), e1rm: best } : null;
     })
     .filter((x): x is { date: string; e1rm: number } => x !== null);
+}
+
+/** The completed working sets of an exercise the last time it was trained. */
+export function lastPerformance(
+  sessions: CompletedSession[],
+  exercise: string,
+): { date: string; sets: { weight: number; reps: number }[] } | null {
+  const ordered = [...sessions].sort((a, b) => b.finishedAt.localeCompare(a.finishedAt));
+  for (const s of ordered) {
+    const e = s.exercises.find((x) => x.name === exercise);
+    if (!e) continue;
+    const sets = e.sets
+      .filter((set) => set.done && set.weight != null && set.reps != null && !set.warmup)
+      .map((set) => ({ weight: set.weight as number, reps: set.reps as number }));
+    if (sets.length) return { date: s.finishedAt.slice(0, 10), sets };
+  }
+  return null;
+}
+
+/** A one-line "last time" summary, e.g. "175 × 8" (top set) or null. */
+export function lastTopSet(
+  sessions: CompletedSession[],
+  exercise: string,
+): { weight: number; reps: number } | null {
+  const last = lastPerformance(sessions, exercise);
+  if (!last) return null;
+  return [...last.sets].sort((a, b) => b.weight * b.reps - a.weight * a.reps)[0] ?? null;
 }
 
 /** Exercise names that appear in logged history, most recent first. */

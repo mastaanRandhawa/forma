@@ -71,9 +71,48 @@ export async function syncSet(
       weightKg: set.weight == null ? null : toKg(set.weight, units),
       reps: set.reps,
       rpe: set.rpe,
+      isWarmup: set.warmup ?? false,
       completed: set.done,
     })
     .catch(() => {});
+}
+
+/**
+ * Create a server-side ExercisePerformance for an exercise added or substituted
+ * in mid-session (the backend already exposes POST /sessions/:id/performances).
+ * Resolves the backend exercise id from the library by name, attaches the new
+ * `apiPerfId` to the local exercise, then flushes any sets already logged on it.
+ * Best-effort: on any failure the exercise simply stays local-only.
+ */
+export async function syncNewPerformance(
+  active: ActiveSession,
+  exIndex: number,
+  units: Units,
+): Promise<void> {
+  if (!API_ENABLED || !active.apiId) return;
+  const ex = active.exercises[exIndex];
+  if (!ex || ex.apiPerfId) return;
+  try {
+    let exerciseId = ex.exerciseId;
+    if (!exerciseId) {
+      const found = await api.library.exercises({ q: ex.name, take: 1 });
+      exerciseId = found.items[0]?.id;
+    }
+    if (!exerciseId) return;
+    const order = active.exercises.length + exIndex; // keep it after the planned rows
+    const perf = await api.sessions.addPerformance(active.apiId, exerciseId, order);
+    const { updateActive } = await import("./localStore");
+    updateActive((s) => ({
+      ...s,
+      exercises: s.exercises.map((e, i) =>
+        i === exIndex ? { ...e, apiPerfId: perf.id, exerciseId } : e,
+      ),
+    }));
+    const fresh = (await import("./localStore")).loadData().active;
+    if (fresh) for (let i = 0; i < (fresh.exercises[exIndex]?.sets.length ?? 0); i++) await syncSet(fresh, exIndex, i, units);
+  } catch {
+    /* stays local-only */
+  }
 }
 
 export async function syncDeleteSet(
