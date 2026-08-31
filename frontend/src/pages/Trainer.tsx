@@ -19,6 +19,7 @@ import {
 } from "../api/hooks";
 import { buildLocalDashboard } from "../api/localDashboard";
 import { useFormaData } from "../lib/localStore";
+import { useEquippedItem } from "../lib/customization";
 import { api } from "../api";
 import type { ChatMessage } from "../api/types";
 
@@ -76,6 +77,7 @@ export default function Trainer() {
   const prompts = useSuggestedPrompts();
   const trainer = useTrainer();
   const formaData = useFormaData();
+  const equippedLook = useEquippedItem("avatar");
   const mood = coachMood(buildLocalDashboard(formaData));
 
   const [thread, setThread] = useState<Msg[]>([]);
@@ -294,7 +296,14 @@ export default function Trainer() {
           </div>
           <div className="mt-4 flex items-center justify-between text-[0.78rem]">
             <span className="text-content-tertiary">voice · {(trainer.data?.voiceId ?? "v-marcus").replace(/^v-/, "")}</span>
-            <span className="text-content-tertiary">look · {(trainer.data?.avatarId ?? "l-signature").replace(/^l-/, "")}</span>
+            <span className="flex items-center gap-1.5 text-content-tertiary">
+              look ·
+              <span
+                className="inline-block h-3.5 w-3.5 rounded-full border border-white/20 align-middle"
+                style={{ background: equippedLook?.swatch ?? "linear-gradient(135deg,#F06CB0,#7A174F)" }}
+              />
+              {(equippedLook?.name ?? "Signature").toLowerCase()}
+            </span>
           </div>
           <Link
             to="/store"

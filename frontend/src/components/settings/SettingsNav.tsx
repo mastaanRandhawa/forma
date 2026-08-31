@@ -1,5 +1,5 @@
 import { NavLink } from "react-router-dom";
-import { Bell, Palette, ShieldCheck, Sparkles, UserRound, Watch, CircleUser } from "lucide-react";
+import { Bell, Palette, ShieldCheck, Sparkles, UserRound, Watch, CircleUser, Shapes } from "lucide-react";
 
 const ICON = { size: 17, strokeWidth: 1.75 } as const;
 
@@ -9,6 +9,7 @@ export const SETTINGS_CATEGORIES = [
   { to: "/settings/connections", label: "connected apps", icon: <Watch {...ICON} /> },
   { to: "/settings/notifications", label: "notifications", icon: <Bell {...ICON} /> },
   { to: "/settings/appearance", label: "appearance", icon: <Palette {...ICON} /> },
+  { to: "/settings/customization", label: "customization", icon: <Shapes {...ICON} /> },
   { to: "/settings/privacy", label: "privacy & data", icon: <ShieldCheck {...ICON} /> },
   { to: "/settings/account", label: "account & support", icon: <CircleUser {...ICON} /> },
 ];
