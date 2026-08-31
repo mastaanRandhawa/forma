@@ -1,44 +1,47 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { ArrowRight, ArrowLeft, Check, Activity, Dumbbell, HeartPulse, Moon, Scale, Sparkles } from "lucide-react";
+import { ArrowRight, ArrowLeft, Check } from "lucide-react";
 import { AtmosphericBackground } from "../components/layout/AtmosphericBackground";
 import { saveProfile, type Environment, type Experience, type Units } from "../lib/localStore";
 import { todayPlan } from "../lib/program";
+import {
+  GOALS,
+  GOAL_TO_API,
+  EXPERIENCE,
+  DAYS,
+  DURATIONS,
+  ENVIRONMENTS,
+  EQUIPMENT,
+  WEEKDAYS,
+  LB_TO_KG,
+  IN_TO_CM,
+} from "../lib/profileOptions";
+import { api } from "../api/client";
+import { API_ENABLED } from "../api/hooks";
+import { useAuth } from "../api/auth";
+import type { TrainingLocation, ProfilePatch } from "../api/types";
+
+type BiologicalSex = NonNullable<ProfilePatch["biologicalSex"]>;
 
 const EASE = [0.22, 1, 0.36, 1] as const;
 
-const GOALS = [
-  { id: "lose", label: "lose fat", icon: Scale },
-  { id: "muscle", label: "build muscle", icon: Dumbbell },
-  { id: "strength", label: "get stronger", icon: Activity },
-  { id: "fitness", label: "general fitness", icon: HeartPulse },
-  { id: "sleep", label: "sleep & recovery", icon: Moon },
-  { id: "maintain", label: "maintain", icon: Sparkles },
-];
+const STEPS = ["goal", "baseline", "environment", "safety", "schedule", "basics", "ready"] as const;
 
-const EXPERIENCE: { id: Experience; label: string; hint: string }[] = [
-  { id: "beginner", label: "beginner", hint: "new, or back after a long break" },
-  { id: "intermediate", label: "intermediate", hint: "training consistently for 6+ months" },
-  { id: "advanced", label: "advanced", hint: "years of structured training" },
+const SEXES: { id: BiologicalSex; label: string }[] = [
+  { id: "female", label: "female" },
+  { id: "male", label: "male" },
+  { id: "other", label: "other" },
+  { id: "prefer_not_to_say", label: "prefer not to say" },
 ];
-
-const DAYS = [2, 3, 4, 5, 6];
-const DURATIONS = [30, 45, 60, 75];
-const ENVIRONMENTS: { id: Environment; label: string }[] = [
-  { id: "gym", label: "full gym" },
-  { id: "home", label: "home setup" },
-  { id: "both", label: "both" },
-];
-const EQUIPMENT = ["Barbell", "Dumbbells", "Machines", "Cables", "Kettlebell", "Bands", "Pull-up bar", "Bodyweight only"];
-const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-
-const STEPS = ["goal", "baseline", "environment", "safety", "schedule", "ready"] as const;
 
 export default function Onboarding() {
   const nav = useNavigate();
   const reduce = useReducedMotion();
+  const { refreshUser } = useAuth();
   const [step, setStep] = useState(0);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const [goal, setGoal] = useState<string | null>(null);
   const [experience, setExperience] = useState<Experience | null>(null);
@@ -49,6 +52,11 @@ export default function Onboarding() {
   const [equipment, setEquipment] = useState<string[]>([]);
   const [injuries, setInjuries] = useState("");
   const [preferredDays, setPreferredDays] = useState<number[]>([]);
+  const [bodyweight, setBodyweight] = useState("");
+  const [heightPrimary, setHeightPrimary] = useState(""); // cm, or feet when units === "lb"
+  const [heightInches, setHeightInches] = useState(""); // only when units === "lb"
+  const [birthYear, setBirthYear] = useState("");
+  const [sex, setSex] = useState<BiologicalSex | null>(null);
 
   const plan = useMemo(() => todayPlan(), []);
   const nextTrainingDay = useMemo(() => {
@@ -65,9 +73,29 @@ export default function Onboarding() {
     (step === 2 && environment) ||
     step === 3 ||
     (step === 4 && preferredDays.length > 0) ||
-    step === 5;
+    step === 5 ||
+    step === 6;
 
-  const finish = () => {
+  const finish = async () => {
+    const bwNum = Number.parseFloat(bodyweight);
+    const bw = Number.isFinite(bwNum) && bwNum > 0 ? bwNum : null;
+    const weightKg = bw == null ? undefined : units === "lb" ? bw * LB_TO_KG : bw;
+
+    let heightCm: number | undefined;
+    if (units === "lb") {
+      const ft = Number.parseFloat(heightPrimary);
+      const inch = Number.parseFloat(heightInches) || 0;
+      if (Number.isFinite(ft) && ft > 0) heightCm = (ft * 12 + inch) * IN_TO_CM;
+    } else {
+      const cm = Number.parseFloat(heightPrimary);
+      if (Number.isFinite(cm) && cm > 0) heightCm = cm;
+    }
+
+    const yr = Number.parseInt(birthYear, 10);
+    const nowYear = new Date().getFullYear();
+    const dateOfBirth =
+      Number.isFinite(yr) && yr >= 1900 && yr <= nowYear ? `${yr}-01-01` : undefined;
+
     saveProfile({
       goal,
       experience,
@@ -78,11 +106,38 @@ export default function Onboarding() {
       equipment,
       injuries: injuries.trim(),
       preferredDays,
+      bodyweight: bw,
     });
+
+    if (API_ENABLED) {
+      setSubmitting(true);
+      setSubmitError(null);
+      try {
+        await api.me.onboarding({
+          fitnessGoal: goal ? GOAL_TO_API[goal] : undefined,
+          experienceLevel: experience ?? undefined,
+          trainingLocation: (environment as TrainingLocation | null) ?? undefined,
+          unitPreference: units === "kg" ? "metric" : "imperial",
+          trainingFrequencyTarget: daysPerWeek ?? undefined,
+          sessionLengthTargetMin: sessionMin ?? undefined,
+          equipmentKeys: equipment.length ? equipment : undefined,
+          injuries: injuries.trim() ? [{ tag: injuries.trim() }] : undefined,
+          weightKg: weightKg == null ? undefined : Math.round(weightKg * 10) / 10,
+          heightCm: heightCm == null ? undefined : Math.round(heightCm),
+          dateOfBirth,
+          biologicalSex: sex ?? undefined,
+        });
+        await refreshUser();
+      } catch (e) {
+        setSubmitting(false);
+        setSubmitError(e instanceof Error ? e.message : "Couldn't save your setup. Try again.");
+        return;
+      }
+    }
     nav("/dashboard");
   };
 
-  const next = () => (step < STEPS.length - 1 ? setStep(step + 1) : finish());
+  const next = () => (step < STEPS.length - 1 ? setStep(step + 1) : void finish());
   const back = () => setStep(Math.max(0, step - 1));
 
   const toggle = <T,>(list: T[], v: T, set: (l: T[]) => void) =>
@@ -273,6 +328,76 @@ export default function Onboarding() {
               )}
 
               {step === 5 && (
+                <>
+                  <h1 className="text-[1.7rem] font-light lowercase leading-tight text-content-primary">
+                    the basics
+                  </h1>
+                  <p className="mt-2 text-[0.9rem] text-content-secondary">
+                    sets your starting point for weight, strength and recovery targets. optional — skip
+                    if you'd rather not.
+                  </p>
+
+                  <div className="mt-6 label-instrument">bodyweight ({units})</div>
+                  <input
+                    inputMode="decimal"
+                    value={bodyweight}
+                    onChange={(e) => setBodyweight(e.target.value)}
+                    placeholder={units === "kg" ? "80" : "178"}
+                    className="focus-ring mt-2 w-full rounded-2xl border border-white/[0.08] bg-white/[0.03] p-3.5 text-[0.9rem] text-content-primary outline-none placeholder:text-content-tertiary"
+                  />
+
+                  <div className="mt-5 label-instrument">height</div>
+                  {units === "lb" ? (
+                    <div className="mt-2 flex gap-2">
+                      <input
+                        inputMode="numeric"
+                        value={heightPrimary}
+                        onChange={(e) => setHeightPrimary(e.target.value)}
+                        placeholder="5"
+                        aria-label="height feet"
+                        className="focus-ring w-full rounded-2xl border border-white/[0.08] bg-white/[0.03] p-3.5 text-[0.9rem] text-content-primary outline-none placeholder:text-content-tertiary"
+                      />
+                      <input
+                        inputMode="numeric"
+                        value={heightInches}
+                        onChange={(e) => setHeightInches(e.target.value)}
+                        placeholder="10 in"
+                        aria-label="height inches"
+                        className="focus-ring w-full rounded-2xl border border-white/[0.08] bg-white/[0.03] p-3.5 text-[0.9rem] text-content-primary outline-none placeholder:text-content-tertiary"
+                      />
+                    </div>
+                  ) : (
+                    <input
+                      inputMode="numeric"
+                      value={heightPrimary}
+                      onChange={(e) => setHeightPrimary(e.target.value)}
+                      placeholder="178 cm"
+                      aria-label="height in centimetres"
+                      className="focus-ring mt-2 w-full rounded-2xl border border-white/[0.08] bg-white/[0.03] p-3.5 text-[0.9rem] text-content-primary outline-none placeholder:text-content-tertiary"
+                    />
+                  )}
+
+                  <div className="mt-5 label-instrument">year of birth</div>
+                  <input
+                    inputMode="numeric"
+                    value={birthYear}
+                    onChange={(e) => setBirthYear(e.target.value)}
+                    placeholder="1995"
+                    className="focus-ring mt-2 w-full rounded-2xl border border-white/[0.08] bg-white/[0.03] p-3.5 text-[0.9rem] text-content-primary outline-none placeholder:text-content-tertiary"
+                  />
+
+                  <div className="mt-5 label-instrument">biological sex</div>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {SEXES.map((s) => (
+                      <button key={s.id} onClick={() => setSex(s.id)} className={chip(sex === s.id)}>
+                        {s.label}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+
+              {step === 6 && (
                 <div className="text-center">
                   <motion.span
                     className="mx-auto mb-5 grid h-16 w-16 place-items-center rounded-full"
@@ -318,7 +443,7 @@ export default function Onboarding() {
             <span />
           )}
           <div className="flex items-center gap-3">
-            {step === 3 && (
+            {(step === 3 || step === 5) && (
               <button
                 onClick={next}
                 className="focus-ring text-[0.85rem] lowercase text-content-tertiary transition-colors hover:text-content-secondary"
@@ -328,17 +453,20 @@ export default function Onboarding() {
             )}
             <button
               onClick={next}
-              disabled={!canNext}
+              disabled={!canNext || submitting}
               className="focus-ring tactile inline-flex items-center gap-2 rounded-pill py-2.5 pl-6 pr-2.5 text-[0.9rem] font-medium text-[var(--fill-on-color)] disabled:opacity-40"
               style={{ background: "var(--fill-coral)" }}
             >
-              {step === STEPS.length - 1 ? "enter forma" : "continue"}
+              {step === STEPS.length - 1 ? (submitting ? "saving…" : "enter forma") : "continue"}
               <span className="grid h-7 w-7 place-items-center rounded-pill bg-[rgba(255,250,248,0.22)]">
                 <ArrowRight size={14} strokeWidth={2.25} />
               </span>
             </button>
           </div>
         </div>
+        {submitError && (
+          <p role="alert" className="mt-3 text-right text-[0.8rem] text-[var(--accent-pink)]">{submitError}</p>
+        )}
       </div>
     </div>
   );

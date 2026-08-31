@@ -1,17 +1,32 @@
 import { Link } from "react-router-dom";
 import { ArrowUpRight, CalendarPlus } from "lucide-react";
 import { BodyMuscles } from "../BodyMuscles";
-import { muscleActivation } from "../../lib/data";
-import { useDashboardData } from "../../api/dashboard-context";
+import { useDashboardData, useDashboardLoading } from "../../api/dashboard-context";
 
 /**
  * SessionCard — the featured "today's session" tile: a full-bleed muscle map
  * zoomed onto the worked area with the workout details layered on top.
- * Falls back to a "plan a session" prompt on a rest day.
+ * Falls back to a "plan a session" prompt when nothing is scheduled, and to a
+ * quiet skeleton while the real dashboard is still loading.
  */
 export function SessionCard() {
   const dash = useDashboardData();
+  const loading = useDashboardLoading();
   const workout = dash?.todayWorkout ?? null;
+
+  if (loading) {
+    return (
+      <div
+        className="metric-card relative flex min-h-[220px] flex-col items-center justify-center gap-3 overflow-hidden text-center"
+        data-tone="mauve"
+        aria-busy="true"
+      >
+        <span className="skeleton h-11 w-11 rounded-pill" />
+        <span className="skeleton h-4 w-28 rounded" />
+        <span className="skeleton h-3 w-40 rounded" />
+      </div>
+    );
+  }
 
   if (!workout) {
     return (
@@ -24,14 +39,17 @@ export function SessionCard() {
         <span className="grid h-11 w-11 place-items-center rounded-pill bg-white/[0.06] text-content-tertiary">
           <CalendarPlus size={18} strokeWidth={1.75} />
         </span>
-        <div className="text-[0.98rem] lowercase text-content-primary">rest day</div>
+        <div className="text-[0.98rem] lowercase text-content-primary">nothing scheduled</div>
         <p className="max-w-[28ch] text-[0.84rem] leading-relaxed text-content-secondary">
-          nothing scheduled for today. plan a session or start one now.
+          no session planned for today. plan one or start now.
         </p>
         <span className="label-instrument">go to training →</span>
       </Link>
     );
   }
+
+  const activation: Record<string, number> = {};
+  for (const m of workout.muscles ?? []) activation[m.toLowerCase()] = 0.9;
 
   return (
     <Link
@@ -40,10 +58,10 @@ export function SessionCard() {
       data-tone="pink"
       data-variant="vivid"
     >
-      {/* full-bleed body map — zoomed onto today's worked chest / shoulders */}
+      {/* full-bleed body map — zoomed onto today's worked muscles */}
       <div className="pointer-events-none absolute inset-0 z-0 grid place-items-center overflow-hidden">
         <BodyMuscles
-          activation={muscleActivation}
+          activation={activation}
           className="[&_svg]:!max-w-none [&_svg]:origin-[50%_18%] [&_svg]:scale-[2.15]"
         />
       </div>

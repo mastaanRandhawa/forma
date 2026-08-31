@@ -46,12 +46,19 @@ export interface LoggedExercise {
   target: string;
   sets: LoggedSet[];
   skipped: boolean;
+  /** backend ExercisePerformance id, when the session was started via the API */
+  apiPerfId?: string;
+  exerciseId?: string;
+  /** "last time 60×8 → today 62.5×8" hint from the prescription engine (§2.1) */
+  prescription?: { weightKg: number | null; reps: number | null; rpe: number | null; note: string } | null;
 }
 
 export interface ActiveSession {
   id: string;
   name: string;
   startedAt: string;
+  /** backend WorkoutSession id, when started via the API */
+  apiId?: string;
   exercises: LoggedExercise[];
   /** current exercise index */
   cursor: number;
@@ -62,6 +69,8 @@ export interface ActiveSession {
 export interface CompletedSession {
   id: string;
   name: string;
+  /** backend WorkoutSession id, when finished via the API */
+  apiId?: string;
   startedAt: string;
   finishedAt: string;
   durationSec: number;
@@ -222,18 +231,35 @@ export function saveProfile(patch: Partial<Profile>): void {
   }));
 }
 
-export function startSession(name: string, plan: { name: string; target: string }[]): ActiveSession {
+export interface StartExercise {
+  name: string;
+  target: string;
+  exerciseId?: string;
+  apiPerfId?: string;
+  prescription?: LoggedExercise["prescription"];
+  sets?: LoggedSet[];
+}
+
+export function startSession(
+  name: string,
+  plan: StartExercise[],
+  meta?: { apiId?: string; startedAt?: string },
+): ActiveSession {
   const session: ActiveSession = {
-    id: uid(),
+    id: meta?.apiId ?? uid(),
+    apiId: meta?.apiId,
     name,
-    startedAt: new Date().toISOString(),
+    startedAt: meta?.startedAt ?? new Date().toISOString(),
     cursor: 0,
     restEndsAt: null,
     exercises: plan.map((p) => ({
       name: p.name,
       target: p.target,
+      exerciseId: p.exerciseId,
+      apiPerfId: p.apiPerfId,
+      prescription: p.prescription ?? null,
       skipped: false,
-      sets: [{ weight: null, reps: null, rpe: null, done: false }],
+      sets: p.sets ?? [{ weight: null, reps: null, rpe: null, done: false }],
     })),
   };
   mutate((d) => ({ ...d, active: session }));
@@ -253,12 +279,14 @@ export function finishSession(
   volume: number,
   units: Units,
   prs: string[],
+  apiId?: string,
 ): CompletedSession | null {
   const d = read();
   if (!d.active) return null;
   const finishedAt = new Date().toISOString();
   const completed: CompletedSession = {
     id: d.active.id,
+    apiId: apiId ?? d.active.apiId,
     name: d.active.name,
     startedAt: d.active.startedAt,
     finishedAt,

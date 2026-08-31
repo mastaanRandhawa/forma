@@ -36,9 +36,8 @@ jobs:
       - run: npm run build
         env:
           VITE_API_URL: ${{ vars.VITE_API_URL }}
-      # SPA fallback: GitHub Pages serves 404.html for unknown paths (deep links,
-      # hard refresh). A copy of index.html lets the client router take over.
-      - run: cp dist/index.html dist/404.html
+      # SPA deep-link fallback ships as frontend/public/404.html (rafgraph
+      # spa-github-pages redirect) — Vite copies it into dist/ during the build.
 
       - uses: actions/configure-pages@v5
         with:

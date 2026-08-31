@@ -7,6 +7,11 @@ import { MetricCard } from "../components/health/MetricCard";
 import { MiniTrend } from "../components/health/MiniTrend";
 import { CountUp } from "../components/health/CountUp";
 import { useFormaData } from "../lib/localStore";
+import { readinessFromCheckin } from "../api/localDashboard";
+import { DailyCheckinDrawer } from "../components/health/DailyCheckin";
+import { apiSessionToCompleted } from "../lib/lifecycle";
+import { API_ENABLED, useSessionHistory } from "../api/hooks";
+import { NutritionCard } from "../components/NutritionCard";
 import {
   adherence,
   allTimePRs,
@@ -92,10 +97,67 @@ function TrendCurve({ data, unit = "lb" }: { data: number[]; unit?: string }) {
   );
 }
 
+function RecoverySection() {
+  const data = useFormaData();
+  const [open, setOpen] = useState(false);
+  const checkins = useMemo(
+    () => [...data.checkins].sort((a, b) => a.date.localeCompare(b.date)),
+    [data.checkins],
+  );
+  const last = checkins[checkins.length - 1] ?? null;
+  const today = new Date().toISOString().slice(0, 10);
+  const series = checkins
+    .slice(-14)
+    .map((c) => readinessFromCheckin({ ...data, checkins: [c] }) ?? 0);
+  const readiness = last ? readinessFromCheckin(data) : null;
+
+  return (
+    <Reveal onView className="mt-12">
+      <div className="flex items-center justify-between">
+        <div className="label-soft lowercase">recovery</div>
+        <button
+          onClick={() => setOpen(true)}
+          className="focus-ring tactile rounded-pill bg-white/[0.06] px-3.5 py-1.5 text-[0.78rem] lowercase text-content-primary transition-colors hover:bg-white/[0.12]"
+        >
+          {last?.date === today ? "update check-in" : "daily check-in"}
+        </button>
+      </div>
+      {last ? (
+        <div className="mt-4 grid gap-6 sm:grid-cols-[190px_minmax(0,1fr)] sm:items-center">
+          <div>
+            <div className="metric-numeral text-content-primary" style={{ fontSize: "2.6rem" }}>
+              {readiness}
+            </div>
+            <div className="label-instrument mt-1">readiness · {last.date}</div>
+            <div className="mt-2 text-[0.82rem] text-content-tertiary">
+              {last.sleepH}h sleep · quality {last.sleepQuality}/5 · fatigue {last.fatigue}/5 ·
+              soreness {last.soreness}/5
+            </div>
+          </div>
+          {series.length >= 2 && (
+            <MiniTrend data={series} mode="curve" color="var(--accent-pink)" fill height={72} />
+          )}
+        </div>
+      ) : (
+        <p className="mt-3 max-w-[52ch] text-[0.86rem] leading-relaxed text-content-secondary">
+          no check-ins yet. log how you're sleeping and recovering and forma scores your readiness
+          before each session.
+        </p>
+      )}
+      <DailyCheckinDrawer open={open} onClose={() => setOpen(false)} />
+    </Reveal>
+  );
+}
+
 export default function Progress() {
   const [range, setRange] = useState<(typeof RANGE)[number]>("3M");
   const data = useFormaData();
-  const { sessions, profile } = data;
+  const profile = data.profile;
+  const apiHist = useSessionHistory();
+  const sessions = useMemo(
+    () => (API_ENABLED ? (apiHist.data ?? []).map((s) => apiSessionToCompleted(s, profile.units)) : data.sessions),
+    [apiHist.data, data.sessions, profile.units],
+  );
   const windowDays = RANGE_DAYS[range];
 
   const inRange = useMemo(
@@ -133,6 +195,12 @@ export default function Progress() {
             action={{ label: "start a workout", to: "/workouts" }}
           />
         </Reveal>
+        <RecoverySection />
+        {API_ENABLED && (
+          <Reveal className="mt-10">
+            <NutritionCard />
+          </Reveal>
+        )}
       </div>
     );
   }
@@ -150,6 +218,8 @@ export default function Progress() {
         {sessions.length} session{sessions.length > 1 ? "s" : ""} logged, {trainedDays91} active days in the
         last 13 weeks{adh != null ? `, ${Math.round(adh * 100)}% of your ${profile.daysPerWeek}-day target` : ""}.
       </Reveal>
+
+      <RecoverySection />
 
       {/* strength */}
       <Reveal onView delay={0.05} className="mt-12">
@@ -290,6 +360,12 @@ export default function Progress() {
           )}
         </div>
       </Reveal>
+
+      {API_ENABLED && (
+        <Reveal onView className="mt-14">
+          <NutritionCard />
+        </Reveal>
+      )}
     </div>
   );
 }

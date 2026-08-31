@@ -15,10 +15,52 @@ export interface ApiError {
 
 export interface Tokens {
   accessToken: string;
-  refreshToken: string;
+  /** Only returned to native clients (X-Client-Platform: native). Web uses the httpOnly cookie. */
+  refreshToken?: string;
 }
 export interface AuthSession extends Tokens {
   user: User;
+  /** dev-only convenience: the email-verification token, when NODE_ENV !== production */
+  devVerificationToken?: string;
+}
+
+export type AuthErrorCode =
+  | "invalid_credentials"
+  | "account_locked"
+  | "account_inactive"
+  | "email_not_verified"
+  | "session_expired"
+  | "csrf_failed"
+  | "too_many_requests"
+  | "token_invalid"
+  | "token_expired"
+  | "reset_link_expired"
+  | "no_password"
+  | "last_credential"
+  | "conflict"
+  | "bad_request";
+
+export interface SessionInfo {
+  id: string;
+  current: boolean;
+  userAgent: string | null;
+  ip: string | null;
+  createdAt: ISODate;
+  lastSeenAt: ISODate;
+  expiresAt: ISODate;
+}
+
+export interface ConnectedAccounts {
+  password: boolean;
+  google: boolean;
+  apple: boolean;
+}
+
+export interface AuthConfig {
+  providers: { google: boolean; apple: boolean };
+  googleClientId: string | null;
+  appleClientId: string | null;
+  passwordPolicy: { minLength: number; classesRequired: number };
 }
 
 // ── enums ───────────────────────────────────────────────────────────────────
@@ -66,6 +108,9 @@ export interface User {
   trainingFrequencyTarget: number | null;
   sessionLengthTargetMin: number | null;
   onboardingCompletedAt: ISODate | null;
+  emailVerified: boolean;
+  emailVerifiedAt?: ISODate | null;
+  role: "user" | "admin";
   formDataVerbosity: FormDataVerbosity;
   saveHighlightClips: boolean;
   createdAt: ISODate;
@@ -146,16 +191,39 @@ export interface ProgressionState {
   gatingEnabled: boolean;
   nextUnlock: NextUnlock | null;
 }
+/**
+ * Frontend-owned preference slice. The backend `SettingsBundle` has no home for
+ * these yet, so they are always persisted to localStorage (see `api/settings`)
+ * and preserved across the initial server fetch.
+ */
+export interface LocalPrefs {
+  camera: { formTracking: boolean };
+  recovery: { manualCheckins: boolean; promptBeforeFirstWorkout: boolean };
+  research: { anonFormData: boolean };
+  notifications: {
+    workoutReminders: boolean;
+    trainerCheckins: boolean;
+    milestones: boolean;
+    weeklyDigest: boolean;
+  };
+}
 export interface SettingsBundle {
   camera: CameraSettings;
   units: UnitSettings;
   appearance: AppearanceSettings;
   disclosure: DisclosureSettings;
   progression: ProgressionState;
+  prefs: LocalPrefs;
 }
 export interface SettingsPatch {
   camera?: Partial<CameraSettings>;
   units?: Partial<UnitSettings>;
+  prefs?: {
+    camera?: Partial<LocalPrefs["camera"]>;
+    recovery?: Partial<LocalPrefs["recovery"]>;
+    research?: Partial<LocalPrefs["research"]>;
+    notifications?: Partial<LocalPrefs["notifications"]>;
+  };
   appearance?: Partial<{
     presetId: string | null;
     backgroundMode: "solid" | "gradient" | "image";
@@ -231,8 +299,81 @@ export interface Equipment {
 export interface DeviceConnection {
   id: string;
   provider: string;
-  status: string;
+  status: string; // "connected" | "disconnected" | "error" | "pending"
   lastSyncAt: ISODate | null;
+  lastError?: string | null;
+  lastErrorAt?: ISODate | null;
+  oauthConnected?: boolean;
+}
+
+// ── nutrition daily log (§5) ───────────────────────────────────────────────
+export interface NutritionEntryInput {
+  date?: string; // YYYY-MM-DD
+  label?: string;
+  calories?: number;
+  proteinG?: number;
+  carbsG?: number;
+  fatG?: number;
+  note?: string;
+}
+export interface NutritionEntry extends NutritionEntryInput {
+  id: string;
+  date: string;
+  createdAt: ISODate;
+}
+export interface NutritionTotals {
+  calories: number;
+  proteinG: number;
+  carbsG: number;
+  fatG: number;
+}
+export interface NutritionDay {
+  date: string;
+  entries: NutritionEntry[];
+  totals: NutritionTotals;
+}
+export interface NutritionDayTotals extends NutritionTotals {
+  date: string;
+}
+
+// ── recovery check-in (§3.1) ────────────────────────────────────────────────
+export interface RecoveryCheckinInput {
+  sleepH?: number;
+  sleepQuality?: number; // 1..5
+  fatigue?: number; // 1..5
+  soreness?: number; // 1..5
+  note?: string;
+  recordedAt?: ISODate;
+}
+export interface RecoveryCheckin extends RecoveryCheckinInput {
+  id: string;
+  recordedAt: ISODate;
+}
+
+// ── mobile health ingest (§3.2) ────────────────────────────────────────────
+export interface HealthSamplesInput {
+  provider: "apple_health" | "health_connect";
+  samples: Array<{
+    type: "sleep" | "hrv" | "resting_hr" | "steps";
+    value: number;
+    unit: string;
+    recordedAt?: ISODate;
+    date?: ISODate;
+    start?: ISODate;
+    end?: ISODate;
+    sourceBundleId?: string;
+  }>;
+}
+
+// ── recommendation provenance (§4) ─────────────────────────────────────────
+export interface RecommendationAudit {
+  id: string;
+  kind: "prescription" | "deload" | "readiness_adjustment" | "swap";
+  subjectId: string;
+  inputs: Record<string, unknown>;
+  rule: string;
+  output: Record<string, unknown>;
+  createdAt: ISODate;
 }
 
 // ── library ─────────────────────────────────────────────────────────────────
@@ -268,6 +409,22 @@ export interface Exercise {
   supportsCameraTracking: boolean;
   alternativeSlugs: string[];
   muscles?: ExerciseMuscleLink[];
+
+  // ── enrichment layer (RepDB — repdb.co) — all optional / nullable ──────────
+  source?: string; // "native" | "repdb"
+  externalId?: string | null;
+  description?: string | null;
+  formTips?: string[];
+  bodyPart?: string | null;
+  forceType?: string | null; // "push" | "pull" | "static" | "dynamic"
+  mechanic?: string | null; // "compound" | "isolation"
+  discipline?: string | null; // "strength" | "stretching" | "cardio" | ...
+  isUnilateral?: boolean | null;
+  isBodyweight?: boolean | null;
+  metValue?: number | null;
+  trainingGoals?: string[];
+  imageStartUrl?: string | null;
+  imageEndUrl?: string | null;
 }
 
 export interface ExerciseDetail extends Exercise {
@@ -363,6 +520,8 @@ export interface SwapSuggestion {
   name: string;
   equipment: string[];
   difficulty: ExperienceLevel;
+  movementPattern?: string | null;
+  rationale?: string;
   reasons: string[];
   score: number;
 }
@@ -422,6 +581,10 @@ export interface ExercisePerformance {
   formScoreAvg: number | null;
   romAvg: number | null;
   supersetGroup: number | null;
+  prescribedWeightKg?: number | null;
+  prescribedReps?: number | null;
+  prescribedRpe?: number | null;
+  prescriptionAudit?: RecommendationAudit | null;
   exercise: Exercise;
   sets: ExerciseSet[];
 }
@@ -553,6 +716,28 @@ export interface ConsistencyReport {
   currentStreak: number;
   adherence: number;
   weeks: Array<{ week: string; sessions: number; volumeKg: number }>;
+  days?: Array<{ date: string; sessions: number }>;
+}
+
+// ── resolved program schedule (§2.4) ───────────────────────────────────────
+export interface ProgramScheduleDay {
+  programDayId: string;
+  weekIndex: number;
+  dayIndex: number;
+  label: string | null;
+  workoutId: string | null;
+  workoutName: string | null;
+  date: string | null;
+  completedAt: ISODate | null;
+  status: "scheduled" | "completed" | "missed" | "rescheduled";
+}
+export interface ProgramSchedule {
+  programId: string;
+  startDate: string | null;
+  preferredWeekdays: number[];
+  anchored: boolean;
+  days: ProgramScheduleDay[];
+  upcoming: ProgramScheduleDay[];
 }
 export interface FormTrends {
   slug: string | null;
@@ -775,4 +960,8 @@ export interface Dashboard {
   goals: Goal[];
   notificationsUnread: number;
   insights: CoachingInsight[];
+  /** per-metric provenance (§5) — render "—" when unavailable. */
+  readinessAvailable?: "live" | "unavailable" | "computed";
+  formAvailable?: "live" | "unavailable" | "computed";
+  volumeSource?: "computed" | "unavailable";
 }

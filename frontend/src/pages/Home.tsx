@@ -12,12 +12,15 @@ import { InsightCard } from "../components/dashboard/InsightCard";
 import { GoalsCard } from "../components/dashboard/GoalsCard";
 import { KaiOrb, coachMood } from "../components/KaiOrb";
 import { ActivityList } from "../components/dashboard/ActivityList";
-import { DashboardProvider } from "../api/dashboard-context";
+import { DashboardProvider, DashboardLoadingProvider } from "../api/dashboard-context";
 import { buildLocalDashboard, readinessFromCheckin } from "../api/localDashboard";
-import { useFormaData, hasRecoveryData } from "../lib/localStore";
+import { useFormaData, hasRecoveryData, latestCheckin } from "../lib/localStore";
+import { DailyCheckinCard } from "../components/health/DailyCheckin";
 import { currentStreak, sessionVolume, volumeInLastDays } from "../lib/fitness";
+import { apiSessionToCompleted } from "../lib/lifecycle";
 import { Quiet } from "../components/Quiet";
-import { useProgression } from "../api/settings";
+import { useProgression, usePrefs } from "../api/settings";
+import { API_ENABLED, useDashboard, useSessionHistory } from "../api/hooks";
 
 const DAY_MS = 864e5;
 
@@ -39,14 +42,28 @@ function weekVolume(sessions: { finishedAt: string; volume: number }[], weeksAgo
 export default function Home() {
   const data = useFormaData();
   const prog = useProgression();
-  const dash = useMemo(() => buildLocalDashboard(data), [data]);
-
+  const prefs = usePrefs();
   const units = data.profile.units;
-  const hasRecovery = hasRecoveryData(data);
-  const readiness = readinessFromCheckin(data);
-  const streak = currentStreak(data.sessions);
-  const last7Vol = volumeInLastDays(data.sessions, 7);
-  const hasVolume = data.sessions.length > 0;
+  const checkedInToday = latestCheckin(data)?.date === new Date().toISOString().slice(0, 10);
+
+  const apiDash = useDashboard();
+  const apiHist = useSessionHistory();
+  const sessions = useMemo(
+    () => (API_ENABLED ? (apiHist.data ?? []).map((s) => apiSessionToCompleted(s, units)) : data.sessions),
+    [apiHist.data, data.sessions, units],
+  );
+
+  const localDash = useMemo(() => buildLocalDashboard({ ...data, sessions }), [data, sessions]);
+  const dash = API_ENABLED && apiDash.data ? apiDash.data : localDash;
+  const dashLoading = API_ENABLED && apiDash.initialLoading;
+
+  const hasRecovery = API_ENABLED
+    ? (apiDash.data?.readinessAvailable ?? "unavailable") !== "unavailable"
+    : hasRecoveryData(data);
+  const readiness = API_ENABLED ? (apiDash.data?.readiness ?? null) : readinessFromCheckin(data);
+  const streak = API_ENABLED ? (apiDash.data?.streakDays ?? 0) : currentStreak(data.sessions);
+  const last7Vol = volumeInLastDays(sessions, 7);
+  const hasVolume = sessions.length > 0;
 
   const weekTrained = useMemo(() => {
     const now = new Date();
@@ -54,41 +71,42 @@ export default function Home() {
     const dow = (now.getDay() + 6) % 7;
     const monday = new Date(now);
     monday.setDate(now.getDate() - dow);
-    const days = new Set(data.sessions.map((s) => new Date(s.finishedAt).setHours(0, 0, 0, 0)));
+    const days = new Set(sessions.map((s) => new Date(s.finishedAt).setHours(0, 0, 0, 0)));
     return Array.from({ length: 7 }, (_, i) => days.has(monday.getTime() + i * DAY_MS));
-  }, [data.sessions]);
+  }, [sessions]);
 
   const chartSeries = useMemo(
     () => [
-      { label: "this week", color: "var(--accent-pink)", data: weekVolume(data.sessions, 0) },
-      { label: "last week", color: "var(--accent-blue)", data: weekVolume(data.sessions, 1) },
+      { label: "this week", color: "var(--accent-pink)", data: weekVolume(sessions, 0) },
+      { label: "last week", color: "var(--accent-blue)", data: weekVolume(sessions, 1) },
     ],
-    [data.sessions],
+    [sessions],
   );
 
   const rings = [
     hasRecovery
       ? { id: "readiness", label: "readiness", value: String(readiness), sub: "from your check-in", pct: readiness ?? 0, tone: "pink" as const, to: "/progress" }
-      : { id: "readiness", label: "readiness", value: "—", sub: "log a check-in", pct: 0, tone: "pink" as const, to: "/settings" },
+      : { id: "readiness", label: "readiness", value: "—", sub: "log a check-in", pct: 0, tone: "pink" as const, to: "/progress" },
     hasVolume
       ? { id: "volume", label: "7-day volume", value: `${(last7Vol / 1000).toFixed(1)}k`, sub: units, pct: Math.min(100, Math.round(last7Vol / 300)), tone: "cyan" as const, to: "/progress" }
       : { id: "volume", label: "7-day volume", value: "—", sub: "no sessions yet", pct: 0, tone: "cyan" as const, to: "/workouts" },
-    { id: "form", label: "avg form", value: "—", sub: "camera not set up", pct: 0, tone: "lime" as const, to: "/settings" },
+    { id: "form", label: "avg form", value: "—", sub: "camera not set up", pct: 0, tone: "lime" as const, to: "/settings/privacy" },
   ];
 
   const weeklyGoal = { done: dash.weeklyRing.done, target: dash.weeklyRing.target };
-  const avgSessionVol = data.sessions.length
-    ? Math.round(data.sessions.slice(0, 8).reduce((n, s) => n + sessionVolume(s.exercises), 0) / Math.min(8, data.sessions.length))
+  const avgSessionVol = sessions.length
+    ? Math.round(sessions.slice(0, 8).reduce((n, s) => n + sessionVolume(s.exercises), 0) / Math.min(8, sessions.length))
     : 0;
 
   const insight = !hasRecovery
     ? { id: "recovery", tone: "cyan" as const, icon: "moon" as const, text: "No recovery data yet. Log a quick check-in and Forma can score your readiness before each session.", actions: ["Check in"] }
-    : streak === 0 && data.sessions.length > 0
+    : streak === 0 && sessions.length > 0
     ? { id: "streak", tone: "amber" as const, icon: "activity" as const, text: "Your streak has lapsed. A session today restarts it.", actions: ["Today's plan"] }
     : null;
 
   return (
     <DashboardProvider value={dash}>
+     <DashboardLoadingProvider value={dashLoading}>
       <div className="mx-auto max-w-[1120px]">
         <Reveal>
           <Greeting />
@@ -103,6 +121,12 @@ export default function Home() {
                 </Quiet>
               ))}
             </Reveal>
+
+            {prefs.recovery.manualCheckins && !checkedInToday && (
+              <Reveal onView>
+                <DailyCheckinCard />
+              </Reveal>
+            )}
 
             <Reveal onView className="lg:hidden">
               <SessionCard />
@@ -185,6 +209,7 @@ export default function Home() {
           </aside>
         </div>
       </div>
+     </DashboardLoadingProvider>
     </DashboardProvider>
   );
 }
