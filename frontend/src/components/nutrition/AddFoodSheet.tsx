@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  Search, ScanLine, History, Star, SquarePen, Sparkles, ChevronLeft, Plus,
-  Minus, Loader2,
+  Search, ScanLine, History, Star, SquarePen, ChevronLeft, Plus,
+  Minus, Loader2, Trash2,
 } from "lucide-react";
 import { DetailDrawer } from "../dashboard/DetailDrawer";
 import { EmptyState } from "../EmptyState";
@@ -16,14 +16,13 @@ import {
 } from "../../lib/food";
 import { BarcodeScanner } from "./BarcodeScanner";
 
-type Tab = "search" | "scan" | "recent" | "favorites" | "custom" | "quick";
+type Tab = "search" | "scan" | "recent" | "favorites" | "manual";
 const TAB_META: { key: Tab; label: string; icon: JSX.Element }[] = [
   { key: "search", label: "search", icon: <Search size={14} strokeWidth={1.9} /> },
   { key: "scan", label: "scan", icon: <ScanLine size={14} strokeWidth={1.9} /> },
   { key: "recent", label: "recent", icon: <History size={14} strokeWidth={1.9} /> },
   { key: "favorites", label: "favorites", icon: <Star size={14} strokeWidth={1.9} /> },
-  { key: "custom", label: "custom", icon: <SquarePen size={14} strokeWidth={1.9} /> },
-  { key: "quick", label: "quick add", icon: <Sparkles size={14} strokeWidth={1.9} /> },
+  { key: "manual", label: "add manually", icon: <SquarePen size={14} strokeWidth={1.9} /> },
 ];
 
 /** A food picked from any tab, ready for the serving screen. */
@@ -47,10 +46,12 @@ export function AddFoodSheet({
 }) {
   const [tab, setTab] = useState<Tab>("search");
   const [picked, setPicked] = useState<Picked | null>(null);
+  const [photo, setPhoto] = useState<string | null>(null);
 
   useEffect(() => {
     if (open) {
       setPicked(null);
+      setPhoto(null);
       setTab("search");
     }
   }, [open]);
@@ -96,11 +97,29 @@ export function AddFoodSheet({
           </div>
 
           {tab === "search" && <SearchTab onPick={setPicked} />}
-          {tab === "scan" && <ScanTab onPick={setPicked} onManual={() => setTab("search")} onCustom={() => setTab("custom")} />}
+          {tab === "scan" && (
+            <ScanTab
+              onPick={setPicked}
+              onManual={() => setTab("search")}
+              onCustom={() => setTab("manual")}
+              onPhoto={(dataUrl) => {
+                setPhoto(dataUrl);
+                setTab("manual");
+              }}
+            />
+          )}
           {tab === "recent" && <RecentTab onPick={setPicked} />}
           {tab === "favorites" && <FavoritesTab onPick={setPicked} />}
-          {tab === "custom" && <CustomTab onPick={setPicked} />}
-          {tab === "quick" && <QuickAddTab meal={meal} date={date} onLogged={onLogged} />}
+          {tab === "manual" && (
+            <ManualEntryTab
+              meal={meal}
+              date={date}
+              photo={photo}
+              onClearPhoto={() => setPhoto(null)}
+              onLogged={onLogged}
+              onPickCustom={setPicked}
+            />
+          )}
         </div>
       )}
     </DetailDrawer>
@@ -206,11 +225,12 @@ function SearchTab({ onPick }: { onPick: (p: Picked) => void }) {
 /* ── scan ──────────────────────────────────────────────────────────────────── */
 
 function ScanTab({
-  onPick, onManual, onCustom,
+  onPick, onManual, onCustom, onPhoto,
 }: {
   onPick: (p: Picked) => void;
   onManual: () => void;
   onCustom: () => void;
+  onPhoto: (dataUrl: string) => void;
 }) {
   const [code, setCode] = useState<string | null>(null);
   const [state, setState] = useState<"idle" | "looking" | "not-found" | "unavailable">("idle");
@@ -228,7 +248,7 @@ function ScanTab({
 
   return (
     <div className="space-y-4">
-      <BarcodeScanner onDetected={lookup} />
+      <BarcodeScanner onDetected={lookup} onPhoto={onPhoto} />
 
       <div className="flex items-center gap-2">
         <input
@@ -360,84 +380,31 @@ function FavoritesTab({ onPick }: { onPick: (p: Picked) => void }) {
   );
 }
 
-/* ── custom ────────────────────────────────────────────────────────────────── */
+/* ── add manually — custom food + quick-add in one form ───────────────────── */
 
-function CustomTab({ onPick }: { onPick: (p: Picked) => void }) {
+function ManualEntryTab({
+  meal, date, photo, onClearPhoto, onLogged, onPickCustom,
+}: {
+  meal: MealType;
+  date: string;
+  photo: string | null;
+  onClearPhoto: () => void;
+  onLogged: (d: FoodDay) => void;
+  onPickCustom: (p: Picked) => void;
+}) {
   const [mine, setMine] = useState<Food[] | null>(null);
-  const [creating, setCreating] = useState(false);
   const reload = () => api.food.customs().then(setMine).catch(() => setMine([]));
   useEffect(() => {
     void reload();
   }, []);
 
-  if (creating)
-    return (
-      <CustomFoodForm
-        onCancel={() => setCreating(false)}
-        onCreated={(food) => {
-          setCreating(false);
-          onPick({ source: "custom", sourceId: food.sourceId, name: food.name, preloaded: food });
-        }}
-      />
-    );
-
-  return (
-    <div>
-      <Button onClick={() => setCreating(true)}>
-        <Plus size={14} strokeWidth={2.25} /> new custom food
-      </Button>
-      <p className="mt-2 text-[0.8rem] text-content-tertiary">
-        for anything the search and barcode can't find — a recipe, a bakery item, a restaurant meal.
-      </p>
-
-      {mine && mine.length > 0 && (
-        <ul className="mt-4 divide-y divide-[var(--line-soft)]">
-          {mine.map((f) => (
-            <li key={f.id} className="flex items-center gap-2">
-              <button
-                onClick={() => onPick({ source: "custom", sourceId: f.sourceId, name: f.name, preloaded: f })}
-                className="focus-ring flex min-w-0 flex-1 items-center gap-3 py-2.5 text-left"
-              >
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-[0.9rem] text-content-primary">
-                    {f.name}
-                    {f.brand && <span className="text-content-tertiary"> · {f.brand}</span>}
-                  </span>
-                  <span className="label-instrument">
-                    {Math.round(f.caloriesPer100)} kcal {f.perServingOnly ? "per serving" : "per 100 g"}
-                  </span>
-                </span>
-                <Plus size={14} strokeWidth={2} className="shrink-0 text-content-tertiary" />
-              </button>
-              <button
-                aria-label={`Delete ${f.name}`}
-                onClick={async () => {
-                  await api.food.deleteCustom(f.sourceId).catch(() => {});
-                  void reload();
-                }}
-                className="focus-ring text-content-tertiary hover:text-[var(--accent-amber)]"
-              >
-                <Minus size={14} strokeWidth={2} />
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
-  );
-}
-
-function CustomFoodForm({
-  onCancel, onCreated,
-}: {
-  onCancel: () => void;
-  onCreated: (f: Food) => void;
-}) {
   const [f, setF] = useState({
     name: "", brand: "", servingSize: "1", servingUnit: "serving", servingGrams: "",
     basis: "serving" as "serving" | "100g",
     calories: "", protein: "", carbs: "", fat: "", fiber: "", sugar: "", sodium: "",
   });
+  const [m, setM] = useState<MealType>(meal);
+  const [save, setSave] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -449,125 +416,55 @@ function CustomFoodForm({
 
   const submit = async () => {
     setErr(null);
-    if (!f.name.trim()) return setErr("give the food a name");
     const calories = num(f.calories);
     if (calories == null) return setErr("calories are required and can't be negative");
-    const servingSize = num(f.servingSize);
-    if (!servingSize) return setErr("serving size must be greater than 0");
     for (const [k, v] of Object.entries({ protein: f.protein, carbs: f.carbs, fat: f.fat, fiber: f.fiber, sugar: f.sugar, sodium: f.sodium })) {
       if (v.trim() && num(v) == null) return setErr(`${k} can't be negative`);
     }
-    const body: CustomFoodInput = {
-      name: f.name.trim(),
-      brand: f.brand.trim() || undefined,
-      servingSize,
-      servingUnit: f.servingUnit.trim() || "serving",
-      servingGrams: num(f.servingGrams),
-      basis: f.basis,
-      calories,
-      protein: num(f.protein),
-      carbs: num(f.carbs),
-      fat: num(f.fat),
-      fiber: num(f.fiber),
-      sugar: num(f.sugar),
-      sodium: num(f.sodium),
-    };
     setBusy(true);
-    const created = await api.food.createCustom(body).catch((e) => {
-      setErr(errorMessage(e instanceof Error ? e : new Error(String(e))));
-      return null;
-    });
-    setBusy(false);
-    if (created) onCreated(created);
-  };
 
-  const input =
-    "focus-ring mt-1.5 w-full rounded-2xl border border-white/[0.08] bg-white/[0.03] p-2.5 text-[0.88rem] text-content-primary outline-none placeholder:text-content-tertiary";
+    if (save) {
+      if (!f.name.trim()) {
+        setBusy(false);
+        return setErr("a saved food needs a name");
+      }
+      const servingSize = num(f.servingSize);
+      if (!servingSize) {
+        setBusy(false);
+        return setErr("serving size must be greater than 0");
+      }
+      const body: CustomFoodInput = {
+        name: f.name.trim(),
+        brand: f.brand.trim() || undefined,
+        servingSize,
+        servingUnit: f.servingUnit.trim() || "serving",
+        servingGrams: num(f.servingGrams),
+        basis: f.basis,
+        calories,
+        protein: num(f.protein),
+        carbs: num(f.carbs),
+        fat: num(f.fat),
+        fiber: num(f.fiber),
+        sugar: num(f.sugar),
+        sodium: num(f.sodium),
+      };
+      const created = await api.food.createCustom(body).catch((e) => {
+        setErr(errorMessage(e instanceof Error ? e : new Error(String(e))));
+        return null;
+      });
+      if (!created) return setBusy(false);
+      const r = await api.food
+        .log({ source: "custom", sourceId: created.sourceId, mealType: m, quantity: 1, servingUnit: "serving", date })
+        .catch(() => null);
+      setBusy(false);
+      if (r) onLogged(r.day);
+      return;
+    }
 
-  return (
-    <div className="space-y-4">
-      <button onClick={onCancel} className="focus-ring inline-flex items-center gap-1 text-[0.8rem] lowercase text-content-tertiary hover:text-content-secondary">
-        <ChevronLeft size={13} strokeWidth={2} /> back
-      </button>
-
-      <label className="block">
-        <span className="label-instrument">food name *</span>
-        <input value={f.name} onChange={set("name")} className={input} placeholder="e.g. grandma's banana bread" />
-      </label>
-      <label className="block">
-        <span className="label-instrument">brand · optional</span>
-        <input value={f.brand} onChange={set("brand")} className={input} />
-      </label>
-
-      <div className="grid grid-cols-3 gap-2">
-        <label className="block">
-          <span className="label-instrument">serving size *</span>
-          <input value={f.servingSize} onChange={set("servingSize")} inputMode="decimal" className={`${input} tabular-nums`} />
-        </label>
-        <label className="block">
-          <span className="label-instrument">unit *</span>
-          <input value={f.servingUnit} onChange={set("servingUnit")} className={input} placeholder="slice, cup…" />
-        </label>
-        <label className="block">
-          <span className="label-instrument">grams · if known</span>
-          <input value={f.servingGrams} onChange={set("servingGrams")} inputMode="decimal" className={`${input} tabular-nums`} />
-        </label>
-      </div>
-
-      <div>
-        <span className="label-instrument">values are per</span>
-        <div className="mt-1.5">
-          <PillSelector
-            options={["serving", "100g"] as ("serving" | "100g")[]}
-            value={f.basis}
-            onChange={(v) => setF((s) => ({ ...s, basis: v }))}
-          />
-        </div>
-      </div>
-
-      <div className="grid grid-cols-2 gap-2">
-        {([
-          ["calories *", "calories"], ["protein (g)", "protein"], ["carbs (g)", "carbs"],
-          ["fat (g)", "fat"], ["fiber (g)", "fiber"], ["sugar (g)", "sugar"], ["sodium (mg)", "sodium"],
-        ] as [string, keyof typeof f][]).map(([label, key]) => (
-          <label key={key} className="block">
-            <span className="label-instrument">{label}</span>
-            <input value={f[key]} onChange={set(key)} inputMode="decimal" className={`${input} tabular-nums`} />
-          </label>
-        ))}
-      </div>
-
-      {err && <p className="text-[0.82rem] text-[var(--accent-amber)]">{err}</p>}
-      <Button onClick={submit} disabled={busy}>save custom food</Button>
-    </div>
-  );
-}
-
-/* ── quick add ─────────────────────────────────────────────────────────────── */
-
-function QuickAddTab({
-  meal, date, onLogged,
-}: {
-  meal: MealType;
-  date: string;
-  onLogged: (d: FoodDay) => void;
-}) {
-  const [m, setM] = useState<MealType>(meal);
-  const [v, setV] = useState({ name: "", calories: "", protein: "", carbs: "", fat: "" });
-  const [busy, setBusy] = useState(false);
-  const set = (k: keyof typeof v) => (e: { target: { value: string } }) => setV((s) => ({ ...s, [k]: e.target.value }));
-  const num = (s: string) => {
-    const n = Number.parseFloat(s);
-    return Number.isFinite(n) && n >= 0 ? n : undefined;
-  };
-
-  const submit = async () => {
-    const calories = num(v.calories);
-    if (calories == null) return;
-    setBusy(true);
+    // quick add — no reusable food
     const r = await api.food
       .log({
-        quickAdd: { name: v.name.trim() || undefined, calories, protein: num(v.protein), carbs: num(v.carbs), fat: num(v.fat) },
+        quickAdd: { name: f.name.trim() || undefined, calories, protein: num(f.protein), carbs: num(f.carbs), fat: num(f.fat) },
         mealType: m,
         date,
       })
@@ -577,36 +474,146 @@ function QuickAddTab({
   };
 
   const input =
-    "focus-ring mt-1.5 w-full rounded-2xl border border-white/[0.08] bg-white/[0.03] p-2.5 text-[0.88rem] tabular-nums text-content-primary outline-none placeholder:text-content-tertiary";
+    "focus-ring mt-1.5 w-full rounded-2xl border border-white/[0.08] bg-white/[0.03] p-2.5 text-[0.88rem] text-content-primary outline-none placeholder:text-content-tertiary";
 
   return (
     <div className="space-y-4">
+      {photo && (
+        <div className="flex items-center gap-3 rounded-[var(--radius-large)] surface-recessed p-2.5">
+          <img src={photo} alt="Captured food photo" className="h-14 w-14 rounded-xl object-cover" />
+          <p className="flex-1 text-[0.78rem] leading-snug text-content-tertiary">
+            photo reference to help you fill this in. it isn't uploaded or stored.
+          </p>
+          <button
+            onClick={onClearPhoto}
+            aria-label="Remove photo"
+            className="focus-ring text-content-tertiary hover:text-content-secondary"
+          >
+            <Trash2 size={13} strokeWidth={1.9} />
+          </button>
+        </div>
+      )}
+
+      {mine && mine.length > 0 && (
+        <div>
+          <span className="label-instrument">your foods</span>
+          <ul className="mt-1.5 divide-y divide-[var(--line-soft)]">
+            {mine.map((food) => (
+              <li key={food.id} className="flex items-center gap-2">
+                <button
+                  onClick={() => onPickCustom({ source: "custom", sourceId: food.sourceId, name: food.name, preloaded: food })}
+                  className="focus-ring flex min-w-0 flex-1 items-center gap-3 py-2 text-left"
+                >
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-[0.88rem] text-content-primary">
+                      {food.name}
+                      {food.brand && <span className="text-content-tertiary"> · {food.brand}</span>}
+                    </span>
+                    <span className="label-instrument">
+                      {Math.round(food.caloriesPer100)} kcal {food.perServingOnly ? "per serving" : "per 100 g"}
+                    </span>
+                  </span>
+                  <Plus size={13} strokeWidth={2} className="shrink-0 text-content-tertiary" />
+                </button>
+                <button
+                  aria-label={`Delete ${food.name}`}
+                  onClick={async () => {
+                    await api.food.deleteCustom(food.sourceId).catch(() => {});
+                    void reload();
+                  }}
+                  className="focus-ring text-content-tertiary hover:text-[var(--accent-amber)]"
+                >
+                  <Minus size={13} strokeWidth={2} />
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       <p className="text-[0.82rem] leading-relaxed text-content-secondary">
-        when you know the calories but can't find the exact food. macros are optional.
+        add anything search and barcode can't find. calories are required; macros optional.
       </p>
+
       <label className="block">
-        <span className="label-instrument">label · optional</span>
-        <input value={v.name} onChange={set("name")} className={input.replace("tabular-nums ", "")} placeholder="e.g. dinner out" />
+        <span className="label-instrument">name{save ? " *" : " · optional"}</span>
+        <input value={f.name} onChange={set("name")} className={input} placeholder="e.g. grandma's banana bread" />
       </label>
+
       <div className="grid grid-cols-4 gap-2">
-        {([["calories", "calories"], ["protein", "protein"], ["carbs", "carbs"], ["fat", "fat"]] as [string, keyof typeof v][]).map(([label, key]) => (
+        {([["calories *", "calories"], ["protein", "protein"], ["carbs", "carbs"], ["fat", "fat"]] as [string, keyof typeof f][]).map(([label, key]) => (
           <label key={key} className="block">
             <span className="label-instrument">{label}</span>
-            <input value={v[key]} onChange={set(key)} inputMode="decimal" className={input} />
+            <input value={f[key]} onChange={set(key)} inputMode="decimal" className={`${input} tabular-nums`} />
           </label>
         ))}
       </div>
+
+      <label className="flex items-center gap-2.5 text-[0.85rem] text-content-secondary">
+        <input
+          type="checkbox"
+          checked={save}
+          onChange={(e) => setSave(e.target.checked)}
+          className="focus-ring h-4 w-4 accent-[var(--accent-pink)]"
+        />
+        save to my foods (reusable, with a serving size)
+      </label>
+
+      {save && (
+        <div className="space-y-4 rounded-[var(--radius-large)] surface-recessed p-3">
+          <label className="block">
+            <span className="label-instrument">brand · optional</span>
+            <input value={f.brand} onChange={set("brand")} className={input} />
+          </label>
+          <div className="grid grid-cols-3 gap-2">
+            <label className="block">
+              <span className="label-instrument">serving size *</span>
+              <input value={f.servingSize} onChange={set("servingSize")} inputMode="decimal" className={`${input} tabular-nums`} />
+            </label>
+            <label className="block">
+              <span className="label-instrument">unit *</span>
+              <input value={f.servingUnit} onChange={set("servingUnit")} className={input} placeholder="slice, cup…" />
+            </label>
+            <label className="block">
+              <span className="label-instrument">grams · if known</span>
+              <input value={f.servingGrams} onChange={set("servingGrams")} inputMode="decimal" className={`${input} tabular-nums`} />
+            </label>
+          </div>
+          <div>
+            <span className="label-instrument">values above are per</span>
+            <div className="mt-1.5">
+              <PillSelector
+                options={["serving", "100g"] as ("serving" | "100g")[]}
+                value={f.basis}
+                onChange={(v) => setF((s) => ({ ...s, basis: v }))}
+              />
+            </div>
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            {([["fiber (g)", "fiber"], ["sugar (g)", "sugar"], ["sodium (mg)", "sodium"]] as [string, keyof typeof f][]).map(([label, key]) => (
+              <label key={key} className="block">
+                <span className="label-instrument">{label}</span>
+                <input value={f[key]} onChange={set(key)} inputMode="decimal" className={`${input} tabular-nums`} />
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div>
         <span className="label-instrument">meal</span>
         <div className="mt-1.5">
           <PillSelector options={MEALS} value={m} onChange={setM} />
         </div>
       </div>
-      <Button onClick={submit} disabled={busy || !num(v.calories)}>add to log</Button>
+
+      {err && <p className="text-[0.82rem] text-[var(--accent-amber)]">{err}</p>}
+      <Button onClick={submit} disabled={busy || !num(f.calories)}>
+        {save ? "save & log" : `add to ${MEAL_LABEL[m]}`}
+      </Button>
     </div>
   );
 }
-
 /* ── food detail / serving screen ─────────────────────────────────────────── */
 
 function FoodDetail({
