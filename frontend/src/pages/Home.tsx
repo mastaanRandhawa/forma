@@ -14,11 +14,12 @@ import { KaiOrb, coachMood } from "../components/KaiOrb";
 import { ActivityList } from "../components/dashboard/ActivityList";
 import { DashboardProvider, DashboardLoadingProvider } from "../api/dashboard-context";
 import { buildLocalDashboard, readinessFromCheckin } from "../api/localDashboard";
-import { useFormaData, hasRecoveryData } from "../lib/localStore";
+import { useFormaData, hasRecoveryData, latestCheckin } from "../lib/localStore";
+import { DailyCheckinCard } from "../components/health/DailyCheckin";
 import { currentStreak, sessionVolume, volumeInLastDays } from "../lib/fitness";
 import { apiSessionToCompleted } from "../lib/lifecycle";
 import { Quiet } from "../components/Quiet";
-import { useProgression } from "../api/settings";
+import { useProgression, usePrefs } from "../api/settings";
 import { API_ENABLED, useDashboard, useSessionHistory } from "../api/hooks";
 
 const DAY_MS = 864e5;
@@ -41,7 +42,9 @@ function weekVolume(sessions: { finishedAt: string; volume: number }[], weeksAgo
 export default function Home() {
   const data = useFormaData();
   const prog = useProgression();
+  const prefs = usePrefs();
   const units = data.profile.units;
+  const checkedInToday = latestCheckin(data)?.date === new Date().toISOString().slice(0, 10);
 
   const apiDash = useDashboard();
   const apiHist = useSessionHistory();
@@ -83,11 +86,11 @@ export default function Home() {
   const rings = [
     hasRecovery
       ? { id: "readiness", label: "readiness", value: String(readiness), sub: "from your check-in", pct: readiness ?? 0, tone: "pink" as const, to: "/progress" }
-      : { id: "readiness", label: "readiness", value: "—", sub: "log a check-in", pct: 0, tone: "pink" as const, to: "/settings" },
+      : { id: "readiness", label: "readiness", value: "—", sub: "log a check-in", pct: 0, tone: "pink" as const, to: "/progress" },
     hasVolume
       ? { id: "volume", label: "7-day volume", value: `${(last7Vol / 1000).toFixed(1)}k`, sub: units, pct: Math.min(100, Math.round(last7Vol / 300)), tone: "cyan" as const, to: "/progress" }
       : { id: "volume", label: "7-day volume", value: "—", sub: "no sessions yet", pct: 0, tone: "cyan" as const, to: "/workouts" },
-    { id: "form", label: "avg form", value: "—", sub: "camera not set up", pct: 0, tone: "lime" as const, to: "/settings" },
+    { id: "form", label: "avg form", value: "—", sub: "camera not set up", pct: 0, tone: "lime" as const, to: "/settings/privacy" },
   ];
 
   const weeklyGoal = { done: dash.weeklyRing.done, target: dash.weeklyRing.target };
@@ -118,6 +121,12 @@ export default function Home() {
                 </Quiet>
               ))}
             </Reveal>
+
+            {prefs.recovery.manualCheckins && !checkedInToday && (
+              <Reveal onView>
+                <DailyCheckinCard />
+              </Reveal>
+            )}
 
             <Reveal onView className="lg:hidden">
               <SessionCard />

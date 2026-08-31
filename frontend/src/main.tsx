@@ -17,7 +17,15 @@ const Progress = lazy(() => import("./pages/Progress"));
 const Goals = lazy(() => import("./pages/Goals"));
 const Store = lazy(() => import("./pages/Store"));
 const ExerciseLibrary = lazy(() => import("./pages/ExerciseLibrary"));
-const Settings = lazy(() => import("./pages/Settings"));
+const SettingsLayout = lazy(() => import("./pages/settings/SettingsLayout"));
+const SettingsOverview = lazy(() => import("./pages/settings/SettingsOverview"));
+const TrainingProfile = lazy(() => import("./pages/settings/TrainingProfile"));
+const Coaching = lazy(() => import("./pages/settings/Coaching"));
+const Connections = lazy(() => import("./pages/settings/Connections"));
+const NotificationsSettings = lazy(() => import("./pages/settings/Notifications"));
+const AppearanceSettings = lazy(() => import("./pages/settings/Appearance"));
+const PrivacySettings = lazy(() => import("./pages/settings/Privacy"));
+const AccountSettings = lazy(() => import("./pages/settings/Account"));
 const Onboarding = lazy(() => import("./pages/Onboarding"));
 const Login = lazy(() => import("./pages/Login"));
 const Signup = lazy(() => import("./pages/Signup"));
@@ -66,7 +74,20 @@ const router = createBrowserRouter([
       { path: "/goals", element: gated("goals", <Goals />) },
       { path: "/store", element: gated("store", <Store />) },
       { path: "/exercise-library", element: <ExerciseLibrary /> },
-      { path: "/settings", element: <Settings /> },
+      {
+        path: "/settings",
+        element: <SettingsLayout />,
+        children: [
+          { index: true, element: <SettingsOverview /> },
+          { path: "training", element: <TrainingProfile /> },
+          { path: "coaching", element: <Coaching /> },
+          { path: "connections", element: <Connections /> },
+          { path: "notifications", element: <NotificationsSettings /> },
+          { path: "appearance", element: <AppearanceSettings /> },
+          { path: "privacy", element: <PrivacySettings /> },
+          { path: "account", element: <AccountSettings /> },
+        ],
+      },
       { path: "/settings/security", element: <AccountSecurity /> },
       { path: "*", element: <Navigate to="/dashboard" replace /> },
     ],

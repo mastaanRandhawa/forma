@@ -23,6 +23,7 @@ import type {
   AppearanceSettings,
   DisclosureMode,
   FeatureKey,
+  LocalPrefs,
   ProgressionState,
   SettingsBundle,
   SettingsPatch,
@@ -53,6 +54,18 @@ const ALL_FEATURES: FeatureKey[] = [
 /** What "ease me in" mode reveals — the calm starter set (spec tier "starter"). */
 export const STARTER_FEATURES: FeatureKey[] = ["dashboard", "workouts", "trainer"];
 
+export const DEFAULT_PREFS: LocalPrefs = {
+  camera: { formTracking: true },
+  recovery: { manualCheckins: true, promptBeforeFirstWorkout: true },
+  research: { anonFormData: false },
+  notifications: {
+    workoutReminders: true,
+    trainerCheckins: true,
+    milestones: true,
+    weeklyDigest: true,
+  },
+};
+
 const DEFAULT_BUNDLE: SettingsBundle = {
   camera: { formDataVerbosity: "categorical", saveHighlightClips: false },
   units: { unitPreference: "imperial", weekStartsMonday: false },
@@ -64,7 +77,19 @@ const DEFAULT_BUNDLE: SettingsBundle = {
     gatingEnabled: false,
     nextUnlock: null,
   },
+  prefs: DEFAULT_PREFS,
 };
+
+/** Deep-merge a partial prefs patch onto a full prefs object. */
+function mergePrefs(base: LocalPrefs, p?: SettingsPatch["prefs"]): LocalPrefs {
+  if (!p) return base;
+  return {
+    camera: { ...base.camera, ...p.camera },
+    recovery: { ...base.recovery, ...p.recovery },
+    research: { ...base.research, ...p.research },
+    notifications: { ...base.notifications, ...p.notifications },
+  };
+}
 
 // ── curated presets (mirrors the backend's config/appearance-presets) ───────
 export interface Preset {
@@ -132,7 +157,12 @@ function loadLocal(): SettingsBundle | null {
   try {
     const raw = localStorage.getItem(LS_KEY);
     if (!raw) return null;
-    return { ...DEFAULT_BUNDLE, ...(JSON.parse(raw) as SettingsBundle) };
+    const parsed = JSON.parse(raw) as Partial<SettingsBundle>;
+    return {
+      ...DEFAULT_BUNDLE,
+      ...parsed,
+      prefs: mergePrefs(DEFAULT_PREFS, parsed.prefs as SettingsPatch["prefs"]),
+    };
   } catch {
     return null;
   }
@@ -162,6 +192,7 @@ function mergeBundle(b: SettingsBundle, p: SettingsPatch): SettingsBundle {
       ...p.disclosure,
       widgetOverrides: { ...b.disclosure.widgetOverrides, ...p.disclosure?.widgetOverrides },
     },
+    prefs: mergePrefs(b.prefs ?? DEFAULT_PREFS, p.prefs),
   };
 }
 
@@ -223,7 +254,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     api.me
       .settings()
       .then((b) => {
-        if (!cancelled) setBundle(b);
+        // the server bundle owns everything except the frontend `prefs` slice
+        if (!cancelled) setBundle((prev) => ({ ...b, prefs: prev.prefs ?? DEFAULT_PREFS }));
       })
       .catch((e) => {
         if (!cancelled) setError(e instanceof Error ? e : new Error(String(e)));
@@ -238,15 +270,17 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
 
   const update = useCallback(
     async (patch: SettingsPatch) => {
+      // `prefs` is frontend-only — always persisted locally, never sent to the API.
       setBundle((prev) => {
         const next = mergeBundle(prev, patch);
-        if (!API_ENABLED) saveLocal(next);
+        saveLocal(next);
         return next;
       });
-      if (API_ENABLED) {
+      const { prefs: _prefs, ...serverPatch } = patch;
+      if (API_ENABLED && Object.keys(serverPatch).length) {
         try {
-          const fresh = await api.me.updateSettings(patch);
-          setBundle(fresh);
+          const fresh = await api.me.updateSettings(serverPatch);
+          setBundle((cur) => ({ ...fresh, prefs: cur.prefs }));
         } catch (e) {
           setError(e instanceof Error ? e : new Error(String(e)));
         }
@@ -283,7 +317,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
               : null,
           },
         };
-        if (!API_ENABLED) saveLocal(next);
+        saveLocal(next);
         return next;
       });
       if (API_ENABLED) {
@@ -314,6 +348,7 @@ function useSettingsCtx() {
 
 export const useSettings = useSettingsCtx;
 export const useAppearance = () => useSettingsCtx().bundle.appearance;
+export const usePrefs = () => useSettingsCtx().bundle.prefs;
 
 /** Effective disclosure mode for a widget: its override, or the global mode. */
 export function useWidgetMode(key: string): DisclosureMode {

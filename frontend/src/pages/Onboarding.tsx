@@ -1,52 +1,30 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { ArrowRight, ArrowLeft, Check, Activity, Dumbbell, HeartPulse, Moon, Scale, Sparkles } from "lucide-react";
+import { ArrowRight, ArrowLeft, Check } from "lucide-react";
 import { AtmosphericBackground } from "../components/layout/AtmosphericBackground";
 import { saveProfile, type Environment, type Experience, type Units } from "../lib/localStore";
 import { todayPlan } from "../lib/program";
+import {
+  GOALS,
+  GOAL_TO_API,
+  EXPERIENCE,
+  DAYS,
+  DURATIONS,
+  ENVIRONMENTS,
+  EQUIPMENT,
+  WEEKDAYS,
+  LB_TO_KG,
+  IN_TO_CM,
+} from "../lib/profileOptions";
 import { api } from "../api/client";
 import { API_ENABLED } from "../api/hooks";
 import { useAuth } from "../api/auth";
-import type { FitnessGoal, TrainingLocation, ProfilePatch } from "../api/types";
+import type { TrainingLocation, ProfilePatch } from "../api/types";
 
 type BiologicalSex = NonNullable<ProfilePatch["biologicalSex"]>;
 
-const GOAL_TO_API: Record<string, FitnessGoal> = {
-  lose: "lose_fat",
-  muscle: "build_muscle",
-  strength: "get_stronger",
-  fitness: "general_fitness",
-  sleep: "general_fitness",
-  maintain: "maintain",
-};
-
 const EASE = [0.22, 1, 0.36, 1] as const;
-
-const GOALS = [
-  { id: "lose", label: "lose fat", icon: Scale },
-  { id: "muscle", label: "build muscle", icon: Dumbbell },
-  { id: "strength", label: "get stronger", icon: Activity },
-  { id: "fitness", label: "general fitness", icon: HeartPulse },
-  { id: "sleep", label: "sleep & recovery", icon: Moon },
-  { id: "maintain", label: "maintain", icon: Sparkles },
-];
-
-const EXPERIENCE: { id: Experience; label: string; hint: string }[] = [
-  { id: "beginner", label: "beginner", hint: "new, or back after a long break" },
-  { id: "intermediate", label: "intermediate", hint: "training consistently for 6+ months" },
-  { id: "advanced", label: "advanced", hint: "years of structured training" },
-];
-
-const DAYS = [2, 3, 4, 5, 6];
-const DURATIONS = [30, 45, 60, 75];
-const ENVIRONMENTS: { id: Environment; label: string }[] = [
-  { id: "gym", label: "full gym" },
-  { id: "home", label: "home setup" },
-  { id: "both", label: "both" },
-];
-const EQUIPMENT = ["Barbell", "Dumbbells", "Machines", "Cables", "Kettlebell", "Bands", "Pull-up bar", "Bodyweight only"];
-const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 const STEPS = ["goal", "baseline", "environment", "safety", "schedule", "basics", "ready"] as const;
 
@@ -56,9 +34,6 @@ const SEXES: { id: BiologicalSex; label: string }[] = [
   { id: "other", label: "other" },
   { id: "prefer_not_to_say", label: "prefer not to say" },
 ];
-
-const LB_TO_KG = 0.453592;
-const IN_TO_CM = 2.54;
 
 export default function Onboarding() {
   const nav = useNavigate();

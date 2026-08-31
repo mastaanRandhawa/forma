@@ -191,16 +191,39 @@ export interface ProgressionState {
   gatingEnabled: boolean;
   nextUnlock: NextUnlock | null;
 }
+/**
+ * Frontend-owned preference slice. The backend `SettingsBundle` has no home for
+ * these yet, so they are always persisted to localStorage (see `api/settings`)
+ * and preserved across the initial server fetch.
+ */
+export interface LocalPrefs {
+  camera: { formTracking: boolean };
+  recovery: { manualCheckins: boolean; promptBeforeFirstWorkout: boolean };
+  research: { anonFormData: boolean };
+  notifications: {
+    workoutReminders: boolean;
+    trainerCheckins: boolean;
+    milestones: boolean;
+    weeklyDigest: boolean;
+  };
+}
 export interface SettingsBundle {
   camera: CameraSettings;
   units: UnitSettings;
   appearance: AppearanceSettings;
   disclosure: DisclosureSettings;
   progression: ProgressionState;
+  prefs: LocalPrefs;
 }
 export interface SettingsPatch {
   camera?: Partial<CameraSettings>;
   units?: Partial<UnitSettings>;
+  prefs?: {
+    camera?: Partial<LocalPrefs["camera"]>;
+    recovery?: Partial<LocalPrefs["recovery"]>;
+    research?: Partial<LocalPrefs["research"]>;
+    notifications?: Partial<LocalPrefs["notifications"]>;
+  };
   appearance?: Partial<{
     presetId: string | null;
     backgroundMode: "solid" | "gradient" | "image";
