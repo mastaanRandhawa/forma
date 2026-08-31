@@ -2,6 +2,7 @@ import { ReactNode, useEffect, useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import { AnimatePresence, LayoutGroup, motion, useReducedMotion } from "motion/react";
 import { CoinBalance } from "../CoinBalance";
+import { useEquippedItem } from "../../lib/customization";
 import { useProgression } from "../../api/settings";
 import type { FeatureKey } from "../../api/types";
 
@@ -97,6 +98,8 @@ export function TopNav({
   const reduce = useReducedMotion();
   const scrolled = useScrolled();
   const { has } = useProgression();
+  const frame = useEquippedItem("frame");
+  const framed = Boolean(frame && frame.id !== "fr-none");
   const [menuOpen, setMenuOpen] = useState(false);
   const isActive = (n: NavItem) =>
     (n.end ? loc.pathname === n.to : loc.pathname.startsWith(n.to)) ||
@@ -259,6 +262,11 @@ export function TopNav({
             to="/settings"
             aria-label="Profile"
             className="focus-ring hidden h-9 w-9 place-items-center rounded-pill surface-float sm:grid"
+            style={
+              framed
+                ? { boxShadow: "0 0 0 2px var(--accent-pink), 0 0 10px -1px var(--accent-pink)" }
+                : undefined
+            }
           >
             <span className="text-[0.8rem] font-medium text-content-primary">A</span>
           </NavLink>

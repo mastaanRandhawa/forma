@@ -336,6 +336,177 @@ export interface NutritionDayTotals extends NutritionTotals {
   date: string;
 }
 
+// ── food logging & nutrition tracking ─────────────────────────────────────
+export type FoodSource = "open_food_facts" | "usda" | "custom";
+export type MealType = "breakfast" | "lunch" | "dinner" | "snack";
+
+export interface FoodSearchResult {
+  source: FoodSource;
+  sourceId: string;
+  name: string;
+  brand: string | null;
+  imageUrl: string | null;
+  caloriesPer100: number;
+  proteinPer100: number;
+  servingGrams: number | null;
+  servingUnit: string | null;
+  perServingOnly: boolean;
+  dataPer: string;
+}
+export interface FoodSearchResponse {
+  query: string;
+  results: FoodSearchResult[];
+  sources: { usda: boolean; custom: number };
+  degraded: boolean;
+}
+
+export interface ServingOption {
+  unit: "serving" | "g" | "oz" | string;
+  label: string;
+  grams: number | null;
+}
+export interface Food {
+  id: string;
+  source: FoodSource;
+  sourceId: string;
+  barcode: string | null;
+  name: string;
+  brand: string | null;
+  imageUrl: string | null;
+  servingSize: number | null;
+  servingUnit: string | null;
+  servingGrams: number | null;
+  caloriesPer100: number;
+  proteinPer100: number;
+  carbsPer100: number;
+  fatPer100: number;
+  fiberPer100: number | null;
+  sugarPer100: number | null;
+  sodiumPer100: number | null;
+  perServingOnly: boolean;
+  dataPer: string;
+  servingOptions: ServingOption[];
+}
+
+export interface BarcodeResponse {
+  code: string;
+  status: "found" | "not_found" | "source_unavailable";
+  food: Food | null;
+}
+
+export interface FoodNutrients {
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+  fiber: number | null;
+  sugar: number | null;
+  sodium: number | null;
+}
+export interface FoodLogEntry extends FoodNutrients {
+  id: string;
+  foodId: string | null;
+  source: FoodSource | null;
+  sourceId: string | null;
+  foodName: string;
+  brand: string | null;
+  mealType: MealType;
+  quantity: number;
+  servingUnit: string;
+  grams: number | null;
+  loggedAt: ISODate;
+  date: string;
+}
+export interface NutritionGoalRow {
+  userId: string;
+  dailyCalories: number | null;
+  proteinGrams: number | null;
+  carbGrams: number | null;
+  fatGrams: number | null;
+  fiberGrams: number | null;
+}
+export interface NutritionGoalInput {
+  dailyCalories?: number | null;
+  proteinGrams?: number | null;
+  carbGrams?: number | null;
+  fatGrams?: number | null;
+  fiberGrams?: number | null;
+}
+export interface FoodDay {
+  date: string;
+  goal: NutritionGoalRow | null;
+  meals: Record<MealType, FoodLogEntry[]>;
+  mealTotals: Record<MealType, FoodNutrients>;
+  totals: FoodNutrients;
+  remaining: {
+    calories: number | null;
+    protein: number | null;
+    carbs: number | null;
+    fat: number | null;
+    fiber: number | null;
+  } | null;
+}
+export interface FoodLogInput {
+  source?: FoodSource;
+  sourceId?: string;
+  quickAdd?: { name?: string; calories: number; protein?: number; carbs?: number; fat?: number };
+  mealType?: MealType;
+  quantity?: number;
+  servingUnit?: "serving" | "g" | "oz";
+  date?: string;
+  loggedAt?: string;
+}
+export interface FoodLogPatch {
+  quantity?: number;
+  servingUnit?: "serving" | "g" | "oz";
+  mealType?: MealType;
+  date?: string;
+  loggedAt?: string;
+}
+export interface RecentFood {
+  source: FoodSource;
+  sourceId: string;
+  foodName: string;
+  brand: string | null;
+  lastQuantity: number;
+  lastServingUnit: string;
+  lastMealType: MealType;
+  calories: number;
+  protein: number;
+  lastLoggedAt: ISODate;
+}
+export interface FavoriteFood {
+  id: string;
+  source: FoodSource;
+  sourceId: string;
+  foodName: string;
+  brand: string | null;
+  createdAt: ISODate;
+}
+export interface CustomFoodInput {
+  name: string;
+  brand?: string;
+  servingSize: number;
+  servingUnit: string;
+  servingGrams?: number;
+  basis: "serving" | "100g";
+  calories: number;
+  protein?: number;
+  carbs?: number;
+  fat?: number;
+  fiber?: number;
+  sugar?: number;
+  sodium?: number;
+}
+export interface FoodAttribution {
+  openFoodFacts: { name: string; url: string; license: string; licenseUrl: string; note: string };
+  usda: { name: string; url: string; license: string; note: string };
+}
+export interface FoodDayResult {
+  entry: FoodLogEntry;
+  day: FoodDay;
+}
+
 // ── recovery check-in (§3.1) ────────────────────────────────────────────────
 export interface RecoveryCheckinInput {
   sleepH?: number;
@@ -879,6 +1050,12 @@ export interface WalletSummary {
   earnedThisWeek: number;
   recent: WalletTransaction[];
 }
+export interface CustomizationState {
+  owned: string[];
+  equipped: Record<string, string>;
+  balance: number;
+}
+
 export interface StoreItem {
   id: string;
   category: StoreCategory;

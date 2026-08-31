@@ -197,29 +197,12 @@ function mergeBundle(b: SettingsBundle, p: SettingsPatch): SettingsBundle {
 }
 
 // ── apply appearance → CSS custom properties ────────────────────────────────
-const hexToRgb = (hex: string) => {
-  const h = hex.replace("#", "");
-  const n = parseInt(h.length === 3 ? h.split("").map((c) => c + c).join("") : h.slice(0, 6), 16);
-  return `${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}`;
-};
-
 function applyAppearance(a: AppearanceSettings) {
   const root = document.documentElement;
-  let bg = a.backgroundColor;
-  if (a.backgroundMode === "gradient" && a.backgroundGradient) {
-    const g = a.backgroundGradient;
-    bg = `linear-gradient(${g.angle}deg, ${g.stops.map((s) => `${s.color} ${Math.round(s.at * 100)}%`).join(", ")})`;
-  } else if (a.backgroundMode === "image" && a.backgroundImageUrl) {
-    bg = `linear-gradient(rgba(0,0,0,${a.backgroundDim}), rgba(0,0,0,${a.backgroundDim})), url("${a.backgroundImageUrl}") center / cover fixed`;
-  }
-  root.style.setProperty("--app-bg", bg);
+  // The theme engine (src/lib/themes.ts, driven by the customization store) now
+  // owns backgrounds, surfaces, accents, glass and radius. Appearance keeps only
+  // the cross-cutting motion switch plus an optional dim overlay.
   root.style.setProperty("--app-bg-dim", String(a.backgroundDim));
-  root.style.setProperty("--glass-opacity", String(a.glass.opacity));
-  root.style.setProperty("--glass-blur", `${a.glass.blurPx}px`);
-  root.style.setProperty("--glass-tint-rgb", hexToRgb(a.glass.tint));
-  root.style.setProperty("--accent", a.accentColor || BRAND_ACCENT);
-  // retint the brand accent the whole app already references
-  root.style.setProperty("--accent-pink", a.accentColor || BRAND_ACCENT);
   root.dataset.reduceMotion = a.reduceMotion ? "true" : "false";
 }
 

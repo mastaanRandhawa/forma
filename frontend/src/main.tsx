@@ -3,8 +3,9 @@ import ReactDOM from "react-dom/client";
 import { RouterProvider, createBrowserRouter, Navigate } from "react-router-dom";
 import "./index.css";
 import { AppShell } from "./components/AppShell";
-import { SettingsProvider } from "./api/settings";
-import { AuthProvider, RequireAuth, RedirectIfAuthed } from "./api/auth";
+import { SettingsProvider, useAppearance } from "./api/settings";
+import { CustomizationProvider } from "./lib/customization";
+import { AuthProvider, RequireAuth, RedirectIfAuthed, useAuth } from "./api/auth";
 import { FeatureGate } from "./components/FeatureGate";
 import type { FeatureKey } from "./api/types";
 
@@ -25,6 +26,7 @@ const Coaching = lazy(() => import("./pages/settings/Coaching"));
 const Connections = lazy(() => import("./pages/settings/Connections"));
 const NotificationsSettings = lazy(() => import("./pages/settings/Notifications"));
 const AppearanceSettings = lazy(() => import("./pages/settings/Appearance"));
+const CustomizationSettings = lazy(() => import("./pages/settings/Customization"));
 const PrivacySettings = lazy(() => import("./pages/settings/Privacy"));
 const AccountSettings = lazy(() => import("./pages/settings/Account"));
 const Onboarding = lazy(() => import("./pages/Onboarding"));
@@ -87,6 +89,7 @@ const router = createBrowserRouter([
           { path: "connections", element: <Connections /> },
           { path: "notifications", element: <NotificationsSettings /> },
           { path: "appearance", element: <AppearanceSettings /> },
+          { path: "customization", element: <CustomizationSettings /> },
           { path: "privacy", element: <PrivacySettings /> },
           { path: "account", element: <AccountSettings /> },
         ],
@@ -104,11 +107,23 @@ const container = document.getElementById("root")!;
 const store = window as unknown as { __formaRoot?: ReactDOM.Root };
 const root = store.__formaRoot ?? (store.__formaRoot = ReactDOM.createRoot(container));
 
+function CustomizationBridge({ children }: { children: React.ReactNode }) {
+  const appearance = useAppearance();
+  const { status } = useAuth();
+  return (
+    <CustomizationProvider reduceMotion={appearance.reduceMotion} authKey={status}>
+      {children}
+    </CustomizationProvider>
+  );
+}
+
 root.render(
   <React.StrictMode>
     <AuthProvider>
       <SettingsProvider>
-        <RouterProvider router={router} />
+        <CustomizationBridge>
+          <RouterProvider router={router} />
+        </CustomizationBridge>
       </SettingsProvider>
     </AuthProvider>
   </React.StrictMode>

@@ -1,6 +1,9 @@
 import { Link } from "react-router-dom";
 import { useAuth } from "../../api/auth";
-import { usePrefs, useProgression, useAppearance, PRESETS } from "../../api/settings";
+import { usePrefs, useProgression, useAppearance } from "../../api/settings";
+import { useCustomization } from "../../lib/customization";
+import { THEME_MAP } from "../../lib/themes";
+import { customizationItems } from "../../lib/data";
 import { useFormaData } from "../../lib/localStore";
 import { GOAL_LABELS } from "../../lib/profileOptions";
 import { Section, Row } from "../../components/settings/ui";
@@ -18,15 +21,18 @@ export default function SettingsOverview() {
   const summary = [profile.experience, goal, profile.daysPerWeek ? `${profile.daysPerWeek} days/week` : null]
     .filter(Boolean)
     .join(" · ");
+  const cz = useCustomization();
   const notifCount = Object.values(prefs.notifications).filter(Boolean).length;
-  const presetName = PRESETS.find((p) => p.id === appearance.presetId)?.name ?? "custom";
+  const themeName = THEME_MAP[cz.equippedId("theme")]?.name ?? "default";
+  const ownedCount = customizationItems.filter((i) => cz.isOwned(i.id)).length;
 
   const subtitle: Record<string, string> = {
     "/settings/training": summary || "set up your training profile",
     "/settings/coaching": prog.gatingEnabled ? "simple — reveal features as I train" : "full experience",
     "/settings/connections": "not connected",
     "/settings/notifications": `${notifCount} enabled`,
-    "/settings/appearance": presetName,
+    "/settings/appearance": appearance.reduceMotion ? "reduced motion" : "standard motion",
+    "/settings/customization": `${themeName} · ${ownedCount} unlocked`,
     "/settings/privacy": prefs.camera.formTracking ? "form tracking on" : "form tracking off",
     "/settings/account": user?.email ?? "forma web v1.0.0",
   };

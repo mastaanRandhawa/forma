@@ -382,6 +382,32 @@ export const api = {
     report: (days?: number) => get<unknown>("/progress/report", { days }),
   },
 
+  // food logging & nutrition tracking
+  food: {
+    attribution: () => get<T.FoodAttribution>("/food/attribution"),
+    search: (q: string) => get<T.FoodSearchResponse>("/food/search", { q }),
+    barcode: (code: string) => get<T.BarcodeResponse>(`/food/barcode/${encodeURIComponent(code)}`),
+    item: (source: T.FoodSource, sourceId: string) =>
+      get<T.Food>(`/food/item/${source}/${encodeURIComponent(sourceId)}`),
+    customs: () => get<T.Food[]>("/food/custom"),
+    createCustom: (body: T.CustomFoodInput) => post<T.Food>("/food/custom", body),
+    deleteCustom: (sourceId: string) => del<void>(`/food/custom/${encodeURIComponent(sourceId)}`),
+    day: (date?: string) => get<T.FoodDay>("/food/log", { date }),
+    log: (body: T.FoodLogInput) => post<T.FoodDayResult>("/food/log", body),
+    updateLog: (id: string, body: T.FoodLogPatch) => patch<T.FoodDayResult>(`/food/log/${id}`, body),
+    deleteLog: (id: string) => del<{ ok: true; day: T.FoodDay }>(`/food/log/${id}`),
+    recent: (limit?: number) => get<T.RecentFood[]>("/food/recent", { limit }),
+    favorites: () => get<T.FavoriteFood[]>("/food/favorites"),
+    addFavorite: (source: T.FoodSource, sourceId: string) =>
+      post<T.FavoriteFood>("/food/favorites", { source, sourceId }),
+    removeFavorite: (id: string) => del<void>(`/food/favorites/${id}`),
+    goal: () => get<T.NutritionGoalRow | null>("/food/goal"),
+    setGoal: (body: T.NutritionGoalInput) => put<T.NutritionGoalRow>("/food/goal", body),
+    copy: (body: { fromDate: string; toDate: string; meal?: T.MealType; toMeal?: T.MealType }) =>
+      post<{ copied: number; day: T.FoodDay }>("/food/copy", body),
+    summary: (days?: number) => get<{ days: (T.FoodNutrients & { date: string })[] }>("/food/summary", { days }),
+  },
+
   // goals
   goals: {
     list: () => get<T.GoalWithProgress[]>("/goals"),
@@ -398,6 +424,15 @@ export const api = {
     items: (category?: T.StoreCategory) => get<T.StoreItem[]>("/store/items", { category }),
     buy: (id: string) => post<{ item: unknown; balance: number }>(`/store/items/${id}/buy`),
     equip: (id: string) => post<{ ok: true }>(`/store/items/${id}/equip`),
+  },
+
+  // cosmetic customization (themes / accents / effects / avatar / chat / profile)
+  customization: {
+    get: () => get<T.CustomizationState>("/customization"),
+    buy: (itemId: string) => post<T.CustomizationState>("/customization/buy", { itemId }),
+    equip: (itemId: string) => post<T.CustomizationState>("/customization/equip", { itemId }),
+    setSlot: (slot: string, itemId: string) =>
+      post<T.CustomizationState>("/customization/slot", { slot, itemId }),
   },
 
   // chat

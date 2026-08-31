@@ -14,14 +14,17 @@
   /* colour fields sit over --app-bg (painted on <body>); the base wash is
      translucent so a custom background shows through and every surface
      composites against it. */
-  background:
+  background: var(
+    --atmosphere-bg,
     radial-gradient(120% 90% at 50% -14%, rgba(122, 23, 79, 0.34), transparent 60%),
     radial-gradient(90% 70% at 8% 2%, rgba(255, 156, 99, 0.16), transparent 55%),
     radial-gradient(95% 75% at 20% 26%, rgba(232, 165, 197, 0.18), transparent 55%),
     radial-gradient(85% 70% at 92% 12%, rgba(77, 124, 255, 0.13), transparent 55%),
     radial-gradient(75% 62% at 84% 58%, rgba(79, 214, 166, 0.09), transparent 55%),
     radial-gradient(95% 85% at 66% 104%, rgba(213, 26, 122, 0.24), transparent 60%),
-    linear-gradient(168deg, rgba(52, 19, 45, 0.55) 0%, rgba(27, 14, 26, 0.45) 48%, rgba(16, 10, 17, 0.5) 100%);
+    linear-gradient(168deg, rgba(52, 19, 45, 0.55) 0%, rgba(27, 14, 26, 0.45) 48%, rgba(16, 10, 17, 0.5) 100%)
+  );
+  transition: background 600ms var(--ease-luxury);
 }
 :root[data-reduce-motion="true"] .atmosphere__aurora {
   animation: none;
@@ -50,7 +53,7 @@
   height: 62vw;
   top: -24vw;
   left: -18vw;
-  background: radial-gradient(circle, rgba(213, 26, 122, 0.28), transparent 66%);
+  background: radial-gradient(circle, var(--aurora-1, rgba(213, 26, 122, 0.28)), transparent 66%);
   animation: aurora-drift-1 42s ease-in-out infinite alternate;
 }
 .atmosphere__aurora--2 {
@@ -58,7 +61,7 @@
   height: 56vw;
   right: -24vw;
   bottom: -28vw;
-  background: radial-gradient(circle, rgba(122, 23, 79, 0.34), transparent 68%);
+  background: radial-gradient(circle, var(--aurora-2, rgba(122, 23, 79, 0.34)), transparent 68%);
   animation: aurora-drift-2 58s ease-in-out infinite alternate;
 }
 .atmosphere__aurora--3 {
@@ -66,9 +69,14 @@
   height: 46vw;
   top: 22%;
   right: 2%;
-  background: radial-gradient(circle, rgba(179, 101, 150, 0.18), transparent 72%);
+  background: radial-gradient(circle, var(--aurora-3, rgba(179, 101, 150, 0.18)), transparent 72%);
   animation: aurora-drift-3 48s ease-in-out infinite alternate;
 }
+
+/* faster aurora — themes with the "aurora-fast" ambience */
+:root[data-theme-effect="aurora-fast"] .atmosphere__aurora--1 { animation-duration: 16s; }
+:root[data-theme-effect="aurora-fast"] .atmosphere__aurora--2 { animation-duration: 22s; }
+:root[data-theme-effect="aurora-fast"] .atmosphere__aurora--3 { animation-duration: 19s; }
 @keyframes aurora-drift-1 {
   from { transform: translate3d(0, 0, 0) scale(1); }
   to { transform: translate3d(9vw, 7vw, 0) scale(1.18); }
@@ -93,10 +101,75 @@
   background: radial-gradient(120% 100% at 50% 36%, transparent 40%, rgba(16, 10, 17, 0.58) 100%);
 }
 
+/* --------------------------------------------------------------------------
+   Ambient effect layers — all hidden unless the equipped theme / effect turns
+   them on via :root[data-theme-effect]. Kept transform/opacity only.
+   -------------------------------------------------------------------------- */
+.atmosphere__particles,
+.atmosphere__bloom,
+.atmosphere__scanlines {
+  position: absolute;
+  inset: 0;
+  display: none;
+  pointer-events: none;
+}
+
+:root[data-theme-effect="particles"] .atmosphere__particles {
+  display: block;
+  background-image:
+    radial-gradient(2px 2px at 12% 22%, var(--accent-pink), transparent 60%),
+    radial-gradient(1.5px 1.5px at 68% 14%, var(--accent-cyan), transparent 60%),
+    radial-gradient(2px 2px at 82% 62%, var(--accent-amber), transparent 60%),
+    radial-gradient(1.5px 1.5px at 34% 78%, var(--accent-pink), transparent 60%),
+    radial-gradient(1.5px 1.5px at 52% 42%, #fff, transparent 60%);
+  background-repeat: no-repeat;
+  opacity: 0.5;
+  animation: particle-rise 26s linear infinite;
+}
+@keyframes particle-rise {
+  from { transform: translate3d(0, 0, 0); background-position: 0 0, 0 0, 0 0, 0 0, 0 0; }
+  to { transform: translate3d(0, -3vh, 0); background-position: 0 -40vh, 0 -55vh, 0 -32vh, 0 -60vh, 0 -48vh; }
+}
+
+:root[data-theme-effect="glow"] .atmosphere__bloom {
+  display: block;
+  background: radial-gradient(46% 40% at 50% 46%, color-mix(in srgb, var(--accent-pink) 22%, transparent), transparent 72%);
+  animation: bloom-breathe 7s ease-in-out infinite;
+}
+@keyframes bloom-breathe {
+  0%, 100% { opacity: 0.35; transform: scale(1); }
+  50% { opacity: 0.7; transform: scale(1.12); }
+}
+
+:root[data-theme-effect="scanlines"] .atmosphere__scanlines {
+  display: block;
+  background: repeating-linear-gradient(
+    0deg,
+    rgba(0, 0, 0, 0) 0px,
+    rgba(0, 0, 0, 0) 2px,
+    rgba(0, 0, 0, 0.16) 3px,
+    rgba(0, 0, 0, 0) 4px
+  );
+  animation: scan-flicker 5s steps(60) infinite;
+}
+@keyframes scan-flicker {
+  0%, 96%, 100% { opacity: 0.5; }
+  97% { opacity: 0.3; }
+  98% { opacity: 0.62; }
+}
+
+:root[data-theme-effect="grain-heavy"] .atmosphere__grain { opacity: 0.12 !important; }
+
+@media (prefers-reduced-motion: reduce) {
+  .atmosphere__particles,
+  .atmosphere__bloom,
+  .atmosphere__scanlines { animation: none; }
+}
+
 .atmosphere__grain {
   position: absolute;
   inset: 0;
-  opacity: 0.028;
+  opacity: var(--grain-opacity, 0.028);
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
   background-repeat: repeat;
 }

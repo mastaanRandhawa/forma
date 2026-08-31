@@ -39,13 +39,21 @@ export interface LoggedSet {
   reps: number | null;
   rpe: number | null;
   done: boolean;
+  /** warmup sets don't count toward working volume or PRs */
+  warmup?: boolean;
 }
 
 export interface LoggedExercise {
   name: string;
   target: string;
   sets: LoggedSet[];
+  /** permanently dropped from today's session */
   skipped: boolean;
+  /** temporarily moved later in the queue ("machine busy" / "do later") */
+  deferred?: boolean;
+  deferReason?: string | null;
+  /** original planned name, when the user swapped this exercise today */
+  substitutedFrom?: string | null;
   /** backend ExercisePerformance id, when the session was started via the API */
   apiPerfId?: string;
   exerciseId?: string;
@@ -60,10 +68,22 @@ export interface ActiveSession {
   /** backend WorkoutSession id, when started via the API */
   apiId?: string;
   exercises: LoggedExercise[];
-  /** current exercise index */
+  /** index into `exercises` of the exercise currently in focus */
   cursor: number;
+  /**
+   * today's running sequence — indices into `exercises`, reordered as the user
+   * defers / jumps around. The saved template/workout is never mutated; this is
+   * session-only. Always a permutation of every exercise index.
+   */
+  order: number[];
   /** epoch ms the rest timer ends, or null */
   restEndsAt: number | null;
+  /** paused (phone locked, interruption) — elapsed time excludes paused spans */
+  paused?: boolean;
+  /** epoch ms the current pause began */
+  pausedAt?: number | null;
+  /** accumulated paused milliseconds across the session */
+  pausedMs?: number;
 }
 
 export interface CompletedSession {
@@ -155,6 +175,27 @@ const EMPTY: FormaData = {
   nutritionTargets: null,
 };
 
+/** Backfill session-queue / pause fields on sessions saved by an older build. */
+function normalizeActive(a: ActiveSession): ActiveSession {
+  const next = { ...a };
+  if (!Array.isArray(next.order) || next.order.length !== next.exercises.length) {
+    const seen = new Set<number>();
+    const order = (Array.isArray(next.order) ? next.order : []).filter(
+      (i) => Number.isInteger(i) && i >= 0 && i < next.exercises.length && !seen.has(i) && seen.add(i),
+    );
+    next.exercises.forEach((_, i) => {
+      if (!seen.has(i)) order.push(i);
+    });
+    next.order = order;
+  }
+  if (typeof next.cursor !== "number" || next.cursor < 0 || next.cursor >= next.exercises.length) {
+    next.cursor = next.order[0] ?? 0;
+  }
+  if (typeof next.pausedMs !== "number") next.pausedMs = 0;
+  if (typeof next.paused !== "boolean") next.paused = false;
+  return next;
+}
+
 // ── storage ─────────────────────────────────────────────────────────────────
 let cache: FormaData | null = null;
 const listeners = new Set<() => void>();
@@ -174,7 +215,7 @@ function read(): FormaData {
         quickLogs: parsed.quickLogs ?? [],
         meals: parsed.meals ?? [],
         nutritionTargets: parsed.nutritionTargets ?? null,
-        active: parsed.active ?? null,
+        active: parsed.active ? normalizeActive(parsed.active) : null,
       };
       return cache;
     }
@@ -268,6 +309,13 @@ export interface StartExercise {
   sets?: LoggedSet[];
 }
 
+/** Blank sets seeded from a target like "4 × 6–8" → 4 sets (1–8, else 3). */
+function seedSets(target: string, reps: number | null = null): LoggedSet[] {
+  const n = Number(target.match(/^\s*(\d+)/)?.[1]);
+  const count = Number.isFinite(n) && n >= 1 && n <= 8 ? n : 3;
+  return Array.from({ length: count }, () => ({ weight: null, reps, rpe: null, done: false }));
+}
+
 export function startSession(
   name: string,
   plan: StartExercise[],
@@ -279,7 +327,11 @@ export function startSession(
     name,
     startedAt: meta?.startedAt ?? new Date().toISOString(),
     cursor: 0,
+    order: plan.map((_, i) => i),
     restEndsAt: null,
+    paused: false,
+    pausedAt: null,
+    pausedMs: 0,
     exercises: plan.map((p) => ({
       name: p.name,
       target: p.target,
@@ -287,7 +339,10 @@ export function startSession(
       apiPerfId: p.apiPerfId,
       prescription: p.prescription ?? null,
       skipped: false,
-      sets: p.sets ?? [{ weight: null, reps: null, rpe: null, done: false }],
+      deferred: false,
+      deferReason: null,
+      substitutedFrom: null,
+      sets: p.sets ?? seedSets(p.target),
     })),
   };
   mutate((d) => ({ ...d, active: session }));

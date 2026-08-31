@@ -3,6 +3,8 @@ import { Suspense, useEffect, useState } from "react";
 import { House, Dumbbell, MessageSquare, Apple, Library } from "lucide-react";
 import { API_ENABLED } from "../api/hooks";
 import { useFormaData } from "../lib/localStore";
+import { grantDailyBonus } from "../lib/rewards";
+import { CoinToast } from "./CoinToast";
 import { AtmosphericBackground } from "./layout/AtmosphericBackground";
 import { TopNav, type NavItem } from "./layout/TopNav";
 import { RouteProgress } from "./layout/RouteProgress";
@@ -55,6 +57,12 @@ export function AppShell() {
 
   const showSkeleton = pinned || phase === "loading";
 
+  // pay the daily check-in bonus once per calendar day (idempotent)
+  useEffect(() => {
+    const t = setTimeout(() => grantDailyBonus(), 1200);
+    return () => clearTimeout(t);
+  }, []);
+
   return (
     <div className="relative min-h-[100dvh]">
       <AtmosphericBackground />
@@ -75,6 +83,7 @@ export function AppShell() {
       </main>
 
       <QuickActions />
+      <CoinToast />
       <LocalDataBadge />
     </div>
   );

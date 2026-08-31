@@ -11,7 +11,10 @@ export const AtmosphericBackground = memo(function AtmosphericBackground() {
       <div className="atmosphere__aurora atmosphere__aurora--1" />
       <div className="atmosphere__aurora atmosphere__aurora--2" />
       <div className="atmosphere__aurora atmosphere__aurora--3" />
+      <div className="atmosphere__particles" />
+      <div className="atmosphere__bloom" />
       <div className="atmosphere__grain" />
+      <div className="atmosphere__scanlines" />
       <div className="atmosphere__vignette" />
     </div>
   );
