@@ -1,6 +1,6 @@
 import { Outlet, useLocation } from "react-router-dom";
 import { Suspense, useEffect, useState } from "react";
-import { House, Dumbbell, MessageSquare, TrendingUp, Library, Activity } from "lucide-react";
+import { House, Dumbbell, MessageSquare, Apple, Library } from "lucide-react";
 import { API_ENABLED } from "../api/hooks";
 import { useFormaData } from "../lib/localStore";
 import { AtmosphericBackground } from "./layout/AtmosphericBackground";
@@ -14,14 +14,19 @@ const ICON = { size: 19, strokeWidth: 1.75 } as const;
 
 const NAV: NavItem[] = [
   { to: "/dashboard", label: "home", end: true, icon: <House {...ICON} />, feature: "dashboard" },
-  { to: "/workouts", label: "train", icon: <Dumbbell {...ICON} />, feature: "workouts" },
-  { to: "/progress", label: "progress", icon: <TrendingUp {...ICON} />, feature: "progress_basic" },
+  {
+    to: "/workouts",
+    label: "training",
+    icon: <Dumbbell {...ICON} />,
+    feature: "workouts",
+    match: ["/progress", "/body", "/training"],
+  },
+  { to: "/nutrition", label: "nutrition", icon: <Apple {...ICON} /> },
   { to: "/trainer", label: "trainer", icon: <MessageSquare {...ICON} />, feature: "trainer" },
 ];
 
 const SECONDARY: NavItem[] = [
   { to: "/exercise-library", label: "Exercise library", icon: <Library {...ICON} /> },
-  { to: "/body", label: "Muscle balance", icon: <Activity {...ICON} /> },
 ];
 
 const LOAD_MS = 380;

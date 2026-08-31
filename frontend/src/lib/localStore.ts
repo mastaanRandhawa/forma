@@ -99,12 +99,35 @@ export interface QuickLog {
   at: string;
 }
 
+export interface MealEntry {
+  id: string;
+  /** YYYY-MM-DD */
+  date: string;
+  label: string;
+  kcal: number | null;
+  protein: number | null;
+  carbs: number | null;
+  fat: number | null;
+  at: string;
+}
+
+/** Manual override for the auto-derived daily nutrition targets. */
+export interface NutritionTargets {
+  kcal: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+}
+
 export interface FormaData {
   profile: Profile;
   active: ActiveSession | null;
   sessions: CompletedSession[];
   checkins: Checkin[];
   quickLogs: QuickLog[];
+  meals: MealEntry[];
+  /** null → targets are derived from the training profile */
+  nutritionTargets: NutritionTargets | null;
 }
 
 export const DEFAULT_PROFILE: Profile = {
@@ -128,6 +151,8 @@ const EMPTY: FormaData = {
   sessions: [],
   checkins: [],
   quickLogs: [],
+  meals: [],
+  nutritionTargets: null,
 };
 
 // ── storage ─────────────────────────────────────────────────────────────────
@@ -147,6 +172,8 @@ function read(): FormaData {
         sessions: parsed.sessions ?? [],
         checkins: parsed.checkins ?? [],
         quickLogs: parsed.quickLogs ?? [],
+        meals: parsed.meals ?? [],
+        nutritionTargets: parsed.nutritionTargets ?? null,
         active: parsed.active ?? null,
       };
       return cache;
@@ -204,6 +231,7 @@ export function hasRealData(d: FormaData = read()): boolean {
     d.sessions.length > 0 ||
     d.checkins.length > 0 ||
     d.quickLogs.length > 0 ||
+    d.meals.length > 0 ||
     Boolean(d.profile.onboardedAt)
   );
 }
@@ -320,6 +348,45 @@ export function addQuickLog(type: QuickLog["type"], value: number, unit: string)
   });
 }
 
+/** Remove the most recent quick-log of a type logged today (an "undo" for tap-counters). */
+export function removeLastQuickLog(type: QuickLog["type"]): void {
+  mutate((d) => {
+    const day = today();
+    const idx = d.quickLogs.findIndex((q) => q.type === type && q.at.slice(0, 10) === day);
+    if (idx < 0) return d;
+    const next = [...d.quickLogs];
+    next.splice(idx, 1);
+    return { ...d, quickLogs: next };
+  });
+}
+
 export function getSession(id: string, d: FormaData = read()): CompletedSession | null {
   return d.sessions.find((s) => s.id === id) ?? null;
+}
+
+// ── nutrition ───────────────────────────────────────────────────────────────
+export function addMeal(entry: Omit<MealEntry, "id" | "date" | "at">): void {
+  mutate((d) => {
+    const meal: MealEntry = {
+      ...entry,
+      id: uid(),
+      date: today(),
+      at: new Date().toISOString(),
+    };
+    return { ...d, meals: [meal, ...d.meals] };
+  });
+}
+
+export function removeMeal(id: string): void {
+  mutate((d) => ({ ...d, meals: d.meals.filter((m) => m.id !== id) }));
+}
+
+export function saveNutritionTargets(t: NutritionTargets | null): void {
+  mutate((d) => ({ ...d, nutritionTargets: t }));
+}
+
+/** Cups of water logged today (one QuickLog per cup). */
+export function waterCupsToday(d: FormaData = read()): number {
+  const day = today();
+  return d.quickLogs.filter((q) => q.type === "water" && q.at.slice(0, 10) === day).length;
 }

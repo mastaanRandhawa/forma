@@ -3,6 +3,7 @@ import { Link, Outlet, useLocation } from "react-router-dom";
 import { ChevronLeft } from "lucide-react";
 import { PageHeader } from "../../components/PageHeader";
 import { SettingsNav } from "../../components/settings/SettingsNav";
+import { SettingsPanelSkeleton } from "../../components/skeleton/PageSkeleton";
 
 /**
  * Settings shell — a persistent category rail on desktop, a single editing
@@ -31,7 +32,7 @@ export default function SettingsLayout() {
               <ChevronLeft size={14} strokeWidth={2} /> settings
             </Link>
           )}
-          <Suspense fallback={<div className="surface-soft h-64 animate-pulse" />}>
+          <Suspense fallback={<SettingsPanelSkeleton rows={6} />}>
             <Outlet />
           </Suspense>
         </div>

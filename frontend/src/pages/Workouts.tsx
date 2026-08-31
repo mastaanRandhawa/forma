@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { PageHeader } from "../components/PageHeader";
+import { TrainingTabs } from "../components/layout/TrainingTabs";
 import { Reveal } from "../components/Reveal";
 import { EmptyState } from "../components/EmptyState";
 import { ErrorState } from "../components/ErrorState";
@@ -94,6 +95,7 @@ export default function Workouts() {
 
   return (
     <div className="mx-auto max-w-[1120px]">
+      <TrainingTabs className="mb-6" />
       <PageHeader eyebrow="train" title="plan" ghost="& history">
         <Button variant="ghost" onClick={() => setTab("Templates")}>
           browse templates
