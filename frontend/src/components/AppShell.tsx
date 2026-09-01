@@ -10,6 +10,7 @@ import { TopNav, type NavItem } from "./layout/TopNav";
 import { RouteProgress } from "./layout/RouteProgress";
 import { ScrollProgress } from "./layout/ScrollProgress";
 import { QuickActions } from "./layout/QuickActions";
+import { WorkoutInProgressBar } from "./workout/WorkoutInProgressBar";
 import { PageSkeleton } from "./skeleton/PageSkeleton";
 
 const ICON = { size: 19, strokeWidth: 1.75 } as const;
@@ -64,6 +65,7 @@ export function AppShell() {
       </main>
 
       <QuickActions />
+      <WorkoutInProgressBar />
       <CoinToast />
       <LocalDataBadge />
     </div>

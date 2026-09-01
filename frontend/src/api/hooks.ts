@@ -223,6 +223,17 @@ export const useSessionHistory = () =>
     pick(() => api.sessions.list({ status: "completed", take: 40 }), () => []),
   );
 
+export const useTemplates = () => {
+  // imported lazily inside the fetcher to keep the hooks⇄templates module cycle
+  // free of load-time coupling
+  return useResource<import("../lib/templates").TemplateRow[]>("templates", () =>
+    import("../lib/templates").then((m) => m.listTemplates()),
+  );
+};
+
+/** Call after any template create/update/delete so the next `useTemplates` refetches. */
+export const invalidateTemplates = () => invalidateResource("templates");
+
 export const useConsistency = (weeks = 13) =>
   useResource<T.ConsistencyReport | null>(
     `consistency:${weeks}`,

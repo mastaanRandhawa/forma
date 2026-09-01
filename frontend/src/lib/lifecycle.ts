@@ -40,6 +40,7 @@ export async function startApiSessionFromWorkout(workout: Workout, units: Units)
       target: `${we.targetSets} × ${repRange(we.targetRepsMin, we.targetRepsMax)}`,
       exerciseId: we.exerciseId,
       apiPerfId: perf?.id,
+      supersetGroup: we.supersetGroup ?? null,
       prescription: perf
         ? { weightKg: perf.prescribedWeightKg ?? null, reps: perf.prescribedReps ?? null, rpe: perf.prescribedRpe ?? null, note }
         : null,

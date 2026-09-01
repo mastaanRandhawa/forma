@@ -660,6 +660,8 @@ export interface WorkoutInput {
     targetWeightKg?: number;
     targetRestSec?: number;
     notes?: string;
+    supersetGroup?: number | null;
+    supersetType?: SupersetType;
   }>;
 }
 

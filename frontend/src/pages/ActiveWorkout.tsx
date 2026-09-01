@@ -22,15 +22,21 @@ import { KaiOrb } from "../components/KaiOrb";
 import { ExerciseThumb } from "../components/ExerciseThumb";
 import { ExerciseDetailDrawer } from "../components/ExerciseDetailDrawer";
 import { DetailDrawer } from "../components/dashboard/DetailDrawer";
+import { Stepper } from "../components/workout/Stepper";
+import { ExercisePicker } from "../components/workout/ExercisePicker";
 import {
   abandonSession,
   finishSession,
   loadData,
+  repeatFromCompleted,
+  startSession,
   updateActive,
   useFormaData,
+  type CompletedSession,
   type LoggedExercise,
   type LoggedSet,
 } from "../lib/localStore";
+import { saveSessionAsTemplate } from "../lib/templates";
 import { detectPRs, lastPerformance, lastTopSet, sessionVolume } from "../lib/fitness";
 import {
   activeSetIndex,
@@ -40,10 +46,13 @@ import {
   deferExercise,
   focusExercise,
   isExerciseComplete,
+  nextSupersetStep,
   resumeExercise,
   sessionProgress,
   sessionQueue,
   setSkipped,
+  supersetLetter,
+  supersetPosition,
   substituteExercise,
   suggestSubstitutes,
   trainerCue,
@@ -123,59 +132,6 @@ function useElapsed(session: ReturnType<typeof useFormaData>["active"]) {
 const fmtClock = (sec: number) =>
   `${Math.floor(Math.max(0, sec) / 60)}:${String(Math.max(0, sec) % 60).padStart(2, "0")}`;
 
-// ── numeric stepper ─────────────────────────────────────────────────────────
-function Stepper({
-  label,
-  value,
-  step,
-  suffix,
-  onChange,
-}: {
-  label: string;
-  value: number | null;
-  step: number;
-  suffix?: string;
-  onChange: (v: number | null) => void;
-}) {
-  const bump = (dir: number) => {
-    const base = value ?? 0;
-    const next = Math.round((base + dir * step) * 100) / 100;
-    onChange(next < 0 ? 0 : next);
-  };
-  return (
-    <div className="surface-recessed flex flex-1 flex-col items-center rounded-hero px-3 py-3">
-      <span className="label-instrument">{label}</span>
-      <div className="mt-1.5 flex w-full items-center justify-between gap-2">
-        <button
-          aria-label={`decrease ${label}`}
-          onClick={() => bump(-1)}
-          className="focus-ring tactile grid h-11 w-11 shrink-0 place-items-center rounded-full bg-white/[0.06] text-content-secondary hover:bg-white/[0.12] active:scale-95"
-        >
-          <Minus size={18} strokeWidth={2.4} />
-        </button>
-        <input
-          inputMode="decimal"
-          value={value ?? ""}
-          placeholder="—"
-          onChange={(e) => {
-            const raw = e.target.value.replace(",", ".");
-            onChange(raw === "" ? null : Number.isNaN(Number(raw)) ? value : Number(raw));
-          }}
-          className="focus-ring w-full min-w-0 rounded-[var(--radius-small)] bg-transparent text-center text-[1.8rem] font-medium tabular-nums text-content-primary outline-none"
-        />
-        <button
-          aria-label={`increase ${label}`}
-          onClick={() => bump(1)}
-          className="focus-ring tactile grid h-11 w-11 shrink-0 place-items-center rounded-full bg-white/[0.06] text-content-secondary hover:bg-white/[0.12] active:scale-95"
-        >
-          <Plus size={18} strokeWidth={2.4} />
-        </button>
-      </div>
-      {suffix && <span className="label-instrument mt-1">{suffix}</span>}
-    </div>
-  );
-}
-
 // ── progress rail ───────────────────────────────────────────────────────────
 function ProgressRail({ queue, cursor, onJump }: {
   queue: ReturnType<typeof sessionQueue>;
@@ -222,8 +178,11 @@ export default function ActiveWorkout() {
   const [view, setView] = useState<"focus" | "overview">("focus");
   const [subFor, setSubFor] = useState<number | null>(null);
   const [howto, setHowto] = useState(false);
+  const [addingEx, setAddingEx] = useState(false);
+  const [savedAsTemplate, setSavedAsTemplate] = useState(false);
   const [finishing, setFinishing] = useState(false);
   const [endEarly, setEndEarly] = useState(false);
+  const finishedRef = useRef<CompletedSession | null>(null);
   const [cue, setCue] = useState<{ event: CueEvent; ctx: CueContext }>({ event: "start", ctx: {} });
   const [milestone, setMilestone] = useState<null | { kind: "pr" | "exercise"; title: string; detail?: string }>(null);
   const [summary, setSummary] = useState<null | {
@@ -235,6 +194,7 @@ export default function ActiveWorkout() {
     sets: number;
     coins: number;
     muscles: string[];
+    vsLast: { volume: number; duration: number } | null;
   }>(null);
 
   const elapsed = useElapsed(session);
@@ -293,7 +253,7 @@ export default function ActiveWorkout() {
 
   // one-time start cue
   useEffect(() => {
-    if (session && cue.event === "start" && !cue.ctx.totalExercises) {
+    if (session && cue.event === "start" && cue.ctx.totalExercises === undefined) {
       setCue({
         event: "start",
         ctx: {
@@ -439,19 +399,45 @@ export default function ActiveWorkout() {
     const live = fresh.exercises.filter((e) => !e.skipped);
     const exercisesLeft = live.filter((e) => !isExerciseComplete(e)).length - (done ? 0 : 1);
 
+    // PR / completion feedback whenever an exercise wraps
+    let hadPr = false;
     if (done) {
       const prs = detectPRs({ exercises: [freshEx] }, priorSessions);
       if (prs.length) {
+        hadPr = true;
         setMilestone({ kind: "pr", title: "new personal record", detail: prs[0] });
         setCue({ event: "pr", ctx: { prDetail: prs[0].split("— ")[1] } });
         vibrate([20, 40, 20]);
       } else {
         setMilestone({ kind: "exercise", title: `${freshEx.name} complete`, detail: `${freshEx.sets.filter((s) => s.done && !s.warmup).length} sets` });
+      }
+    }
+
+    // ── superset routing: interleave peers, rest only between rounds ────────
+    const step = freshEx.supersetGroup != null ? nextSupersetStep(fresh, cursor) : null;
+    if (step) {
+      updateActive((s) => focusExercise(s, step.targetIndex));
+      const peerName = fresh.exercises[step.targetIndex]?.name;
+      if (step.rest) {
+        const restSec = catEntry?.mechanic === "compound" ? 120 : DEFAULT_REST;
+        startRest(restSec);
+        setCue({ event: "rest", ctx: { restSeconds: restSec } });
+      } else {
+        setCue({ event: "superset-next", ctx: { exerciseName: peerName } });
+      }
+      const after = loadData().active;
+      if (after && after.exercises.filter((e) => !e.skipped).every(isExerciseComplete)) {
+        setTimeout(() => void finish(), 1000);
+      }
+      return;
+    }
+
+    if (done) {
+      if (!hadPr)
         setCue({
           event: exercisesLeft <= 0 ? "finish" : exercisesLeft === 1 ? "almost-done" : "exercise-done",
           ctx: { exercisesLeft, exerciseName: freshEx.name },
         });
-      }
       updateActive((s) => advance(s));
       const after = loadData().active;
       if (after && after.exercises.filter((e) => !e.skipped).every(isExerciseComplete)) {
@@ -493,7 +479,12 @@ export default function ActiveWorkout() {
     }
 
     const before = walletStore.snapshot().lifetimeEarned;
-    finishSession(volume, units, prs, session.apiId);
+    const completed = finishSession(volume, units, prs, session.apiId);
+    finishedRef.current = completed;
+    const lastSame = priorSessions.find((s) => s.name === session.name) ?? null;
+    const vsLast = lastSame
+      ? { volume: volume - lastSame.volume, duration: durationSec - lastSame.durationSec }
+      : null;
     grantWorkoutRewards({
       sessionId: session.apiId ?? session.startedAt,
       volume,
@@ -528,6 +519,7 @@ export default function ActiveWorkout() {
       sets: session.exercises.reduce((n, e) => n + e.sets.filter((s) => s.done && !s.warmup).length, 0),
       coins,
       muscles,
+      vsLast,
     });
     setFinishing(false);
   };
@@ -583,6 +575,29 @@ export default function ActiveWorkout() {
           )}
         </div>
       </header>
+
+      {session && session.exercises.length === 0 && (
+        <div className="surface-soft mb-5 p-6 text-center sm:p-8">
+          <h2 className="text-heading text-content-primary lowercase">empty workout</h2>
+          <p className="mx-auto mt-2 max-w-[34ch] text-[0.88rem] text-content-secondary lowercase">
+            add exercises as you go. log your sets, rest between them, and finish when you're done.
+          </p>
+          <button
+            onClick={() => setAddingEx(true)}
+            className="focus-ring tactile mt-6 rounded-hero bg-[var(--accent-lime)] px-6 py-3.5 text-[0.95rem] font-semibold lowercase text-[#0c0c0c] active:scale-[0.99]"
+          >
+            + add your first exercise
+          </button>
+        </div>
+      )}
+      <ExercisePicker
+        open={addingEx}
+        onClose={() => setAddingEx(false)}
+        onPick={(n) => {
+          addExercise(n);
+          setAddingEx(false);
+        }}
+      />
 
       {session?.paused && (
         <div className="surface-recessed mb-5 flex items-center justify-between rounded-hero p-4">
@@ -645,6 +660,11 @@ export default function ActiveWorkout() {
           workingCount={workingSets.length}
           trainablePos={trainablePos}
           trainableTotal={trainableTotal}
+          supersetLabel={
+            session && supersetPosition(session, cursor)
+              ? `superset ${supersetPosition(session, cursor)!.letter} · ${supersetPosition(session, cursor)!.position}/${supersetPosition(session, cursor)!.count}`
+              : null
+          }
           last={last}
           rxWeight={rxWeight}
           rxReps={rxReps}
@@ -652,6 +672,11 @@ export default function ActiveWorkout() {
           onStopRest={stopRest}
           onStartRest={startRest}
           onPatchActiveSet={patchActiveSet}
+          onUsePrevious={() => {
+            if (!currentEx) return;
+            const top = lastTopSet(priorSessions, currentEx.name);
+            if (top) patchActiveSet((s) => ({ ...s, weight: top.weight, reps: top.reps }));
+          }}
           onCompleteSet={completeActiveSet}
           onAddSet={(w) => addSet(cursor, w)}
           onToggleWarmup={() =>
@@ -749,20 +774,29 @@ export default function ActiveWorkout() {
       <AnimatePresence>
         {endEarly && progress && (
           <Scrim onClose={() => setEndEarly(false)}>
-            <h2 className="text-heading text-content-primary lowercase">end workout?</h2>
+            <h2 className="text-heading text-content-primary lowercase">leave workout?</h2>
             <p className="mx-auto mt-2 max-w-[34ch] text-[0.88rem] text-content-secondary">
               {progress.exercisesDone} / {progress.exercisesTotal} exercises · {progress.setsDone} / {progress.setsTotal} sets logged.
             </p>
             <div className="mt-6 flex flex-col gap-2.5">
-              <Button onClick={() => void finish()} disabled={finishing} className="w-full">
-                {finishing ? "saving…" : "save workout"}
-              </Button>
               <button
                 onClick={() => setEndEarly(false)}
+                className="focus-ring rounded-pill surface-recessed px-5 py-2.5 text-[0.86rem] lowercase text-content-primary"
+              >
+                continue workout
+              </button>
+              <button
+                onClick={() => {
+                  if (!session?.paused) togglePause();
+                  nav("/workouts");
+                }}
                 className="focus-ring rounded-pill px-5 py-2.5 text-[0.86rem] lowercase text-content-secondary hover:text-content-primary"
               >
-                keep going
+                pause &amp; exit — resume later
               </button>
+              <Button onClick={() => void finish()} disabled={finishing} className="w-full">
+                {finishing ? "saving…" : "finish & save workout"}
+              </Button>
               <button
                 onClick={() => {
                   const a = loadData().active;
@@ -798,7 +832,9 @@ export default function ActiveWorkout() {
                 <KaiOrb size={40} state="done" />
                 <div>
                   <div className="label-instrument">workout complete</div>
-                  <h2 className="text-heading text-content-primary lowercase">{session?.name ?? "session"}</h2>
+                  <h2 className="text-heading text-content-primary lowercase">
+                    {session?.name ?? finishedRef.current?.name ?? "session"}
+                  </h2>
                 </div>
               </div>
 
@@ -852,20 +888,66 @@ export default function ActiveWorkout() {
                 <p className="mt-3 label-instrument">{summary.skipped} exercise(s) skipped</p>
               )}
 
+              {summary.vsLast && (
+                <p className="mt-3 label-instrument">
+                  vs last time:{" "}
+                  <span
+                    style={{
+                      color:
+                        summary.vsLast.volume >= 0 ? "var(--accent-lime)" : "var(--accent-amber)",
+                    }}
+                  >
+                    {summary.vsLast.volume >= 0 ? "+" : ""}
+                    {Math.round(summary.vsLast.volume).toLocaleString()} {units} volume
+                  </span>
+                  {" · "}
+                  {summary.vsLast.duration >= 0 ? "+" : ""}
+                  {Math.round(summary.vsLast.duration / 60)} min
+                </p>
+              )}
+
               <p className="mt-4 flex items-start gap-2 text-[0.9rem] italic leading-relaxed text-content-secondary">
                 <span aria-hidden>“</span>
                 {trainerCue("finish")}
               </p>
 
-              <div className="mt-6 flex gap-2.5">
-                <Link to="/workouts" className="flex-1">
-                  <Button className="w-full">done</Button>
-                </Link>
-                <Link to="/progress" className="flex-1">
-                  <Button variant="ghost" className="w-full">
-                    progress
-                  </Button>
-                </Link>
+              <div className="mt-6 flex flex-col gap-2.5">
+                <div className="flex gap-2.5">
+                  <Link to="/workouts" className="flex-1">
+                    <Button className="w-full">done</Button>
+                  </Link>
+                  <Link to="/progress" className="flex-1">
+                    <Button variant="ghost" className="w-full">
+                      progress
+                    </Button>
+                  </Link>
+                </div>
+                <div className="flex gap-2.5">
+                  <button
+                    onClick={() => {
+                      const s = finishedRef.current;
+                      if (!s) return;
+                      startSession(s.name, repeatFromCompleted(s));
+                      setSummary(null);
+                      nav("/workouts/active");
+                    }}
+                    className="focus-ring surface-recessed flex-1 rounded-pill py-2.5 text-[0.82rem] lowercase text-content-secondary hover:text-content-primary"
+                  >
+                    repeat workout
+                  </button>
+                  <button
+                    onClick={() => {
+                      const s = finishedRef.current;
+                      if (!s || savedAsTemplate) return;
+                      void saveSessionAsTemplate(s);
+                      setSavedAsTemplate(true);
+                    }}
+                    disabled={savedAsTemplate}
+                    className="focus-ring surface-recessed flex-1 rounded-pill py-2.5 text-[0.82rem] lowercase text-content-secondary hover:text-content-primary disabled:opacity-50"
+                  >
+                    {savedAsTemplate ? "saved ✓" : "save as template"}
+                  </button>
+                </div>
               </div>
             </motion.div>
           </motion.div>
@@ -913,6 +995,7 @@ function RestOrFocus(props: {
   workingCount: number;
   trainablePos: number;
   trainableTotal: number;
+  supersetLabel: string | null;
   last: ReturnType<typeof lastPerformance>;
   rxWeight: number | null;
   rxReps: number | null;
@@ -920,6 +1003,7 @@ function RestOrFocus(props: {
   onStopRest: () => void;
   onStartRest: (s: number) => void;
   onPatchActiveSet: (fn: (s: LoggedSet) => LoggedSet) => void;
+  onUsePrevious: () => void;
   onCompleteSet: () => void;
   onAddSet: (warmup: boolean) => void;
   onToggleWarmup: () => void;
@@ -1013,9 +1097,22 @@ function RestOrFocus(props: {
       <div className="p-5 sm:p-6">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <div className="label-instrument">
-              exercise {props.trainablePos} / {props.trainableTotal}
-              {currentEx.substitutedFrom ? ` · swapped from ${currentEx.substitutedFrom}` : ""}
+            <div className="label-instrument flex flex-wrap items-center gap-x-2">
+              {props.supersetLabel && (
+                <span
+                  className="rounded-pill px-2 py-0.5 text-[0.68rem] uppercase tracking-[0.08em]"
+                  style={{
+                    background: "color-mix(in srgb, var(--accent-mauve) 16%, transparent)",
+                    color: "var(--accent-mauve)",
+                  }}
+                >
+                  {props.supersetLabel}
+                </span>
+              )}
+              <span>
+                exercise {props.trainablePos} / {props.trainableTotal}
+                {currentEx.substitutedFrom ? ` · swapped from ${currentEx.substitutedFrom}` : ""}
+              </span>
             </div>
             <h2 className="mt-0.5 text-[1.5rem] font-medium lowercase text-content-primary">{currentEx.name}</h2>
             <div className="label-instrument mt-0.5">
@@ -1026,8 +1123,15 @@ function RestOrFocus(props: {
 
         {/* previous / today */}
         <div className="mt-4 grid grid-cols-2 gap-2.5">
-          <div className="surface-recessed rounded-hero p-3">
-            <div className="label-instrument">previous</div>
+          <button
+            onClick={props.onUsePrevious}
+            disabled={!props.last?.sets.length}
+            className="focus-ring surface-recessed rounded-hero p-3 text-left disabled:cursor-default"
+          >
+            <div className="label-instrument flex items-center justify-between">
+              previous
+              {props.last?.sets.length ? <span className="text-content-tertiary">tap to fill</span> : null}
+            </div>
             <div className="mt-0.5 text-[0.95rem] tabular-nums text-content-secondary">
               {props.last?.sets.length
                 ? props.last.sets
@@ -1036,7 +1140,7 @@ function RestOrFocus(props: {
                     .join("  ")
                 : "first time"}
             </div>
-          </div>
+          </button>
           <div className="surface-recessed rounded-hero p-3">
             <div className="label-instrument" style={{ color: "var(--accent-mauve)" }}>
               today
@@ -1145,13 +1249,30 @@ function OverviewBody({
   };
   return (
     <div className="space-y-2">
-      {queue.map((r) => {
+      {queue.map((r, qi) => {
         const done = r.ex.sets.filter((s) => s.done && !s.warmup).length;
         const total = r.ex.sets.filter((s) => !s.warmup).length;
+        const grp = r.ex.supersetGroup ?? null;
+        const prevGrp = qi > 0 ? queue[qi - 1].ex.supersetGroup ?? null : null;
+        const groupHeader = grp != null && grp !== prevGrp;
         return (
+          <div key={r.index}>
+            {groupHeader && (
+              <div className="mb-1 mt-2 flex items-center gap-2 px-1">
+                <span
+                  className="rounded-pill px-2 py-0.5 text-[0.66rem] uppercase tracking-[0.1em]"
+                  style={{
+                    background: "color-mix(in srgb, var(--accent-mauve) 16%, transparent)",
+                    color: "var(--accent-mauve)",
+                  }}
+                >
+                  superset {supersetLetter(grp)}
+                </span>
+                <span className="label-instrument">back-to-back · rest after the round</span>
+              </div>
+            )}
           <div
-            key={r.index}
-            className={`rounded-[var(--radius-medium)] p-3 ${r.index === cursor ? "surface-recessed" : ""}`}
+            className={`rounded-[var(--radius-medium)] p-3 ${grp != null ? "border-l-2 border-[color-mix(in_srgb,var(--accent-mauve)_45%,transparent)]" : ""} ${r.index === cursor ? "surface-recessed" : ""}`}
           >
             <div className="flex items-center gap-3">
               <span
@@ -1206,33 +1327,25 @@ function OverviewBody({
               )}
             </div>
           </div>
+          </div>
         );
       })}
 
       <div className="border-t border-[var(--line-soft)] pt-3">
-        {adding ? (
-          <div className="flex flex-wrap gap-1.5">
-            {EXERCISE_POOL.map((n) => (
-              <button
-                key={n}
-                onClick={() => {
-                  onAddExercise(n);
-                  setAdding(false);
-                }}
-                className="focus-ring tactile rounded-pill bg-white/[0.05] px-3 py-1.5 text-[0.78rem] text-content-primary hover:bg-white/[0.12]"
-              >
-                {n}
-              </button>
-            ))}
-          </div>
-        ) : (
-          <button
-            onClick={() => setAdding(true)}
-            className="focus-ring w-full rounded-[var(--radius-large)] border border-dashed border-[var(--line-soft)] py-3 text-[0.82rem] lowercase text-content-tertiary hover:text-content-secondary"
-          >
-            <Plus size={13} className="mr-1.5 inline" /> add exercise
-          </button>
-        )}
+        <button
+          onClick={() => setAdding(true)}
+          className="focus-ring w-full rounded-[var(--radius-large)] border border-dashed border-[var(--line-soft)] py-3 text-[0.82rem] lowercase text-content-tertiary hover:text-content-secondary"
+        >
+          <Plus size={13} className="mr-1.5 inline" /> add exercise
+        </button>
+        <ExercisePicker
+          open={adding}
+          onClose={() => setAdding(false)}
+          onPick={(n) => {
+            onAddExercise(n);
+            setAdding(false);
+          }}
+        />
       </div>
       <p className="label-instrument pt-1">
         changes apply to today's session only — your saved plan isn't touched.
@@ -1308,8 +1421,9 @@ function SubstituteSheet({
         )}
       </DetailDrawer>
 
-      <LibraryPicker
+      <ExercisePicker
         open={showLib}
+        title="exercise library"
         onClose={() => {
           setShowLib(false);
           onClose();
@@ -1320,50 +1434,5 @@ function SubstituteSheet({
         }}
       />
     </>
-  );
-}
-
-function LibraryPicker({
-  open,
-  onClose,
-  onPick,
-}: {
-  open: boolean;
-  onClose: () => void;
-  onPick: (name: string) => void;
-}) {
-  const [q, setQ] = useState("");
-  const [cat, setCat] = useState<RepDbCatalogEntry[]>([]);
-  useEffect(() => {
-    if (open && cat.length === 0) void import("../lib/repdb.catalog").then((m) => setCat(m.REPDB_CATALOG));
-  }, [open, cat.length]);
-  const shown = useMemo(() => {
-    const n = q.trim().toLowerCase();
-    return (n ? cat.filter((e) => e.name.toLowerCase().includes(n)) : cat).slice(0, 40);
-  }, [q, cat]);
-  return (
-    <DetailDrawer open={open} onClose={onClose} title="exercise library">
-      <input
-        value={q}
-        onChange={(e) => setQ(e.target.value)}
-        placeholder="search…"
-        className="focus-ring surface-recessed mb-3 w-full rounded-pill px-4 py-2.5 text-[0.9rem] text-content-primary outline-none placeholder:text-content-tertiary"
-      />
-      <div className="divide-y divide-[var(--line-soft)]">
-        {shown.map((e) => (
-          <button
-            key={e.id}
-            onClick={() => onPick(e.name)}
-            className="focus-ring flex w-full items-center gap-3 py-2.5 text-left"
-          >
-            <ExerciseThumb src={repdbThumb(e.name)} alt="" size={40} />
-            <span className="min-w-0 flex-1">
-              <span className="block truncate text-[0.92rem] lowercase text-content-primary">{e.name}</span>
-              <span className="label-instrument">{(e.primary[0] ?? e.bodyPart) + " · " + e.equipment}</span>
-            </span>
-          </button>
-        ))}
-      </div>
-    </DetailDrawer>
   );
 }
