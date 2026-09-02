@@ -93,14 +93,18 @@ export function Button({
   children: ReactNode;
   variant?: "primary" | "ghost";
 } & React.ButtonHTMLAttributes<HTMLButtonElement>) {
-  const base =
-    "focus-ring tactile inline-flex items-center justify-center gap-2 rounded-pill px-6 py-3 text-[0.92rem] font-medium lowercase tracking-[0.01em] transition";
-  const styles =
-    variant === "primary"
-      ? "surface-raised surface-raised--interactive text-content-primary"
-      : "surface-recessed text-content-secondary hover:text-content-primary";
+  if (variant === "primary") {
+    return (
+      <button className={`focus-ring btn-primary lowercase ${className}`} {...props}>
+        {children}
+      </button>
+    );
+  }
   return (
-    <button className={`${base} ${styles} ${className}`} {...props}>
+    <button
+      className={`focus-ring tactile inline-flex items-center justify-center gap-2 rounded-pill px-6 py-3 text-[0.92rem] font-medium lowercase tracking-[0.01em] transition surface-recessed text-content-secondary hover:text-content-primary ${className}`}
+      {...props}
+    >
       {children}
     </button>
   );

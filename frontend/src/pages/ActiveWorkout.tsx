@@ -640,35 +640,55 @@ export default function ActiveWorkout() {
       <AnimatePresence>
         {milestone && (
           <motion.div
-            initial={reduce ? { opacity: 0 } : { opacity: 0, y: -12, scale: 0.97 }}
+            initial={reduce ? { opacity: 0 } : { opacity: 0, y: -16, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.97 }}
-            transition={{ duration: 0.28, ease: EASE }}
-            className="mb-5 flex items-center gap-3 rounded-hero border p-4"
+            exit={reduce ? { opacity: 0 } : { opacity: 0, scale: 0.96, y: -8 }}
+            transition={{ duration: 0.32, ease: EASE }}
+            className="mb-5 overflow-hidden rounded-[var(--radius-large)]"
             style={{
-              borderColor:
-                milestone.kind === "pr"
-                  ? "color-mix(in srgb, var(--accent-lime) 40%, transparent)"
-                  : "var(--line-soft)",
-              background:
-                milestone.kind === "pr"
-                  ? "color-mix(in srgb, var(--accent-lime) 9%, transparent)"
-                  : "rgba(255,255,255,0.03)",
+              border: milestone.kind === "pr"
+                ? "1px solid color-mix(in srgb, var(--accent-lime) 45%, transparent)"
+                : "1px solid var(--line-soft)",
+              background: milestone.kind === "pr"
+                ? "radial-gradient(120% 180% at 10% -20%, color-mix(in srgb, var(--accent-lime) 18%, transparent), transparent 60%), color-mix(in srgb, var(--accent-lime) 6%, transparent)"
+                : "rgba(255,255,255,0.03)",
+              boxShadow: milestone.kind === "pr"
+                ? "0 0 40px -12px color-mix(in srgb, var(--accent-lime) 40%, transparent)"
+                : "none",
             }}
           >
-            <div
-              className="grid h-9 w-9 shrink-0 place-items-center rounded-full"
-              style={{ background: milestone.kind === "pr" ? "var(--accent-lime)" : "rgba(255,255,255,0.08)" }}
-            >
-              {milestone.kind === "pr" ? (
-                <Trophy size={16} strokeWidth={2.2} className="text-[#0c0c0c]" />
-              ) : (
-                <Check size={16} strokeWidth={2.6} className="text-content-primary" />
-              )}
-            </div>
-            <div>
-              <div className="text-[0.9rem] lowercase text-content-primary">{milestone.title}</div>
-              {milestone.detail && <div className="label-instrument mt-0.5">{milestone.detail}</div>}
+            <div className="flex items-center gap-4 p-4 sm:p-5">
+              <motion.div
+                animate={milestone.kind === "pr" && !reduce ? { scale: [0.6, 1.18, 0.96, 1.04, 1] } : {}}
+                transition={{ duration: 0.5, ease: EASE }}
+                className="grid shrink-0 place-items-center rounded-full"
+                style={{
+                  width: milestone.kind === "pr" ? 48 : 36,
+                  height: milestone.kind === "pr" ? 48 : 36,
+                  background: milestone.kind === "pr" ? "var(--accent-lime)" : "rgba(255,255,255,0.08)",
+                  boxShadow: milestone.kind === "pr" ? "0 0 20px -4px rgba(216,255,99,0.6)" : "none",
+                }}
+              >
+                {milestone.kind === "pr" ? (
+                  <Trophy size={20} strokeWidth={2.2} className="text-[#0c0c0c]" />
+                ) : (
+                  <Check size={15} strokeWidth={2.6} className="text-content-primary" />
+                )}
+              </motion.div>
+              <div className="min-w-0">
+                <div
+                  className="font-semibold lowercase leading-tight"
+                  style={{
+                    fontSize: milestone.kind === "pr" ? "1.05rem" : "0.9rem",
+                    color: milestone.kind === "pr" ? "var(--accent-lime)" : "var(--text-primary)",
+                  }}
+                >
+                  {milestone.title}
+                </div>
+                {milestone.detail && (
+                  <div className="label-instrument mt-0.5 text-content-secondary">{milestone.detail}</div>
+                )}
+              </div>
             </div>
           </motion.div>
         )}
@@ -1106,32 +1126,69 @@ function RestOrFocus(props: {
 
   // ── REST STATE ──────────────────────────────────────────────────────────
   if (restEndsAt && remaining > 0) {
+    const totalRest = restEndsAt
+      ? Math.round((restEndsAt - (restEndsAt - remaining * 1000 - (Date.now() - (restEndsAt - remaining * 1000)))) / 1000)
+      : remaining;
+    const pct = Math.max(0, Math.min(1, remaining / Math.max(totalRest, remaining)));
+    const R = 52;
+    const circumference = 2 * Math.PI * R;
+    const dash = pct * circumference;
+
     return (
-      <div className="surface-soft p-6 text-center sm:p-8">
-        <div className="label-soft lowercase flex items-center justify-center gap-1.5">
-          <Timer size={13} /> rest
-        </div>
-        <div className="metric-numeral my-3 text-[3.4rem] leading-none text-content-primary tabular-nums">
-          {fmtClock(remaining)}
-        </div>
-        <div className="flex justify-center gap-2">
-          <button onClick={() => props.onStartRest(remaining + 15)} className="focus-ring tactile rounded-pill bg-white/[0.06] px-4 py-2 text-[0.85rem] tabular-nums text-content-primary hover:bg-white/[0.12]">
-            +15s
-          </button>
-          <button onClick={() => props.onStartRest(Math.max(1, remaining - 15))} className="focus-ring tactile rounded-pill bg-white/[0.06] px-4 py-2 text-[0.85rem] tabular-nums text-content-primary hover:bg-white/[0.12]">
-            −15s
-          </button>
-          <button onClick={props.onStopRest} className="focus-ring tactile rounded-pill bg-[var(--accent-lime)] px-5 py-2 text-[0.85rem] lowercase text-[#0c0c0c]">
-            ready
-          </button>
+      <div className="surface-soft overflow-hidden">
+        {/* cinematic rest header */}
+        <div className="flex flex-col items-center px-6 pt-10 pb-6 text-center">
+          <div className="label-soft lowercase flex items-center gap-1.5 mb-6">
+            <Timer size={12} /> rest
+          </div>
+
+          {/* circular countdown ring */}
+          <div className="relative mb-4" style={{ width: 140, height: 140 }}>
+            <svg width={140} height={140} style={{ transform: "rotate(-90deg)" }}>
+              {/* track */}
+              <circle cx={70} cy={70} r={R} fill="none" stroke="rgba(255,255,255,0.07)" strokeWidth={6} />
+              {/* progress */}
+              <circle
+                cx={70} cy={70} r={R}
+                fill="none"
+                stroke="var(--accent-lime)"
+                strokeWidth={6}
+                strokeLinecap="round"
+                strokeDasharray={`${dash} ${circumference}`}
+                style={{ transition: "stroke-dasharray 0.25s linear", filter: "drop-shadow(0 0 8px var(--accent-lime))" }}
+              />
+            </svg>
+            <div className="absolute inset-0 flex flex-col items-center justify-center">
+              <div
+                className="metric-numeral tabular-nums leading-none text-content-primary"
+                style={{ fontSize: "clamp(2.6rem, 10vw, 3.4rem)" }}
+              >
+                {fmtClock(remaining)}
+              </div>
+            </div>
+          </div>
+
+          {/* controls */}
+          <div className="flex items-center gap-2 mb-6">
+            <button onClick={() => props.onStartRest(remaining + 15)} className="focus-ring tactile rounded-pill bg-white/[0.06] px-4 py-2 text-[0.85rem] tabular-nums text-content-primary hover:bg-white/[0.12]">
+              +15s
+            </button>
+            <button onClick={props.onStopRest} className="btn-primary px-7 py-3 text-[0.95rem]">
+              ready
+            </button>
+            <button onClick={() => props.onStartRest(Math.max(1, remaining - 15))} className="focus-ring tactile rounded-pill bg-white/[0.06] px-4 py-2 text-[0.85rem] tabular-nums text-content-primary hover:bg-white/[0.12]">
+              -15s
+            </button>
+          </div>
         </div>
 
-        <div className="surface-recessed mt-6 rounded-hero p-4 text-left">
-          <div className="label-instrument">next</div>
-          <div className="mt-1 flex items-center gap-3">
-            <ExerciseThumb src={thumb} alt="" size={40} />
-            <div>
-              <div className="text-[0.95rem] lowercase text-content-primary">{currentEx.name}</div>
+        {/* next up */}
+        <div className="surface-recessed mx-5 mb-5 rounded-hero p-4 text-left">
+          <div className="label-instrument mb-2">next up</div>
+          <div className="flex items-center gap-3">
+            <ExerciseThumb src={thumb} alt="" size={44} />
+            <div className="min-w-0">
+              <div className="truncate text-[0.95rem] lowercase text-content-primary">{currentEx.name}</div>
               <div className="label-instrument mt-0.5 tabular-nums">
                 set {props.workingDone + 1} / {props.workingCount}
                 {activeSet?.weight != null ? ` · ${activeSet.weight} ${units} × ${activeSet.reps ?? "—"}` : ""}
@@ -1140,7 +1197,7 @@ function RestOrFocus(props: {
           </div>
         </div>
 
-        <div className="mt-4 flex items-start gap-2.5 text-left">
+        <div className="mx-5 mb-5 flex items-start gap-2.5">
           <KaiOrb size={26} state="idle" />
           <p className="text-[0.86rem] italic leading-relaxed text-content-secondary">{cueText}</p>
         </div>
@@ -1172,7 +1229,7 @@ function RestOrFocus(props: {
 
       <div className="p-5 sm:p-6">
         <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <div className="label-instrument flex flex-wrap items-center gap-x-2">
               {props.supersetLabel && (
                 <span
@@ -1190,9 +1247,25 @@ function RestOrFocus(props: {
                 {currentEx.substitutedFrom ? ` · swapped from ${currentEx.substitutedFrom}` : ""}
               </span>
             </div>
-            <h2 className="mt-0.5 text-[1.5rem] font-medium lowercase text-content-primary">{currentEx.name}</h2>
-            <div className="label-instrument mt-0.5">
-              set {props.workingDone + 1} / {props.workingCount} · target {currentEx.target}
+            {/* hero: exercise name at display scale */}
+            <h2
+              className="mt-1 font-medium lowercase text-content-primary leading-[1.0]"
+              style={{ fontSize: "clamp(1.7rem, 6vw, 2.6rem)", letterSpacing: "-0.02em" }}
+            >
+              {currentEx.name}
+            </h2>
+            {/* set counter — prominent, accent color */}
+            <div className="mt-2 flex items-baseline gap-2">
+              <span
+                className="font-semibold tabular-nums leading-none"
+                style={{ fontSize: "clamp(2.4rem, 9vw, 3.6rem)", color: "var(--accent-pink)", letterSpacing: "-0.03em" }}
+              >
+                {props.workingDone + 1}
+              </span>
+              <span className="text-[1rem] text-content-tertiary">
+                / {props.workingCount}
+              </span>
+              <span className="label-instrument ml-1">sets · {currentEx.target}</span>
             </div>
           </div>
         </div>
@@ -1289,7 +1362,8 @@ function RestOrFocus(props: {
 
         <button
           onClick={props.onCompleteSet}
-          className="focus-ring tactile mt-3 w-full rounded-hero bg-[var(--accent-lime)] py-4 text-[1rem] font-semibold lowercase text-[#0c0c0c] active:scale-[0.99]"
+          className="focus-ring btn-primary mt-3 w-full rounded-[var(--radius-large)] py-4 text-[1.05rem]"
+          style={{ borderRadius: "var(--radius-large)" }}
         >
           complete set {props.workingDone + 1}
         </button>

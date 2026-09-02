@@ -27,16 +27,24 @@ export function KaiOrb({
   gaze = false,
   label,
   className = "",
+  breathe = true,
 }: {
   size?: number;
   state?: AIState;
   gaze?: boolean;
   label?: string;
   className?: string;
+  breathe?: boolean;
 }) {
+  const animClass = !breathe
+    ? ""
+    : state === "thinking"
+    ? "kai-thinking"
+    : "kai-breathing";
+
   return (
     <span
-      className={`relative inline-grid shrink-0 place-items-center ${className}`}
+      className={`relative inline-grid shrink-0 place-items-center ${animClass} ${className}`}
       style={{ width: size, height: size }}
     >
       <span
