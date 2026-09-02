@@ -85,8 +85,10 @@ function emit() {
 
 /** merge an authoritative server bundle into local state */
 function hydrate(remote: { owned?: string[]; equipped?: Record<string, string>; balance?: number }) {
-  if (remote.owned) state.owned = Array.from(new Set([...remote.owned, ...defaultOwned()]));
-  if (remote.equipped) state.equipped = { ...DEFAULT_EQUIPPED, ...remote.equipped };
+  state = {
+    owned: remote.owned ? Array.from(new Set([...remote.owned, ...defaultOwned()])) : state.owned,
+    equipped: remote.equipped ? { ...DEFAULT_EQUIPPED, ...remote.equipped } : state.equipped,
+  };
   emit();
   if (typeof remote.balance === "number") walletStore.setBalance(remote.balance);
 }
@@ -108,8 +110,10 @@ export const customizationStore = {
   buy(item: CustomizationItem, autoEquip = false): boolean {
     if (state.owned.includes(item.id)) return false;
     if (!walletStore.spend(item.price, item.name, "purchase")) return false;
-    state.owned = [...state.owned, item.id];
-    if (autoEquip) state.equipped = { ...state.equipped, [item.slot]: item.id };
+    state = {
+      owned: [...state.owned, item.id],
+      equipped: autoEquip ? { ...state.equipped, [item.slot]: item.id } : state.equipped,
+    };
     emit();
     if (API_ENABLED) {
       api.customization.buy(item.id)
@@ -126,14 +130,14 @@ export const customizationStore = {
   /** equip an owned item into its slot */
   equip(item: CustomizationItem) {
     if (!state.owned.includes(item.id)) return;
-    state.equipped = { ...state.equipped, [item.slot]: item.id };
+    state = { ...state, equipped: { ...state.equipped, [item.slot]: item.id } };
     emit();
     if (API_ENABLED) api.customization.equip(item.id).then(hydrate).catch(() => customizationStore.refresh());
   },
 
   /** direct slot set (used for the "none" pseudo-items and theme picker) */
   set(slot: Slot, id: string) {
-    state.equipped = { ...state.equipped, [slot]: id };
+    state = { ...state, equipped: { ...state.equipped, [slot]: id } };
     emit();
     if (API_ENABLED) api.customization.setSlot(slot, id).then(hydrate).catch(() => customizationStore.refresh());
   },
