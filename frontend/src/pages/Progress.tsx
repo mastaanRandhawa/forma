@@ -273,7 +273,7 @@ export default function Progress() {
         <MetricCard
           tone="amber"
           label="workouts / month"
-          value={String(workoutsThisMonth(sessions))}
+          countTo={workoutsThisMonth(sessions)}
           unit="sessions"
           className="min-h-[168px]"
           viz={<MiniTrend data={weeklyVol.map((v) => v || 0.01)} mode="pulses" color="var(--accent-amber)" fill height={54} />}
@@ -281,7 +281,8 @@ export default function Progress() {
         <MetricCard
           tone="cyan"
           label="avg weekly volume"
-          value={(avgWeeklyVolume(sessions) / 1000).toFixed(1)}
+          countTo={avgWeeklyVolume(sessions) / 1000}
+          countFormat={(n) => n.toFixed(1)}
           unit={`k ${profile.units}`}
           revealDelay={0.08}
           className="min-h-[168px]"
@@ -290,7 +291,7 @@ export default function Progress() {
         <MetricCard
           tone="mauve"
           label="longest streak"
-          value={String(longestStreak(sessions))}
+          countTo={longestStreak(sessions)}
           unit="days"
           revealDelay={0.16}
           className="min-h-[168px]"

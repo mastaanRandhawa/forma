@@ -10,13 +10,24 @@ import type { PRRow } from "../lib/fitness";
 
 const MUSCLE_GROUPS = ["all", "chest", "back", "shoulders", "arms", "legs", "core"];
 
-function PRCard({ row, sessions, units }: { row: PRRow; sessions: ReturnType<typeof useFormaData>["sessions"]; units: string }) {
+function PRCard({ row, sessions, units, top }: { row: PRRow; sessions: ReturnType<typeof useFormaData>["sessions"]; units: string; top?: boolean }) {
   const series = useMemo(() => strengthSeriesFor(sessions, row.exercise), [sessions, row.exercise]);
   const first = series[0]?.e1rm ?? 0;
   const pctGain = first > 0 ? Math.round(((row.e1rm - first) / first) * 100) : 0;
 
   return (
-    <div className="surface-soft rounded-[var(--radius-large)] p-4">
+    <div
+      className="rounded-[var(--radius-large)] p-4"
+      style={
+        top
+          ? {
+              background:
+                "radial-gradient(ellipse 80% 60% at 85% 40%, rgba(163,230,53,0.13), transparent 65%), var(--surface-soft, rgba(255,255,255,0.04))",
+              boxShadow: "0 0 0 1px rgba(163,230,53,0.22), 0 8px 32px -12px rgba(163,230,53,0.25)",
+            }
+          : { background: "var(--surface-soft, rgba(255,255,255,0.04))" }
+      }
+    >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="truncate text-[0.95rem] lowercase text-content-primary">{row.exercise}</div>
@@ -151,8 +162,8 @@ export default function Records() {
           </div>
 
           <div className="space-y-2">
-            {filtered.map((row) => (
-              <PRCard key={row.exercise} row={row} sessions={sessions} units={units} />
+            {filtered.map((row, i) => (
+              <PRCard key={row.exercise} row={row} sessions={sessions} units={units} top={i === 0} />
             ))}
           </div>
         </>

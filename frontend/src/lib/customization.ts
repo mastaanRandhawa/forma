@@ -104,13 +104,22 @@ export const customizationStore = {
     api.customization.get().then(hydrate).catch(() => {});
   },
 
-  /** buy an item — spends coins, adds to owned, does NOT auto-equip */
-  buy(item: CustomizationItem): boolean {
+  /** buy an item — spends coins, adds to owned; pass autoEquip=true to also equip instantly */
+  buy(item: CustomizationItem, autoEquip = false): boolean {
     if (state.owned.includes(item.id)) return false;
     if (!walletStore.spend(item.price, item.name, "purchase")) return false;
     state.owned = [...state.owned, item.id];
+    if (autoEquip) state.equipped = { ...state.equipped, [item.slot]: item.id };
     emit();
-    if (API_ENABLED) api.customization.buy(item.id).then(hydrate).catch(() => customizationStore.refresh());
+    if (API_ENABLED) {
+      api.customization.buy(item.id)
+        .then((res) => {
+          hydrate(res);
+          // chain equip only after buy succeeds so the server owns the item first
+          if (autoEquip) return api.customization.equip(item.id).then(hydrate);
+        })
+        .catch(() => customizationStore.refresh());
+    }
     return true;
   },
 
@@ -171,7 +180,7 @@ interface CustomizationCtx {
   isOwned: (id: string) => boolean;
   isEquipped: (id: string, slot: Slot) => boolean;
   equippedId: (slot: Slot) => string;
-  buy: (item: CustomizationItem) => boolean;
+  buy: (item: CustomizationItem, autoEquip?: boolean) => boolean;
   equip: (item: CustomizationItem) => void;
   setSlot: (slot: Slot, id: string) => void;
   reset: () => void;

@@ -77,8 +77,7 @@ export default function Store() {
   function onBuy(item: CustomizationItem) {
     if (cz.isOwned(item.id)) return;
     if (wallet.balance < item.price) return;
-    if (cz.buy(item)) {
-      cz.equip(item);
+    if (cz.buy(item, true)) {
       flash(`${item.name} unlocked and equipped`);
     }
   }
