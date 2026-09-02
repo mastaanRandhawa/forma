@@ -144,6 +144,128 @@ export const THEME_EFFECTS: { id: ThemeEffect; label: string }[] = [
 ];
 
 export const THEMES: Theme[] = [
+  // ── light themes ──────────────────────────────────────────────────────────
+  {
+    id: "cloud",
+    name: "Cloud",
+    blurb: "Crisp ivory daylight, pink accent. The light-mode default.",
+    rarity: "free",
+    price: 0,
+    swatch: "linear-gradient(140deg,#F2EDF6,#E8D8F2 55%,#D51A7A)",
+    vars: {
+      "--app-bg": "#F2EDF6",
+      "--background": "#F2EDF6",
+      "--background-deep": "#E8E0EE",
+      "--background-soft": "#FEFBFF",
+      "--surface": "rgba(255,252,255,0.72)",
+      "--surface-glass": "rgba(255,252,255,0.62)",
+      "--surface-raised": "rgba(255,252,255,0.88)",
+      "--surface-recessed": "rgba(18,8,22,0.058)",
+      "--surface-opaque": "#FEFBFF",
+      "--surface-float": "rgba(255,252,255,0.96)",
+      "--text-primary": "rgba(18,8,22,0.92)",
+      "--text-secondary": "rgba(18,8,22,0.60)",
+      "--text-tertiary": "rgba(18,8,22,0.40)",
+      "--accent": "#D51A7A",
+      "--accent-pink": "#D51A7A",
+      "--accent-purple": "#7A174F",
+      "--accent-mauve": "#8A5090",
+      "--accent-blue": "#2860E0",
+      "--accent-cyan": "#0EA8C0",
+      "--accent-coral": "#D51A7A",
+      "--accent-orange": "#E07038",
+      "--accent-amber": "#C07800",
+      "--accent-lime": "#5CA018",
+      "--accent-jade": "#1EA870",
+      "--line-soft": "rgba(18,8,22,0.10)",
+      "--line-highlight": "rgba(18,8,22,0.22)",
+      "--specular": "rgba(18,8,22,0.07)",
+      "--glass-tint-rgb": "240, 234, 246",
+      "--glass-blur": "22px",
+      "--glass-opacity": "0.56",
+      "--radius-small": "18px",
+      "--radius-medium": "24px",
+      "--radius-large": "32px",
+      "--radius-xl": "40px",
+      "--radius-shell": "48px",
+      "--fill-coral": "linear-gradient(150deg,#FF7E58 0%,#E64A2B 100%)",
+      "--fill-on-color": "rgba(255,250,248,0.96)",
+      "--atmosphere-bg": [
+        "radial-gradient(120% 90% at 50% -14%, rgba(213,26,122,0.11), transparent 62%)",
+        "radial-gradient(90% 70% at 8% 2%, rgba(255,156,99,0.07), transparent 55%)",
+        "radial-gradient(90% 78% at 88% 98%, rgba(213,26,122,0.07), transparent 58%)",
+        "linear-gradient(168deg, rgba(242,237,246,0.95) 0%, rgba(232,224,240,0.90) 100%)",
+      ].join(","),
+      "--aurora-1": "rgba(213,26,122,0.10)",
+      "--aurora-2": "rgba(122,23,79,0.07)",
+      "--aurora-3": "rgba(179,101,150,0.07)",
+      "--grain-opacity": "0.012",
+      "--btn-white": "#F8F2FC",
+      "--btn-white-ink": "#180A1E",
+      "--inner-hi": "rgba(255,255,255,0.65)",
+    },
+  },
+  {
+    id: "dusk",
+    name: "Warm Dusk",
+    blurb: "Golden hour — amber and rose on cream, always inviting.",
+    rarity: "rare",
+    price: 380,
+    swatch: "linear-gradient(140deg,#F7EFE2,#E8C490 55%,#E06040)",
+    vars: {
+      "--app-bg": "#F7F0E4",
+      "--background": "#F7F0E4",
+      "--background-deep": "#EDE4D2",
+      "--background-soft": "#FFFDF5",
+      "--surface": "rgba(255,253,248,0.72)",
+      "--surface-glass": "rgba(255,253,248,0.60)",
+      "--surface-raised": "rgba(255,253,248,0.88)",
+      "--surface-recessed": "rgba(26,14,4,0.058)",
+      "--surface-opaque": "#FFFDF5",
+      "--surface-float": "rgba(255,253,248,0.96)",
+      "--text-primary": "rgba(26,14,4,0.92)",
+      "--text-secondary": "rgba(26,14,4,0.60)",
+      "--text-tertiary": "rgba(26,14,4,0.40)",
+      "--accent": "#E05A28",
+      "--accent-pink": "#E05A28",
+      "--accent-purple": "#B03818",
+      "--accent-mauve": "#7A4050",
+      "--accent-blue": "#1E6090",
+      "--accent-cyan": "#1E7A6A",
+      "--accent-coral": "#E05A28",
+      "--accent-orange": "#D07020",
+      "--accent-amber": "#C06800",
+      "--accent-lime": "#4A8A18",
+      "--accent-jade": "#1A8060",
+      "--line-soft": "rgba(26,14,4,0.10)",
+      "--line-highlight": "rgba(26,14,4,0.22)",
+      "--specular": "rgba(26,14,4,0.07)",
+      "--glass-tint-rgb": "247, 240, 228",
+      "--glass-blur": "20px",
+      "--glass-opacity": "0.58",
+      "--radius-small": "22px",
+      "--radius-medium": "30px",
+      "--radius-large": "40px",
+      "--radius-xl": "48px",
+      "--radius-shell": "56px",
+      "--fill-coral": "linear-gradient(150deg,#E07840 0%,#B03818 100%)",
+      "--fill-on-color": "rgba(255,250,248,0.96)",
+      "--atmosphere-bg": [
+        "radial-gradient(120% 90% at 50% -14%, rgba(224,90,40,0.11), transparent 62%)",
+        "radial-gradient(90% 70% at 8% 2%, rgba(240,188,80,0.10), transparent 55%)",
+        "radial-gradient(90% 78% at 86% 98%, rgba(200,100,40,0.08), transparent 58%)",
+        "linear-gradient(168deg, rgba(247,240,228,0.95) 0%, rgba(237,228,210,0.90) 100%)",
+      ].join(","),
+      "--aurora-1": "rgba(224,90,40,0.10)",
+      "--aurora-2": "rgba(200,140,60,0.08)",
+      "--aurora-3": "rgba(180,90,40,0.07)",
+      "--grain-opacity": "0.012",
+      "--btn-white": "#F8F2E8",
+      "--btn-white-ink": "#1A0E04",
+      "--inner-hi": "rgba(255,255,248,0.65)",
+    },
+  },
+  // ── dark themes ───────────────────────────────────────────────────────────
   {
     id: "aurora-plum",
     name: "Aurora Plum",
@@ -458,13 +580,112 @@ export function applyTheme(themeId: string, opts: { effect?: ThemeEffect; accent
 
 // ── accent packs (cheap, universal recolour of the primary accent) ──────────
 export const ACCENTS: { id: string; name: string; color: string; price: number }[] = [
-  { id: "ac-brand", name: "Signature", color: "#D51A7A", price: 0 },
-  { id: "ac-ember", name: "Ember", color: "#FF6B4A", price: 90 },
-  { id: "ac-cyan", name: "Ion", color: "#4CC6E0", price: 90 },
-  { id: "ac-lime", name: "Volt", color: "#B8E637", price: 120 },
-  { id: "ac-violet", name: "Ultraviolet", color: "#9C7BFF", price: 120 },
-  { id: "ac-gold", name: "Gilded", color: "#F5C63C", price: 200 },
-  { id: "ac-mint", name: "Mint", color: "#4FD6A6", price: 120 },
-  { id: "ac-blood", name: "Redline", color: "#FF3B47", price: 160 },
+  { id: "ac-brand",   name: "Signature",   color: "#D51A7A", price: 0   },
+  { id: "ac-ember",   name: "Ember",        color: "#FF6B4A", price: 90  },
+  { id: "ac-cyan",    name: "Ion",          color: "#4CC6E0", price: 90  },
+  { id: "ac-lime",    name: "Volt",         color: "#B8E637", price: 120 },
+  { id: "ac-violet",  name: "Ultraviolet",  color: "#9C7BFF", price: 120 },
+  { id: "ac-gold",    name: "Gilded",       color: "#F5C63C", price: 200 },
+  { id: "ac-mint",    name: "Mint",         color: "#4FD6A6", price: 120 },
+  { id: "ac-blood",   name: "Redline",      color: "#FF3B47", price: 160 },
+  // ── new accents ──────────────────────────────────────────────────────────
+  { id: "ac-rose",    name: "Crimson",      color: "#E8294A", price: 110 },
+  { id: "ac-teal",    name: "Teal",         color: "#2CB4B4", price: 110 },
+  { id: "ac-peach",   name: "Peach",        color: "#FF9472", price: 100 },
+  { id: "ac-indigo",  name: "Midnight",     color: "#5A6BFF", price: 150 },
+  { id: "ac-forest",  name: "Forest",       color: "#3DAA6A", price: 130 },
+  { id: "ac-amber",   name: "Amber",        color: "#F5A623", price: 130 },
 ];
 export const ACCENT_MAP = Object.fromEntries(ACCENTS.map((a) => [a.id, a]));
+
+// ── light-mode overlay ────────────────────────────────────────────────────
+/**
+ * Vars written on top of ANY dark theme when color mode is "light".
+ * They override bg / surface / text / atmosphere, keeping all accents from the
+ * equipped theme so the user's palette choice still reads through.
+ */
+export const LIGHT_MODE_VARS: Record<string, string> = {
+  "--app-bg":             "#F2EDF6",
+  "--background":         "#F2EDF6",
+  "--background-deep":    "#E8E0EE",
+  "--background-soft":    "#FEFBFF",
+  "--surface":            "rgba(255,252,255,0.72)",
+  "--surface-glass":      "rgba(255,252,255,0.62)",
+  "--surface-raised":     "rgba(255,252,255,0.88)",
+  "--surface-recessed":   "rgba(18,8,22,0.058)",
+  "--surface-opaque":     "#FEFBFF",
+  "--surface-float":      "rgba(255,252,255,0.96)",
+  "--text-primary":       "rgba(18,8,22,0.92)",
+  "--text-secondary":     "rgba(18,8,22,0.60)",
+  "--text-tertiary":      "rgba(18,8,22,0.40)",
+  "--line-soft":          "rgba(18,8,22,0.10)",
+  "--line-highlight":     "rgba(18,8,22,0.22)",
+  "--specular":           "rgba(18,8,22,0.07)",
+  "--inner-hi":           "rgba(255,255,255,0.65)",
+  "--glass-tint-rgb":     "240, 234, 246",
+  "--glass-blur":         "22px",
+  "--glass-opacity":      "0.56",
+  "--btn-white":          "#F8F2FC",
+  "--btn-white-ink":      "#180A1E",
+  "--atmosphere-bg": [
+    "radial-gradient(120% 90% at 50% -14%, rgba(213,26,122,0.11), transparent 62%)",
+    "radial-gradient(90% 70% at 8% 2%, rgba(255,156,99,0.07), transparent 55%)",
+    "radial-gradient(90% 78% at 88% 98%, rgba(213,26,122,0.07), transparent 58%)",
+    "linear-gradient(168deg, rgba(242,237,246,0.95) 0%, rgba(232,224,240,0.90) 100%)",
+  ].join(","),
+};
+
+/**
+ * Apply or peel back light-mode overrides.
+ * Always call AFTER applyTheme() — the theme sets base dark vars, then we
+ * overlay the light palette. On dark mode, themeVars re-instates the dark
+ * values for any key we might have previously overwritten with light values.
+ */
+export function applyColorModeOverrides(
+  isLight: boolean,
+  themeVars: Record<string, string>,
+): void {
+  if (typeof document === "undefined") return;
+  const root = document.documentElement;
+  if (isLight) {
+    for (const [k, v] of Object.entries(LIGHT_MODE_VARS)) root.style.setProperty(k, v);
+    root.dataset.colorMode = "light";
+  } else {
+    for (const k of Object.keys(LIGHT_MODE_VARS)) {
+      const v = themeVars[k];
+      if (v !== undefined) root.style.setProperty(k, v);
+      else root.style.removeProperty(k);
+    }
+    delete root.dataset.colorMode;
+  }
+}
+
+// ── font pack ─────────────────────────────────────────────────────────────
+
+const FONT_STACKS: Record<string, string> = {
+  "fn-system":  "",
+  "fn-mono":    "ui-monospace, 'Cascadia Code', 'SF Mono', Menlo, monospace",
+  "fn-rounded": "'Nunito', system-ui, sans-serif",
+  "fn-serif":   "'DM Serif Display', Georgia, serif",
+};
+
+const FONT_URLS: Record<string, string> = {
+  "fn-rounded": "https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700&display=swap",
+  "fn-serif":   "https://fonts.googleapis.com/css2?family=DM+Serif+Display&display=swap",
+};
+
+export function applyFont(fontId: string): void {
+  if (typeof document === "undefined") return;
+  const url = FONT_URLS[fontId];
+  if (url) {
+    const linkId = `forma-font-${fontId}`;
+    if (!document.getElementById(linkId)) {
+      const link = document.createElement("link");
+      link.rel = "stylesheet";
+      link.href = url;
+      link.id = linkId;
+      document.head.appendChild(link);
+    }
+  }
+  document.body.style.fontFamily = FONT_STACKS[fontId] ?? "";
+}

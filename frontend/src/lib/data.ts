@@ -311,7 +311,8 @@ export const storeItems: StoreItem[] = [
  * items are owned from the start.                                          */
 
 export type CustomizationSlot =
-  | "theme" | "accent" | "effect" | "avatar" | "chatTheme" | "frame" | "title" | "badge";
+  | "theme" | "accent" | "effect" | "avatar" | "chatTheme" | "frame" | "title" | "badge"
+  | "colorMode" | "font";
 
 export type CustomizationRarity = "common" | "rare" | "epic" | "legendary";
 
@@ -319,7 +320,7 @@ export type CustomizationItem = {
   id: string;
   slot: CustomizationSlot;
   /** tab grouping on the store */
-  group: "Themes" | "Accents" | "Effects" | "Kai" | "Chat" | "Profile";
+  group: "Themes" | "Accents" | "Effects" | "Kai" | "Chat" | "Profile" | "Appearance" | "Font";
   name: string;
   detail: string;
   price: number;
@@ -410,6 +411,82 @@ const profileItems: CustomizationItem[] = [
   { id: "bd-diamond", slot: "badge", group: "Profile", name: "Diamond badge", detail: "a cut-gem mark by your name", price: 500, rarity: "epic", glyph: "Gem" },
 ];
 
+const colorModeItems: CustomizationItem[] = [
+  {
+    id: "cm-system",
+    slot: "colorMode",
+    group: "Appearance",
+    name: "Follow system",
+    detail: "matches your OS light/dark preference automatically",
+    price: 0,
+    rarity: "common",
+    glyph: "Monitor",
+  },
+  {
+    id: "cm-dark",
+    slot: "colorMode",
+    group: "Appearance",
+    name: "Always dark",
+    detail: "full dark mode regardless of OS setting",
+    price: 0,
+    rarity: "common",
+    glyph: "Moon",
+  },
+  {
+    id: "cm-light",
+    slot: "colorMode",
+    group: "Appearance",
+    name: "Always light",
+    detail: "bright surface mode — pairs with Cloud or Warm Dusk themes",
+    price: 0,
+    rarity: "common",
+    glyph: "Sun",
+  },
+];
+
+const fontItems: CustomizationItem[] = [
+  {
+    id: "fn-system",
+    slot: "font",
+    group: "Font",
+    name: "System default",
+    detail: "the OS system sans-serif, clean and familiar",
+    price: 0,
+    rarity: "common",
+    glyph: "Type",
+  },
+  {
+    id: "fn-mono",
+    slot: "font",
+    group: "Font",
+    name: "Monospace",
+    detail: "all UI text in monospace — terminal energy",
+    price: 80,
+    rarity: "rare",
+    glyph: "Terminal",
+  },
+  {
+    id: "fn-rounded",
+    slot: "font",
+    group: "Font",
+    name: "Rounded",
+    detail: "Nunito — soft rounded letterforms, warm and approachable",
+    price: 120,
+    rarity: "rare",
+    glyph: "Circle",
+  },
+  {
+    id: "fn-serif",
+    slot: "font",
+    group: "Font",
+    name: "Serif",
+    detail: "DM Serif Display — editorial, bold, confident headings",
+    price: 140,
+    rarity: "rare",
+    glyph: "BookOpen",
+  },
+];
+
 export const customizationItems: CustomizationItem[] = [
   ...themeItems,
   ...accentItems,
@@ -417,6 +494,8 @@ export const customizationItems: CustomizationItem[] = [
   ...avatarItems,
   ...chatItems,
   ...profileItems,
+  ...colorModeItems,
+  ...fontItems,
 ];
 
 export type GoalTone = "pink" | "cyan" | "lime" | "amber" | "mauve" | "violet";

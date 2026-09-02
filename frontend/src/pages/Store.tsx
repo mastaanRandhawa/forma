@@ -4,8 +4,8 @@ import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import {
   Coins, Check, Lock, Sparkles, Palette, Droplet, Wand2, MessageSquare, UserRound,
   Flame, Target, Trophy, CalendarDays, Dumbbell, Sunrise, Medal,
-  Minus, Sun, Waves, Grip, Monitor, Circle, CircleDot, Award, Aperture, Crown,
-  Zap, Cpu, Sparkle, Star, Gem,
+  Minus, Sun, Moon, Waves, Grip, Monitor, Circle, CircleDot, Award, Aperture, Crown,
+  Zap, Cpu, Sparkle, Star, Gem, Type, Terminal, BookOpen, Layers,
 } from "lucide-react";
 import { PageHeader } from "../components/PageHeader";
 import { Reveal } from "../components/Reveal";
@@ -15,15 +15,16 @@ import { useWallet } from "../lib/wallet";
 import { useCustomization } from "../lib/customization";
 import { EARN_WAYS, useChallenges, challengeStore, type EarnWay } from "../lib/rewards";
 
-const TABS = ["all", "themes", "accents", "effects", "kai", "chat", "profile"] as const;
+const TABS = ["all", "themes", "accents", "effects", "kai", "chat", "profile", "appearance", "font"] as const;
 const TAB_GROUP: Record<string, CustomizationItem["group"] | null> = {
   all: null, themes: "Themes", accents: "Accents", effects: "Effects",
-  kai: "Kai", chat: "Chat", profile: "Profile",
+  kai: "Kai", chat: "Chat", profile: "Profile", appearance: "Appearance", font: "Font",
 };
 
 const GLYPHS: Record<string, LucideIcon> = {
-  Wand2, Minus, Sun, Sparkles, Waves, Grip, Monitor, Circle, CircleDot, Award,
+  Wand2, Minus, Sun, Moon, Sparkles, Waves, Grip, Monitor, Circle, CircleDot, Award,
   Aperture, Crown, Sunrise, Dumbbell, Zap, Cpu, Trophy, Sparkle, Star, Gem, Palette,
+  Type, Terminal, BookOpen,
 };
 const EARN_ICONS: Record<EarnWay["icon"], LucideIcon> = {
   dumbbell: Dumbbell, flame: Flame, target: Target, trophy: Trophy, calendar: CalendarDays,
@@ -39,6 +40,7 @@ const RARITY: Record<CustomizationRarity, { label: string; ring: string; text: s
 
 const GROUP_ICON: Record<CustomizationItem["group"], LucideIcon> = {
   Themes: Palette, Accents: Droplet, Effects: Wand2, Kai: UserRound, Chat: MessageSquare, Profile: Star,
+  Appearance: Layers, Font: Type,
 };
 
 const EASE = [0.22, 1, 0.36, 1] as const;

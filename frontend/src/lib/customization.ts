@@ -10,6 +10,8 @@ import {
 import { walletStore, useWalletBalance } from "./wallet";
 import {
   ACCENT_MAP,
+  applyColorModeOverrides,
+  applyFont,
   applyTheme,
   DEFAULT_THEME_ID,
   THEME_MAP,
@@ -44,6 +46,8 @@ const DEFAULT_EQUIPPED: Record<Slot, string> = {
   frame: "fr-none",
   title: "ti-none",
   badge: "bd-none",
+  colorMode: "cm-system",
+  font: "fn-system",
 };
 
 type State = {
@@ -187,6 +191,8 @@ interface CustomizationCtx {
   buy: (item: CustomizationItem, autoEquip?: boolean) => boolean;
   equip: (item: CustomizationItem) => void;
   setSlot: (slot: Slot, id: string) => void;
+  /** shortcut for setSlot("colorMode", id) */
+  setColorMode: (id: "cm-system" | "cm-light" | "cm-dark") => void;
   reset: () => void;
 }
 const Ctx = createContext<CustomizationCtx | null>(null);
@@ -214,18 +220,47 @@ export function CustomizationProvider({
     customizationStore.refresh();
   }, [authKey]);
 
-  // apply the live theme whenever the equipped set changes
+  // apply theme + color mode + font whenever equipped set changes
   useEffect(() => {
     const themeId = snap.equipped.theme;
     const accent = ACCENT_MAP[snap.equipped.accent];
-    const effect = reduceMotion
-      ? "none"
-      : resolveEffect(themeId, snap.equipped.effect);
+    const effect = reduceMotion ? "none" : resolveEffect(themeId, snap.equipped.effect);
+    const colorMode = snap.equipped.colorMode ?? "cm-system";
+    const fontId = snap.equipped.font ?? "fn-system";
+
     applyTheme(themeId, {
       effect,
       accentOverride: accent && accent.price >= 0 && accent.id !== "ac-brand" ? accent.color : null,
     });
-  }, [snap.equipped.theme, snap.equipped.accent, snap.equipped.effect, reduceMotion]);
+
+    const theme = THEME_MAP[themeId] ?? THEME_MAP[DEFAULT_THEME_ID];
+    const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+    const isLight = colorMode === "cm-light" || (colorMode === "cm-system" && !prefersDark);
+    applyColorModeOverrides(isLight, theme.vars);
+
+    applyFont(fontId);
+  }, [
+    snap.equipped.theme,
+    snap.equipped.accent,
+    snap.equipped.effect,
+    snap.equipped.colorMode,
+    snap.equipped.font,
+    reduceMotion,
+  ]);
+
+  // when color mode is "system", re-apply whenever the OS preference flips
+  useEffect(() => {
+    const colorMode = snap.equipped.colorMode ?? "cm-system";
+    if (colorMode !== "cm-system") return;
+    const mq = window.matchMedia("(prefers-color-scheme: dark)");
+    const handler = () => {
+      const themeId = snap.equipped.theme;
+      const theme = THEME_MAP[themeId] ?? THEME_MAP[DEFAULT_THEME_ID];
+      applyColorModeOverrides(!mq.matches, theme.vars);
+    };
+    mq.addEventListener("change", handler);
+    return () => mq.removeEventListener("change", handler);
+  }, [snap.equipped.colorMode, snap.equipped.theme]);
 
   const value = useMemo<CustomizationCtx>(
     () => ({
@@ -238,6 +273,8 @@ export function CustomizationProvider({
       buy: customizationStore.buy,
       equip: customizationStore.equip,
       setSlot: customizationStore.set,
+      setColorMode: (id: "cm-system" | "cm-light" | "cm-dark") =>
+        customizationStore.set("colorMode", id),
       reset: customizationStore.reset,
     }),
     [snap, balance],
