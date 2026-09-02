@@ -570,7 +570,25 @@ function AttributionNote() {
       >
         USDA FoodData Central
       </a>
-      .
+      , with{" "}
+      <a
+        href="https://www.nutritionix.com"
+        target="_blank"
+        rel="noreferrer"
+        className="focus-ring underline hover:text-content-secondary"
+      >
+        Nutritionix
+      </a>{" "}
+      and{" "}
+      <a
+        href="https://www.edamam.com"
+        target="_blank"
+        rel="noreferrer"
+        className="focus-ring underline hover:text-content-secondary"
+      >
+        Edamam
+      </a>{" "}
+      as fallbacks.
     </p>
   );
 }
