@@ -1,9 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import {
   Check,
   ChevronLeft,
+  Circle,
+  Clock,
   Coins,
   Minus,
   Pause,
@@ -14,6 +16,7 @@ import {
   Timer,
   Trophy,
   X,
+  Zap,
 } from "lucide-react";
 import { Reveal } from "../components/Reveal";
 import { EmptyState } from "../components/EmptyState";
@@ -37,7 +40,7 @@ import {
   type LoggedSet,
 } from "../lib/localStore";
 import { saveSessionAsTemplate } from "../lib/templates";
-import { detectPRs, lastPerformance, lastTopSet, sessionVolume } from "../lib/fitness";
+import { detectPRs, epley1RM, lastPerformance, lastTopSet, sessionVolume } from "../lib/fitness";
 import {
   activeSetIndex,
   addWarmupSet,
@@ -65,8 +68,10 @@ import { walletStore } from "../lib/wallet";
 import { streakData } from "../lib/data";
 import { ALL_TEMPLATES } from "../lib/program";
 import type { RepDbCatalogEntry } from "../lib/repdb";
-import { repdbThumb } from "../lib/repdb";
+import { repdbThumb, repdbImage } from "../lib/repdb";
+import { plateCombo, plateLabel } from "../lib/plates";
 import { API_ENABLED } from "../api/hooks";
+import { api } from "../api/client";
 import {
   abandonApiSession,
   finishApiSession,
@@ -79,6 +84,13 @@ import {
 const EASE = [0.22, 1, 0.36, 1] as const;
 const REST_PRESETS = [60, 90, 120, 180];
 const DEFAULT_REST = 90;
+const COMPOUND_REST = 120;
+const ISOLATION_REST = 75;
+
+function adaptiveRest(mechanic: string | null | undefined, lastRpe: number | null | undefined): number {
+  const base = mechanic === "compound" ? COMPOUND_REST : ISOLATION_REST;
+  return (lastRpe ?? 0) >= 9 ? base + 30 : base;
+}
 
 const EXERCISE_POOL = [
   ...new Set(ALL_TEMPLATES.flatMap((t) => t.exercises.map((e) => e.name))),
@@ -195,6 +207,7 @@ export default function ActiveWorkout() {
     coins: number;
     muscles: string[];
     vsLast: { volume: number; duration: number } | null;
+    proteinNudge: { eaten: number; target: number } | null;
   }>(null);
 
   const elapsed = useElapsed(session);
@@ -419,7 +432,9 @@ export default function ActiveWorkout() {
       updateActive((s) => focusExercise(s, step.targetIndex));
       const peerName = fresh.exercises[step.targetIndex]?.name;
       if (step.rest) {
-        const restSec = catEntry?.mechanic === "compound" ? 120 : DEFAULT_REST;
+        const doneWrk = freshEx.sets.filter((s) => s.done && !s.warmup);
+        const lastRpe = doneWrk[doneWrk.length - 1]?.rpe;
+        const restSec = adaptiveRest(catEntry?.mechanic, lastRpe);
         startRest(restSec);
         setCue({ event: "rest", ctx: { restSeconds: restSec } });
       } else {
@@ -447,7 +462,9 @@ export default function ActiveWorkout() {
       }
     } else {
       const setsLeft = freshEx.sets.filter((s) => !s.done).length;
-      const restSec = catEntry?.mechanic === "compound" ? 120 : DEFAULT_REST;
+      const doneWrk2 = freshEx.sets.filter((s) => s.done && !s.warmup);
+      const lastRpe2 = doneWrk2[doneWrk2.length - 1]?.rpe;
+      const restSec = adaptiveRest(catEntry?.mechanic, lastRpe2);
       startRest(restSec);
       setCue({ event: "rest", ctx: { restSeconds: restSec, setsLeftInExercise: setsLeft } });
     }
@@ -510,6 +527,16 @@ export default function ActiveWorkout() {
       /* offline / no catalog */
     }
 
+    let proteinNudge: { eaten: number; target: number } | null = null;
+    if (API_ENABLED && data.nutritionTargets?.protein) {
+      try {
+        const foodDay = await api.food.day();
+        const eaten = Math.round(foodDay.totals?.protein ?? 0);
+        const target = data.nutritionTargets.protein;
+        if (eaten < target * 0.85) proteinNudge = { eaten, target };
+      } catch { /* offline — skip nudge */ }
+    }
+
     setSummary({
       durationSec,
       volume,
@@ -520,6 +547,7 @@ export default function ActiveWorkout() {
       coins,
       muscles,
       vsLast,
+      proteinNudge,
     });
     setFinishing(false);
   };
@@ -693,18 +721,25 @@ export default function ActiveWorkout() {
         <div className="mt-4">
           <div className="label-soft mb-2 lowercase">sets</div>
           <div className="space-y-1.5">
-            {currentEx.sets.map((s, si) => (
+            {currentEx.sets.map((s, si) => {
+              const workingIdx = currentEx.sets.slice(0, si + 1).filter((x) => !x.warmup).length - 1;
+              const prevSet = !s.warmup && last?.sets[workingIdx] ? last.sets[workingIdx] : null;
+              return (
               <div
                 key={si}
-                className={`flex items-center gap-3 rounded-[var(--radius-medium)] px-3 py-2 text-[0.88rem] ${
+                className={`rounded-[var(--radius-medium)] px-3 py-2 text-[0.88rem] ${
                   si === activeIdx && !s.done ? "surface-recessed" : ""
                 }`}
               >
+                <div className="flex items-center gap-3">
                 <span className="w-10 shrink-0 label-instrument">
                   {s.warmup ? "w/u" : `#${currentEx.sets.slice(0, si + 1).filter((x) => !x.warmup).length}`}
                 </span>
                 <span className="flex-1 tabular-nums text-content-secondary">
-                  {s.weight != null ? `${s.weight} ${units}` : "—"} × {s.reps ?? "—"}
+                  {s.weight != null ? `${s.weight} ${units}` : "—"} ×{" "}
+                  {s.isAmrap ? (
+                    <span className="rounded-sm px-1 text-[0.72rem] font-semibold uppercase tracking-wider" style={{ background: "rgba(var(--accent-amber-rgb,250,170,58),0.18)", color: "var(--accent-amber)" }}>amrap</span>
+                  ) : (s.reps ?? "—")}
                   {s.rpe != null ? ` @ ${s.rpe}` : ""}
                 </span>
                 <button
@@ -725,8 +760,15 @@ export default function ActiveWorkout() {
                 >
                   <X size={13} strokeWidth={2} />
                 </button>
+                </div>
+                {prevSet && !s.done && (
+                  <div className="ml-10 mt-0.5 label-instrument" style={{ color: "var(--content-tertiary)" }}>
+                    last time: {prevSet.weight} {units} × {prevSet.reps}
+                  </div>
+                )}
               </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
@@ -906,8 +948,22 @@ export default function ActiveWorkout() {
                 </p>
               )}
 
+              {summary.proteinNudge && (
+                <div className="mt-3 flex items-start gap-2 rounded-2xl p-3.5 text-[0.84rem] text-content-secondary"
+                  style={{ border: "1px solid rgba(245,158,11,0.3)", background: "rgba(245,158,11,0.08)" }}>
+                  <Zap size={14} className="mt-0.5 shrink-0" style={{ color: "var(--accent-amber)" }} />
+                  <span>
+                    protein today:{" "}
+                    <span className="font-medium text-content-primary">{summary.proteinNudge.eaten}g</span>
+                    {" of "}
+                    <span className="font-medium text-content-primary">{summary.proteinNudge.target}g</span>
+                    {" - log a meal to hit your goal."}
+                  </span>
+                </div>
+              )}
+
               <p className="mt-4 flex items-start gap-2 text-[0.9rem] italic leading-relaxed text-content-secondary">
-                <span aria-hidden>“</span>
+                <span aria-hidden>"</span>
                 {trainerCue("finish")}
               </p>
 
@@ -945,7 +1001,9 @@ export default function ActiveWorkout() {
                     disabled={savedAsTemplate}
                     className="focus-ring surface-recessed flex-1 rounded-pill py-2.5 text-[0.82rem] lowercase text-content-secondary hover:text-content-primary disabled:opacity-50"
                   >
-                    {savedAsTemplate ? "saved ✓" : "save as template"}
+                    {savedAsTemplate ? (
+                      <span className="flex items-center justify-center gap-1.5"><Check size={12} strokeWidth={2.5} /> saved</span>
+                    ) : "save as template"}
                   </button>
                 </div>
               </div>
@@ -1013,7 +1071,18 @@ function RestOrFocus(props: {
 }) {
   const { session, currentEx, catEntry, units, activeSet, cueText } = props;
   const [now, setNow] = useState(() => Date.now());
+  const [imgFrame, setImgFrame] = useState(0);
   const restEndsAt = session.restEndsAt;
+
+  // Animate between start/end RepDB frames when resting or viewing the card
+  const imgStart = catEntry?.imgStart ? repdbImage(catEntry.imgStart) : null;
+  const imgEnd = catEntry?.imgEnd ? repdbImage(catEntry.imgEnd) : null;
+  const hasAnim = !!(imgStart && imgEnd);
+  useEffect(() => {
+    if (!hasAnim) return;
+    const id = setInterval(() => setImgFrame((f) => (f === 0 ? 1 : 0)), 800);
+    return () => clearInterval(id);
+  }, [hasAnim]);
 
   useEffect(() => {
     if (!restEndsAt) return;
@@ -1033,6 +1102,7 @@ function RestOrFocus(props: {
   if (!currentEx) return null;
 
   const thumb = repdbThumb(currentEx.name);
+  const animSrc = hasAnim ? (imgFrame === 0 ? imgStart! : imgEnd!) : thumb;
 
   // ── REST STATE ──────────────────────────────────────────────────────────
   if (restEndsAt && remaining > 0) {
@@ -1082,9 +1152,15 @@ function RestOrFocus(props: {
   const isBodyweight = catEntry?.bodyweight ?? false;
   return (
     <div className="surface-soft overflow-hidden">
-      {thumb && (
+      {animSrc && (
         <div className="relative aspect-[16/10] w-full bg-[#150c12]">
-          <img src={thumb} alt={currentEx.name} className="h-full w-full object-cover opacity-90" loading="eager" />
+          <img
+            key={animSrc}
+            src={animSrc}
+            alt={currentEx.name}
+            className="h-full w-full object-cover opacity-90 transition-opacity duration-300"
+            loading="eager"
+          />
           <button
             onClick={props.onHowto}
             className="focus-ring absolute bottom-3 right-3 rounded-pill bg-[rgba(12,6,10,0.7)] px-3 py-1.5 text-[0.76rem] lowercase text-content-primary backdrop-blur-sm hover:bg-[rgba(12,6,10,0.85)]"
@@ -1152,6 +1228,18 @@ function RestOrFocus(props: {
               {currentEx.prescription?.note ? (
                 <span className="label-instrument block">{currentEx.prescription.note}</span>
               ) : null}
+              {(() => {
+                if (props.rxWeight == null || !props.last?.sets.length) return null;
+                const bestE1rm = Math.max(...props.last.sets.map((s) => epley1RM(s.weight, s.reps)));
+                if (bestE1rm <= 0) return null;
+                const pct = Math.round((props.rxWeight / bestE1rm) * 100);
+                if (pct < 40 || pct > 115) return null;
+                return (
+                  <span className="label-instrument block" style={{ color: "var(--accent-mauve)" }}>
+                    {pct}% of est. 1RM
+                  </span>
+                );
+              })()}
             </div>
           </div>
         </div>
@@ -1181,6 +1269,24 @@ function RestOrFocus(props: {
           />
         </div>
 
+        {/* plate calculator — shown when a weight is set and exercise uses a barbell */}
+        {activeSet?.weight != null && !isBodyweight && (() => {
+          const barKg = units === "kg" ? 20 : 45;
+          const result = plateCombo(activeSet.weight, barKg, units as "kg" | "lb");
+          if (!result.perSide.length) return null;
+          return (
+            <div className="mt-2 flex items-center gap-2 rounded-hero px-3 py-2" style={{ background: "rgba(255,255,255,0.04)" }}>
+              <span className="label-instrument shrink-0">plates/side</span>
+              <span className="flex-1 tabular-nums text-[0.82rem] text-content-secondary">{plateLabel(result.perSide)}</span>
+              {result.loaded !== activeSet.weight && (
+                <span className="label-instrument shrink-0 tabular-nums" style={{ color: "var(--accent-amber)" }}>
+                  {result.loaded} {units}
+                </span>
+              )}
+            </div>
+          );
+        })()}
+
         <button
           onClick={props.onCompleteSet}
           className="focus-ring tactile mt-3 w-full rounded-hero bg-[var(--accent-lime)] py-4 text-[1rem] font-semibold lowercase text-[#0c0c0c] active:scale-[0.99]"
@@ -1197,6 +1303,12 @@ function RestOrFocus(props: {
           </button>
           <button onClick={props.onToggleWarmup} className="focus-ring hover:text-content-secondary">
             {activeSet?.warmup ? "unmark warmup" : "this is a warmup"}
+          </button>
+          <button
+            onClick={() => props.onPatchActiveSet((s) => ({ ...s, isAmrap: !s.isAmrap, reps: s.isAmrap ? s.reps : null }))}
+            className={`focus-ring hover:text-content-secondary ${activeSet?.isAmrap ? "text-[var(--accent-amber)]" : ""}`}
+          >
+            {activeSet?.isAmrap ? "unmark amrap" : "amrap set"}
           </button>
           <button onClick={props.onDeferBusy} className="focus-ring hover:text-content-secondary">
             <SkipForward size={11} className="mr-1 inline" />
@@ -1240,12 +1352,12 @@ function OverviewBody({
   onAddExercise: (name: string) => void;
 }) {
   const [adding, setAdding] = useState(false);
-  const glyph: Record<string, string> = {
-    done: "✓",
-    active: "●",
-    deferred: "⏳",
-    skipped: "○",
-    pending: "○",
+  const phaseIcon: Record<string, React.ReactNode> = {
+    done:     <Check  size={13} strokeWidth={2.5} />,
+    active:   <Play   size={11} strokeWidth={2.5} />,
+    deferred: <Clock  size={12} strokeWidth={2} />,
+    skipped:  <Circle size={11} strokeWidth={1.5} />,
+    pending:  <Circle size={11} strokeWidth={1.5} />,
   };
   return (
     <div className="space-y-2">
@@ -1276,7 +1388,7 @@ function OverviewBody({
           >
             <div className="flex items-center gap-3">
               <span
-                className="w-4 shrink-0 text-center text-[0.9rem]"
+                className="flex w-4 shrink-0 items-center justify-center"
                 style={{
                   color:
                     r.phase === "done"
@@ -1288,7 +1400,7 @@ function OverviewBody({
                       : "var(--content-tertiary)",
                 }}
               >
-                {glyph[r.phase]}
+                {phaseIcon[r.phase]}
               </span>
               <button
                 onClick={() => onJump(r.index)}

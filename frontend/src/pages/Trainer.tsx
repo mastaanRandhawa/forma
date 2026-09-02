@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { ArrowUp, Coins, MessageSquare } from "lucide-react";
+import { ArrowUp, Coins, MessageSquare, Plus, Check } from "lucide-react";
 import { PageHeader } from "../components/PageHeader";
 import { Reveal } from "../components/Reveal";
 import { KaiOrb, coachMood } from "../components/KaiOrb";
@@ -23,7 +23,24 @@ import { useEquippedItem } from "../lib/customization";
 import { api } from "../api";
 import type { ChatMessage } from "../api/types";
 
-type Msg = { from: "trainer" | "user"; text: string; time: string };
+/** Detect program-design intent in a user message. */
+function isProgramIntent(text: string): boolean {
+  const lower = text.toLowerCase();
+  const hasProgram = /\b(program|plan|routine|schedule|build me|create a|design|make me)\b/.test(lower);
+  const hasGoal = /\b(day|days|week|weeks|gain|lose|bulk|cut|strength|hypertrophy|muscle)\b/.test(lower);
+  return hasProgram && hasGoal;
+}
+
+/** Detect if Kai's reply looks like a structured program response. */
+function looksLikeProgram(text: string): boolean {
+  const lower = text.toLowerCase();
+  return (
+    (lower.includes("day 1") || lower.includes("week 1") || lower.includes("monday")) &&
+    (lower.includes("sets") || lower.includes("reps") || lower.includes("exercise"))
+  );
+}
+
+type Msg = { from: "trainer" | "user"; text: string; time: string; isProgram?: boolean };
 
 const EASE = [0.22, 1, 0.36, 1] as const;
 
@@ -86,6 +103,8 @@ export default function Trainer() {
   const [seeded, setSeeded] = useState(history.data != null);
   const [draft, setDraft] = useState("");
   const [typing, setTyping] = useState(false);
+  const [savedMsgIdx, setSavedMsgIdx] = useState<Set<number>>(new Set());
+  const [savingIdx, setSavingIdx] = useState<number | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // seed the thread once from the fetched history
@@ -115,6 +134,7 @@ export default function Trainer() {
 
   async function send(text: string) {
     if (!text.trim() || typing) return;
+    const hasProgramIntent = isProgramIntent(text);
     setThread((t) => [...t, { from: "user", text, time: timeLabel() }]);
     setDraft("");
     setTyping(true);
@@ -122,7 +142,9 @@ export default function Trainer() {
     if (API_ENABLED) {
       try {
         const turn = await api.chat.send(text);
-        setThread((t) => [...t, toMsg(turn.trainerMessage)]);
+        const replyText = turn.trainerMessage.content;
+        const isProgram = hasProgramIntent && looksLikeProgram(replyText);
+        setThread((t) => [...t, { ...toMsg(turn.trainerMessage), isProgram }]);
       } catch (e) {
         setThread((t) => [
           ...t,
@@ -142,9 +164,29 @@ export default function Trainer() {
           from: "trainer",
           text: "Thanks for the context — noted. Automatic program adjustments aren't wired up in this build yet, so nothing changes on its own. When you start your next session you can tweak the weights and swap exercises directly in the logger.",
           time: timeLabel(),
+          isProgram: false,
         },
       ]);
     }, 1400);
+  }
+
+  async function saveProgram(idx: number, _text: string) {
+    if (!API_ENABLED || savingIdx !== null) return;
+    setSavingIdx(idx);
+    try {
+      // Find the user message that preceded this trainer reply to extract intent
+      const userMsg = [...thread].reverse().find((m, ri) => {
+        const msgIdx = thread.length - 1 - ri;
+        return m.from === "user" && msgIdx < idx;
+      });
+      const name = userMsg?.text.slice(0, 60) ?? "Kai's Program";
+      await api.programs.generate({ name, daysPerWeek: 4 });
+      setSavedMsgIdx((s) => new Set([...s, idx]));
+    } catch {
+      /* silently ignore */
+    } finally {
+      setSavingIdx(null);
+    }
   }
 
   return (
@@ -217,6 +259,19 @@ export default function Trainer() {
                         </div>
                         {last && (
                           <span className="num mt-1 px-1 text-[0.66rem] text-content-tertiary">{m.time}</span>
+                        )}
+                        {m.isProgram && !mine && last && (
+                          <button
+                            onClick={() => saveProgram(i, m.text)}
+                            disabled={savedMsgIdx.has(i) || savingIdx === i}
+                            className="focus-ring tactile mt-1.5 flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[0.74rem] text-content-secondary transition-colors hover:border-white/20 hover:text-content-primary disabled:opacity-50"
+                          >
+                            {savedMsgIdx.has(i) ? (
+                              <><Check size={11} strokeWidth={2.5} className="text-[var(--accent-lime)]" /> saved to programs</>
+                            ) : (
+                              <><Plus size={11} strokeWidth={2.5} /> save as program</>
+                            )}
+                          </button>
                         )}
                       </div>
                     </div>

@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { Dumbbell, History as HistoryIcon, Pencil, Plus, Zap } from "lucide-react";
+import { Dumbbell, History as HistoryIcon, Pencil, Plus, Zap, CalendarDays } from "lucide-react";
 import { PageHeader } from "../components/PageHeader";
 import { TrainingTabs } from "../components/layout/TrainingTabs";
 import { Reveal } from "../components/Reveal";
@@ -26,6 +26,7 @@ import {
   useSessionHistory,
   useTemplates,
   useAction,
+  useResource,
   invalidateTemplates,
 } from "../api/hooks";
 import { api } from "../api/client";
@@ -70,6 +71,21 @@ export default function Workouts() {
   const planned = usePlannedWorkouts();
   const templates = useTemplates();
   const history = useSessionHistory();
+  const programs = useResource(
+    "programs-list",
+    () => API_ENABLED ? api.programs.list() : Promise.reject(new Error("offline")),
+  );
+  const activeProgram = programs.data?.find((p) => p.active) ?? null;
+
+  // Compute current week index from the program's creation date
+  const programWeekInfo = useMemo(() => {
+    if (!activeProgram) return null;
+    const startMs = new Date(activeProgram.createdAt).getTime();
+    const weekIndex = Math.max(0, Math.floor((Date.now() - startMs) / (7 * 24 * 60 * 60 * 1000)));
+    const currentWeek = Math.min(weekIndex + 1, activeProgram.durationWeeks);
+    const isDeloadWeek = activeProgram.durationWeeks >= 4 && currentWeek % 4 === 0;
+    return { currentWeek, totalWeeks: activeProgram.durationWeeks, isDeloadWeek, name: activeProgram.name };
+  }, [activeProgram]);
 
   const apiWorkout = API_ENABLED ? planned.data?.[0] ?? null : null;
   const hasActive = Boolean(data.active);
@@ -212,6 +228,31 @@ export default function Workouts() {
 
       {tab === "Today" && (
         <Reveal key="today" className="space-y-6">
+          {/* ── program week banner ─────────────────────────────────── */}
+          {programWeekInfo && (
+            <div
+              className="flex items-center gap-3 rounded-[var(--radius-medium)] px-4 py-3"
+              style={{ background: programWeekInfo.isDeloadWeek ? "rgba(var(--accent-cyan-rgb,131,233,244),0.08)" : "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}
+            >
+              <CalendarDays size={14} className="shrink-0" style={{ color: programWeekInfo.isDeloadWeek ? "var(--accent-cyan)" : "var(--content-tertiary)" }} />
+              <div className="flex-1 min-w-0">
+                <span className="text-[0.84rem] text-content-primary lowercase">{programWeekInfo.name}</span>
+                <span className="mx-2 text-content-tertiary">·</span>
+                <span className="text-[0.84rem] text-content-secondary lowercase">
+                  week {programWeekInfo.currentWeek} / {programWeekInfo.totalWeeks}
+                </span>
+                {programWeekInfo.isDeloadWeek && (
+                  <span className="ml-2 rounded-sm px-1.5 py-0.5 text-[0.7rem] font-medium uppercase tracking-wide" style={{ background: "rgba(131,233,244,0.15)", color: "var(--accent-cyan)" }}>
+                    deload week
+                  </span>
+                )}
+                {!programWeekInfo.isDeloadWeek && programWeekInfo.currentWeek < programWeekInfo.totalWeeks && programWeekInfo.currentWeek % 4 === 3 && (
+                  <span className="ml-2 text-[0.76rem] text-content-tertiary lowercase">deload next week</span>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* ── workout in progress ─────────────────────────────────── */}
           {hasActive && data.active && (
             <section className="surface-soft border border-[color-mix(in_srgb,var(--accent-pink)_28%,transparent)] p-6">

@@ -1,6 +1,6 @@
 import { Outlet, useLocation, useNavigation } from "react-router-dom";
 import { Suspense, useEffect, useState } from "react";
-import { House, Dumbbell, MessageSquare, Apple, Library } from "lucide-react";
+import { House, Dumbbell, MessageSquare, Apple, Library, Trophy } from "lucide-react";
 import { API_ENABLED } from "../api/hooks";
 import { useFormaData } from "../lib/localStore";
 import { grantDailyBonus } from "../lib/rewards";
@@ -29,6 +29,7 @@ const NAV: NavItem[] = [
 ];
 
 const SECONDARY: NavItem[] = [
+  { to: "/records", label: "Records", icon: <Trophy {...ICON} /> },
   { to: "/exercise-library", label: "Exercise library", icon: <Library {...ICON} /> },
 ];
 

@@ -42,6 +42,8 @@ export interface LoggedSet {
   done: boolean;
   /** warmup sets don't count toward working volume or PRs */
   warmup?: boolean;
+  /** set is performed for max reps (As Many Reps As Possible) */
+  isAmrap?: boolean;
 }
 
 export interface LoggedExercise {
