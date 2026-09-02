@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import type { LucideIcon } from "lucide-react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import {
@@ -51,6 +51,8 @@ export default function Store() {
   const cz = useCustomization();
   const challenges = useChallenges();
   const [toast, setToast] = useState<string | null>(null);
+  const [purchased, setPurchased] = useState<CustomizationItem | null>(null);
+  const purchaseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const flash = (m: string) => {
     setToast(m);
@@ -77,8 +79,10 @@ export default function Store() {
   function onBuy(item: CustomizationItem) {
     if (cz.isOwned(item.id)) return;
     if (wallet.balance < item.price) return;
-    if (cz.buy(item, true)) {
-      flash(`${item.name} unlocked and equipped`);
+    if (cz.buy(item)) {
+      if (purchaseTimer.current) clearTimeout(purchaseTimer.current);
+      setPurchased(item);
+      purchaseTimer.current = setTimeout(() => setPurchased(null), 2400);
     }
   }
   function onEquip(item: CustomizationItem) {
@@ -269,7 +273,132 @@ export default function Store() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      <AnimatePresence>
+        {purchased && <PurchaseCelebration key={purchased.id} item={purchased} reduce={!!reduce} />}
+      </AnimatePresence>
     </div>
+  );
+}
+
+const RARITY_COLOR: Record<CustomizationRarity, string> = {
+  common: "var(--accent-cyan)",
+  rare: "var(--accent-cyan)",
+  epic: "var(--accent-mauve)",
+  legendary: "var(--accent-amber)",
+};
+
+function PurchaseCelebration({ item, reduce }: { item: CustomizationItem; reduce: boolean }) {
+  const color = RARITY_COLOR[item.rarity];
+
+  // 20 particles at evenly spaced angles + slight jitter
+  const particles = useMemo(
+    () =>
+      Array.from({ length: 20 }, (_, i) => {
+        const angle = (i / 20) * Math.PI * 2 + (Math.random() - 0.5) * 0.5;
+        const dist = 90 + Math.random() * 130;
+        const size = 6 + Math.random() * 7;
+        const delay = Math.random() * 0.08;
+        return { x: Math.cos(angle) * dist, y: Math.sin(angle) * dist, size, delay };
+      }),
+    [],
+  );
+
+  if (reduce) return null;
+
+  return (
+    <motion.div
+      className="pointer-events-none fixed inset-0 z-[200] flex items-center justify-center"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: [0, 1, 1, 0] }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 2.4, times: [0, 0.04, 0.72, 1], ease: "easeInOut" }}
+    >
+      {/* dark backdrop */}
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-[2px]" />
+
+      {/* large radial burst ring */}
+      <motion.div
+        className="absolute rounded-full"
+        style={{ width: 360, height: 360, background: `radial-gradient(circle, ${color}28, transparent 70%)` }}
+        initial={{ scale: 0, opacity: 1 }}
+        animate={{ scale: [0, 3], opacity: [0.9, 0] }}
+        transition={{ duration: 0.7, ease: [0.2, 0, 0.4, 1] }}
+      />
+
+      {/* secondary ring pulse */}
+      <motion.div
+        className="absolute rounded-full border"
+        style={{ width: 180, height: 180, borderColor: color, opacity: 0.7 }}
+        initial={{ scale: 0, opacity: 0 }}
+        animate={{ scale: [0.2, 2.2], opacity: [0.8, 0] }}
+        transition={{ duration: 0.9, ease: "easeOut", delay: 0.05 }}
+      />
+
+      {/* coin particles */}
+      {particles.map((p, i) => (
+        <motion.div
+          key={i}
+          className="absolute"
+          initial={{ x: 0, y: 0, scale: 0, opacity: 1 }}
+          animate={{
+            x: [0, p.x * 0.6, p.x],
+            y: [0, p.y * 0.6 - 20, p.y + 30],
+            scale: [0, 1, 0],
+            opacity: [1, 1, 0],
+          }}
+          transition={{ duration: 1.1 + Math.random() * 0.3, ease: "easeOut", delay: p.delay }}
+        >
+          <svg viewBox="0 0 12 12" width={p.size} height={p.size} aria-hidden>
+            <circle cx={6} cy={6} r={5.5} fill={color} fillOpacity={0.85} />
+            <circle cx={6} cy={6} r={3.5} fill="none" stroke="rgba(255,255,255,0.35)" strokeWidth={1} />
+          </svg>
+        </motion.div>
+      ))}
+
+      {/* center text card */}
+      <motion.div
+        className="relative flex flex-col items-center gap-2 text-center"
+        initial={{ scale: 0.55, opacity: 0, y: 12 }}
+        animate={{ scale: [0.55, 1.06, 1], opacity: [0, 1, 1, 0], y: [12, 0, 0, -8] }}
+        transition={{ duration: 2.4, times: [0, 0.1, 0.65, 1], ease: EASE }}
+      >
+        <motion.div
+          initial={{ scale: 0, rotate: -15 }}
+          animate={{ scale: [0, 1.3, 1], rotate: [-15, 4, 0] }}
+          transition={{ duration: 0.45, ease: [0.34, 1.56, 0.64, 1] }}
+          className="mb-1 grid h-16 w-16 place-items-center rounded-2xl border border-white/15 bg-white/[0.08] shadow-[0_0_32px_-8px_var(--glow)]"
+          style={{ ["--glow" as string]: color }}
+        >
+          {item.swatch ? (
+            <span className="h-10 w-10 rounded-xl" style={{ background: item.swatch }} />
+          ) : (
+            <Star size={28} strokeWidth={1.6} style={{ color }} />
+          )}
+        </motion.div>
+
+        <div
+          className="label-instrument"
+          style={{ color, letterSpacing: "0.14em", fontSize: "0.65rem", textTransform: "uppercase" }}
+        >
+          {item.rarity} · unlocked
+        </div>
+        <div
+          style={{
+            fontSize: "clamp(1.7rem, 5vw, 2.3rem)",
+            fontWeight: 700,
+            color: "#fff",
+            letterSpacing: "-0.025em",
+            lineHeight: 1.1,
+          }}
+        >
+          {item.name}
+        </div>
+        <div style={{ fontSize: "0.8rem", color: "rgba(255,255,255,0.4)", marginTop: "0.2rem" }}>
+          added to your collection
+        </div>
+      </motion.div>
+    </motion.div>
   );
 }
 
