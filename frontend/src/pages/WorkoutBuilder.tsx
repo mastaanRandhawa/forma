@@ -262,14 +262,14 @@ export default function WorkoutBuilder() {
           value={draft.name}
           onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))}
           placeholder="workout name"
-          className="focus-ring w-full rounded-[var(--radius-small)] bg-transparent text-[1.3rem] font-medium lowercase text-content-primary outline-none placeholder:text-content-tertiary"
+          className="focus-ring surface-recessed w-full rounded-hero px-3.5 py-2.5 text-[1.15rem] font-medium lowercase text-content-primary outline-none placeholder:text-content-tertiary"
         />
         <textarea
           value={draft.description}
           onChange={(e) => setDraft((d) => ({ ...d, description: e.target.value }))}
           placeholder="description (optional)"
           rows={2}
-          className="focus-ring surface-recessed w-full resize-none rounded-hero px-3 py-2 text-[0.88rem] text-content-secondary outline-none placeholder:text-content-tertiary"
+          className="focus-ring surface-recessed w-full resize-none rounded-hero px-3.5 py-2.5 text-[0.88rem] text-content-secondary outline-none placeholder:text-content-tertiary"
         />
         <div className="label-instrument flex flex-wrap gap-x-3 gap-y-1">
           <span>{draft.exercises.length} exercises</span>
@@ -405,7 +405,7 @@ export default function WorkoutBuilder() {
       )}
 
       {/* footer actions */}
-      <div className="fixed inset-x-0 bottom-0 z-40 border-t border-[var(--line-soft)] bg-[rgba(16,10,17,0.9)] backdrop-blur-md">
+      <div className="fixed inset-x-0 bottom-0 z-40 border-t border-[var(--line-highlight)] bg-[var(--surface-opaque)] shadow-[0_-10px_30px_-14px_rgba(20,12,18,0.25)] backdrop-blur-md">
         <div className="mx-auto flex max-w-[720px] flex-wrap items-center gap-2 px-5 py-3">
           <Button onClick={() => save.run()} disabled={!canSave || save.pending}>
             {save.pending ? "saving…" : id ? "save changes" : "save template"}

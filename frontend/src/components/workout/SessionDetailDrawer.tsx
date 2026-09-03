@@ -128,7 +128,7 @@ export function SessionDetailDrawer({
         <button
           onClick={() => onRepeat(session)}
           disabled={busy === "repeat"}
-          className="focus-ring tactile w-full rounded-pill bg-[var(--accent-lime)] py-3 text-[0.88rem] lowercase text-[#0c0c0c] disabled:opacity-50"
+          className="focus-ring tactile w-full rounded-pill bg-[var(--accent-pink)] py-3 text-[0.88rem] lowercase text-white disabled:opacity-50"
         >
           {busy === "repeat" ? "starting…" : "repeat workout"}
         </button>

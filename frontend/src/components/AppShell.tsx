@@ -81,7 +81,7 @@ function LocalDataBadge() {
   const fresh = !profile.onboardedAt && sessions.length === 0;
   return (
     <div className="fixed bottom-4 left-4 z-[60] max-w-[15rem]">
-      <div className="flex items-start gap-2 rounded-2xl border border-white/10 bg-[rgba(24,13,20,0.92)] px-3 py-2 text-[0.72rem] leading-snug text-content-tertiary shadow-[0_16px_36px_-14px_rgba(0,0,0,0.6)] backdrop-blur-md">
+      <div className="flex items-start gap-2 rounded-2xl border border-[var(--line-soft)] bg-[var(--surface-opaque)] px-3 py-2 text-[0.72rem] leading-snug text-content-tertiary shadow-[0_16px_36px_-14px_rgba(20,12,18,0.32)] backdrop-blur-md">
         <span>
           {fresh
             ? "Demo build · running on template defaults. Finish setup to make it yours — data stays in this browser."

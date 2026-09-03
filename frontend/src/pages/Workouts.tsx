@@ -489,7 +489,7 @@ export default function Workouts() {
                   <li key={s.id}>
                     <button
                       onClick={() => setDetail(s)}
-                      className="focus-ring flex w-full items-center justify-between py-4 text-left first:pt-0"
+                      className="focus-ring flex w-full items-center justify-between py-3 text-left first:pt-0.5"
                     >
                       <div>
                         <div className="text-[0.95rem] text-content-primary lowercase">{s.name}</div>

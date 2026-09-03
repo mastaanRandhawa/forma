@@ -39,7 +39,7 @@ export function WorkoutInProgressBar() {
           exit={reduce ? { opacity: 0 } : { opacity: 0, y: 20 }}
           transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
           onClick={() => nav("/workouts/active")}
-          className="focus-ring tactile fixed bottom-4 left-4 right-20 z-[65] mx-auto flex max-w-max items-center gap-3 rounded-pill border border-white/10 bg-[rgba(24,13,20,0.94)] py-2 pl-3.5 pr-4 text-left shadow-[0_16px_40px_-14px_rgba(0,0,0,0.6)] backdrop-blur-md sm:right-auto sm:left-1/2 sm:-translate-x-1/2"
+          className="focus-ring tactile fixed bottom-4 left-4 right-20 z-[65] mx-auto flex max-w-max items-center gap-3 rounded-pill border border-[var(--line-soft)] bg-[var(--surface-opaque)] py-2 pl-3.5 pr-4 text-left shadow-[0_16px_40px_-14px_rgba(20,12,18,0.35)] backdrop-blur-md sm:right-auto sm:left-1/2 sm:-translate-x-1/2"
         >
           <span
             className="grid h-8 w-8 shrink-0 place-items-center rounded-full"
@@ -60,7 +60,7 @@ export function WorkoutInProgressBar() {
               {progress ? ` · ${progress.setsDone}/${progress.setsTotal} sets` : ""}
             </span>
           </span>
-          <span className="shrink-0 rounded-pill bg-[var(--accent-lime)] px-3 py-1 text-[0.76rem] lowercase text-[#0c0c0c]">
+          <span className="shrink-0 rounded-pill bg-[var(--accent-pink)] px-3 py-1 text-[0.76rem] lowercase text-white">
             resume
           </span>
         </motion.button>

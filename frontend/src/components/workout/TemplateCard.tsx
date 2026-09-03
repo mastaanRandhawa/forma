@@ -78,7 +78,7 @@ export function TemplateCard({
         <button
           onClick={onStart}
           disabled={starting}
-          className="focus-ring tactile rounded-pill bg-[var(--accent-lime)] px-4 py-2 text-[0.82rem] lowercase text-[#0c0c0c] disabled:opacity-50"
+          className="focus-ring tactile rounded-pill bg-[var(--accent-pink)] px-4 py-2 text-[0.82rem] lowercase text-white disabled:opacity-50"
         >
           {starting ? "starting…" : "start"}
         </button>

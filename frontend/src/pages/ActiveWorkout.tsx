@@ -612,7 +612,7 @@ export default function ActiveWorkout() {
           </p>
           <button
             onClick={() => setAddingEx(true)}
-            className="focus-ring tactile mt-6 rounded-hero bg-[var(--accent-lime)] px-6 py-3.5 text-[0.95rem] font-semibold lowercase text-[#0c0c0c] active:scale-[0.99]"
+            className="focus-ring tactile mt-6 rounded-hero bg-[var(--accent-pink)] px-6 py-3.5 text-[0.95rem] font-semibold lowercase text-white active:scale-[0.99]"
           >
             + add your first exercise
           </button>
