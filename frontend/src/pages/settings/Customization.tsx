@@ -130,8 +130,8 @@ export default function Customization() {
               >
                 <Icon size={17} strokeWidth={1.75} className={active ? "text-content-primary" : "text-content-tertiary"} />
                 <span className="text-[0.78rem] lowercase text-content-primary">{label}</span>
-                <span className="text-[0.56rem] uppercase tracking-wide text-content-tertiary">
-                  {active ? "active" : "free"}
+                <span className="h-[0.66rem] text-[0.56rem] uppercase tracking-wide text-[var(--accent-lime)]">
+                  {active ? "active" : ""}
                 </span>
               </button>
             );

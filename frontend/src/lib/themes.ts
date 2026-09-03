@@ -161,23 +161,30 @@ function buildVars(p: PaletteSpec): Record<string, string> {
 //    layer at the end of index.css for the surface-class translations.)
 function buildLightVars(p: PaletteSpec): Record<string, string> {
   const r = RADII[p.radius];
+  const white: RGB = [255, 255, 255];
   const hue = hexToRgb(p.accent);
   const cool = hexToRgb(onLight(p.accentContrast));
   const hs = `${clamp255(hue[0])}, ${clamp255(hue[1])}, ${clamp255(hue[2])}`;
   const cs = `${clamp255(cool[0])}, ${clamp255(cool[1])}, ${clamp255(cool[2])}`;
 
-  return {
-    "--app-bg": "#F7F5F8",
-    "--background": "#F7F5F8",
-    "--background-deep": "#F1EEF4",
-    "--background-soft": "#FFFFFF",
+  // a light ground that clearly carries the theme's hue — as a tint of
+  // near-white, not a wash. Cards stay crisp white; the hue lives in the
+  // canvas, the atmosphere and the accents.
+  const bg = rgbToHex(mix(white, hue, 0.06));
+  const bgDeep = rgbToHex(mix(white, hue, 0.13));
 
-    "--surface": "rgba(255, 255, 255, 0.78)",
-    "--surface-glass": "rgba(255, 255, 255, 0.55)",
-    "--surface-raised": "rgba(255, 255, 255, 0.94)",
-    "--surface-recessed": "rgba(41, 28, 45, 0.06)",
-    "--surface-opaque": "#FFFFFF",
-    "--surface-float": "rgba(255, 255, 255, 0.96)",
+  return {
+    "--app-bg": bg,
+    "--background": bg,
+    "--background-deep": bgDeep,
+    "--background-soft": rgbToHex(mix(white, hue, 0.02)),
+
+    "--surface": "rgba(255, 255, 255, 0.8)",
+    "--surface-glass": "rgba(255, 255, 255, 0.58)",
+    "--surface-raised": "rgba(255, 255, 255, 0.95)",
+    "--surface-recessed": `rgba(${hs}, 0.07)`,
+    "--surface-opaque": rgbToHex(mix(white, hue, 0.015)),
+    "--surface-float": "rgba(255, 255, 255, 0.97)",
 
     "--text-primary": "#211A24",
     "--text-secondary": "#5B5162",
@@ -212,15 +219,15 @@ function buildLightVars(p: PaletteSpec): Record<string, string> {
     "--fill-coral": p.fill,
     "--fill-on-color": p.fillInk ?? "rgba(255, 250, 248, 0.96)",
 
-    // mostly-neutral canvas; the theme hue is a faint corner wash only (§1)
+    // the theme hue as a visible-but-soft canvas + corner washes
     "--atmosphere-bg": [
-      `radial-gradient(620px circle at 10% 2%, rgba(${hs}, 0.045), transparent 52%)`,
-      `radial-gradient(680px circle at 92% 98%, rgba(${cs}, 0.035), transparent 52%)`,
-      `linear-gradient(168deg, #F7F5F8 0%, #F1EEF4 100%)`,
+      `radial-gradient(760px circle at 8% 0%, rgba(${hs}, 0.09), transparent 55%)`,
+      `radial-gradient(820px circle at 94% 100%, rgba(${cs}, 0.065), transparent 55%)`,
+      `linear-gradient(168deg, ${bg} 0%, ${bgDeep} 100%)`,
     ].join(","),
-    "--aurora-1": `rgba(${hs}, 0.04)`,
-    "--aurora-2": `rgba(${cs}, 0.03)`,
-    "--aurora-3": `rgba(${hs}, 0.025)`,
+    "--aurora-1": `rgba(${hs}, 0.07)`,
+    "--aurora-2": `rgba(${cs}, 0.05)`,
+    "--aurora-3": `rgba(${hs}, 0.045)`,
     "--grain-opacity": "0.009",
 
     // circular action button / active pill → dark on light (see guideline §7)
