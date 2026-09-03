@@ -103,7 +103,7 @@ export function DailyCheckinCard() {
   const readiness = done ? readinessFromCheckin(data) : null;
 
   return (
-    <div className="surface-soft p-4 sm:p-5">
+    <div className="checkin-card surface-soft p-4 sm:p-5">
       <div className="flex items-start gap-3">
         <span
           className="grid h-9 w-9 shrink-0 place-items-center rounded-pill"

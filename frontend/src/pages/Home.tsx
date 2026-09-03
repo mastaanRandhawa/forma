@@ -208,7 +208,7 @@ export default function Home() {
             )}
           </div>
 
-          <aside className="space-y-4">
+          <aside className="dash-aside space-y-4">
             <Reveal onView className="hidden lg:block">
               <SessionCard />
             </Reveal>
