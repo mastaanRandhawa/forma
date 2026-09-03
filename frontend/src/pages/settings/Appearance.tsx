@@ -3,7 +3,7 @@ import { ArrowRight, Monitor, Moon, Sun } from "lucide-react";
 import { useAppearance, useSettings } from "../../api/settings";
 import { Section } from "../../components/settings/ui";
 import { Toggle } from "../../components/settings/Toggle";
-import { THEME_MAP } from "../../lib/themes";
+import { THEME_MAP, resolveColorMode } from "../../lib/themes";
 import { useCustomization } from "../../lib/customization";
 
 const MODES: { id: "cm-light" | "cm-dark" | "cm-system"; label: string; icon: typeof Sun }[] = [
@@ -18,6 +18,7 @@ export default function Appearance() {
   const cz = useCustomization();
   const theme = THEME_MAP[cz.equippedId("theme")];
   const mode = (cz.equippedId("colorMode") ?? "cm-system") as "cm-light" | "cm-dark" | "cm-system";
+  const light = resolveColorMode(mode) === "light";
 
   return (
     <div className="space-y-5">
@@ -54,22 +55,34 @@ export default function Appearance() {
       >
         <Link
           to="/settings/customization"
-          className="focus-ring tactile on-swatch flex items-center gap-3 rounded-2xl border p-3 transition-colors"
-          style={{ background: theme?.swatch, borderColor: "rgba(255,255,255,0.14)" }}
+          className="focus-ring tactile flex items-center gap-3 rounded-2xl border p-3 transition-colors"
+          style={{
+            background: light ? theme?.swatchLight : theme?.swatch,
+            borderColor: light ? "rgba(41,28,45,0.14)" : "rgba(255,255,255,0.14)",
+          }}
         >
           <span
             className="grid h-10 w-10 place-items-center rounded-lg backdrop-blur-sm"
-            style={{ background: "rgba(0,0,0,0.25)", border: "1px solid rgba(255,255,255,0.15)" }}
+            style={{
+              background: light ? "rgba(255,255,255,0.55)" : "rgba(0,0,0,0.25)",
+              border: `1px solid ${light ? "rgba(41,28,45,0.14)" : "rgba(255,255,255,0.15)"}`,
+            }}
           />
           <span className="flex-1">
-            <span className="block text-[0.9rem] lowercase" style={{ color: "#fff" }}>
+            <span
+              className="block text-[0.9rem] lowercase"
+              style={{ color: light ? "#211A24" : "#fff" }}
+            >
               {theme?.name ?? "current theme"}
             </span>
-            <span className="block text-[0.72rem] lowercase" style={{ color: "rgba(255,255,255,0.78)" }}>
+            <span
+              className="block text-[0.72rem] lowercase"
+              style={{ color: light ? "rgba(33,26,36,0.6)" : "rgba(255,255,255,0.78)" }}
+            >
               open customization
             </span>
           </span>
-          <ArrowRight size={16} style={{ color: "rgba(255,255,255,0.82)" }} />
+          <ArrowRight size={16} style={{ color: light ? "rgba(33,26,36,0.65)" : "rgba(255,255,255,0.82)" }} />
         </Link>
       </Section>
 

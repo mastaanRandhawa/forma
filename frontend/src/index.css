@@ -236,6 +236,14 @@ body {
   box-shadow: var(--shadow-float);
 }
 
+/* ---- body-muscles map: on a light ground the "rest" muscles are near-white
+   and vanish — give every muscle a thin neutral outline for definition
+   (the app removes the library's slate stroke in surfaces.css for dark). ---- */
+:root[data-color-mode="light"] .body-muscles .body-chart-muscle {
+  stroke: rgba(41, 28, 45, 0.22);
+  stroke-width: 0.12;
+}
+
 /* ---- navbar: active item is an obvious dark pill (§7) ---- */
 :root[data-color-mode="light"] .nav-active-pill {
   background: #2A2130;

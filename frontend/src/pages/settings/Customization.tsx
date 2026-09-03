@@ -2,7 +2,7 @@ import { Link } from "react-router-dom";
 import { Check, Lock, Monitor, Moon, Sun } from "lucide-react";
 import { Section } from "../../components/settings/ui";
 import { customizationItems, type CustomizationSlot } from "../../lib/data";
-import { THEMES } from "../../lib/themes";
+import { THEMES, resolveColorMode } from "../../lib/themes";
 import { useCustomization } from "../../lib/customization";
 import { useWallet } from "../../lib/wallet";
 
@@ -91,6 +91,7 @@ export default function Customization() {
   const ownedCount = customizationItems.filter((i) => cz.isOwned(i.id)).length;
   const accents = customizationItems.filter((i) => i.slot === "accent");
   const mode = (cz.equippedId("colorMode") ?? "cm-system") as "cm-light" | "cm-dark" | "cm-system";
+  const light = resolveColorMode(mode) === "light";
 
   return (
     <div className="space-y-5">
@@ -145,30 +146,41 @@ export default function Customization() {
         <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
           {THEMES.map((t) => {
             const active = cz.equippedId("theme") === t.id;
+            // the swatch previews the theme AS IT RENDERS in the current mode
+            const ink = light ? "#211A24" : "rgba(255,255,255,0.96)";
+            const inkFaint = light ? "rgba(33,26,36,0.55)" : "rgba(255,255,255,0.62)";
+            const edge = light ? "rgba(41,28,45,0.14)" : "rgba(255,255,255,0.15)";
             return (
               <button
                 key={t.id}
                 onClick={() => cz.setSlot("theme", t.id)}
                 className="focus-ring tactile relative overflow-hidden rounded-2xl border p-3 text-left transition-colors"
                 style={{
-                  background: t.swatch,
-                  borderColor: active ? "rgba(255,255,255,0.55)" : "rgba(255,255,255,0.14)",
+                  background: light ? t.swatchLight : t.swatch,
+                  borderColor: active ? (light ? "rgba(41,28,45,0.5)" : "rgba(255,255,255,0.55)") : edge,
                 }}
               >
                 <span
                   className="block h-10 w-full rounded-lg backdrop-blur-sm"
-                  style={{ background: "rgba(0,0,0,0.25)", border: "1px solid rgba(255,255,255,0.15)" }}
+                  style={{
+                    background: light ? "rgba(255,255,255,0.55)" : "rgba(0,0,0,0.25)",
+                    border: `1px solid ${edge}`,
+                  }}
                 />
-                <span className="mt-2 block text-[0.76rem] lowercase" style={{ color: "rgba(255,255,255,0.96)" }}>
+                <span className="mt-2 block text-[0.76rem] lowercase" style={{ color: ink }}>
                   {t.name}
                 </span>
-                <span
-                  className="mt-0.5 block text-[0.54rem] uppercase tracking-wide"
-                  style={{ color: "rgba(255,255,255,0.62)" }}
-                >
+                <span className="mt-0.5 block text-[0.54rem] uppercase tracking-wide" style={{ color: inkFaint }}>
                   included
                 </span>
-                {active && <Check size={13} strokeWidth={3} className="absolute right-2 top-2 text-white" />}
+                {active && (
+                  <Check
+                    size={13}
+                    strokeWidth={3}
+                    className="absolute right-2 top-2"
+                    style={{ color: ink }}
+                  />
+                )}
               </button>
             );
           })}

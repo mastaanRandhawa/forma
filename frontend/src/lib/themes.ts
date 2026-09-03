@@ -247,14 +247,23 @@ export type Theme = {
   blurb: string;
   rarity: Rarity;
   price: 0;
-  /** swatch gradient for the picker card */
+  /** swatch gradient for the picker card — dark-mode rendering */
   swatch: string;
+  /** swatch gradient for the picker card — light-mode rendering */
+  swatchLight: string;
   /** an ambient effect this theme turns on by default (user can override) */
   effect?: ThemeEffect;
   spec: PaletteSpec;
   vars: Record<string, string>;
   varsLight: Record<string, string>;
 };
+
+/** a light-mode preview swatch: neutral canvas → faint tint → the accent */
+function lightSwatch(spec: PaletteSpec): string {
+  const acc = hexToRgb(spec.accent);
+  const tint = rgbToHex(mix([255, 255, 255], acc, 0.16));
+  return `linear-gradient(140deg,#FCFBFD 0%,${tint} 46%,${onLight(spec.accent)} 100%)`;
+}
 
 /** compact theme entry → resolved Theme (dark + light var sets) */
 function theme(
@@ -265,6 +274,7 @@ function theme(
     ...meta,
     rarity: "free",
     price: 0,
+    swatchLight: lightSwatch(spec),
     spec,
     vars: buildVars(spec),
     varsLight: buildLightVars(spec),
