@@ -10,6 +10,7 @@
  * is the local stand-in, not a mock dataset.
  */
 import { useSyncExternalStore } from "react";
+import type { TemplateExercise } from "./workoutTemplates";
 
 const KEY = "forma.data.v1";
 
@@ -41,6 +42,8 @@ export interface LoggedSet {
   done: boolean;
   /** warmup sets don't count toward working volume or PRs */
   warmup?: boolean;
+  /** set is performed for max reps (As Many Reps As Possible) */
+  isAmrap?: boolean;
 }
 
 export interface LoggedExercise {
@@ -54,11 +57,31 @@ export interface LoggedExercise {
   deferReason?: string | null;
   /** original planned name, when the user swapped this exercise today */
   substitutedFrom?: string | null;
+  /** exercises sharing a group value are trained back-to-back as a superset */
+  supersetGroup?: number | null;
   /** backend ExercisePerformance id, when the session was started via the API */
   apiPerfId?: string;
   exerciseId?: string;
   /** "last time 60×8 → today 62.5×8" hint from the prescription engine (§2.1) */
   prescription?: { weightKg: number | null; reps: number | null; rpe: number | null; note: string } | null;
+}
+
+/**
+ * A user-owned reusable workout template (local build). API build stores these
+ * server-side as `Workout { isTemplate: true }`; `lib/templates.ts` bridges the
+ * two so screens don't branch on `API_ENABLED`.
+ */
+export interface LocalTemplate {
+  id: string;
+  name: string;
+  description: string;
+  targetMuscles: string[];
+  exercises: TemplateExercise[];
+  createdAt: string;
+  lastPerformedAt: string | null;
+  timesCompleted: number;
+  /** preset id / session id this was copied from, if any */
+  sourceId?: string;
 }
 
 export interface ActiveSession {
@@ -67,6 +90,8 @@ export interface ActiveSession {
   startedAt: string;
   /** backend WorkoutSession id, when started via the API */
   apiId?: string;
+  /** local template id this session was started from, for stat tracking */
+  templateId?: string;
   exercises: LoggedExercise[];
   /** index into `exercises` of the exercise currently in focus */
   cursor: number;
@@ -143,6 +168,8 @@ export interface FormaData {
   profile: Profile;
   active: ActiveSession | null;
   sessions: CompletedSession[];
+  /** user-built / saved-copy workout templates (local build) */
+  localTemplates: LocalTemplate[];
   checkins: Checkin[];
   quickLogs: QuickLog[];
   meals: MealEntry[];
@@ -169,6 +196,7 @@ const EMPTY: FormaData = {
   profile: DEFAULT_PROFILE,
   active: null,
   sessions: [],
+  localTemplates: [],
   checkins: [],
   quickLogs: [],
   meals: [],
@@ -211,6 +239,7 @@ function read(): FormaData {
         ...parsed,
         profile: { ...DEFAULT_PROFILE, ...parsed.profile },
         sessions: parsed.sessions ?? [],
+        localTemplates: parsed.localTemplates ?? [],
         checkins: parsed.checkins ?? [],
         quickLogs: parsed.quickLogs ?? [],
         meals: parsed.meals ?? [],
@@ -307,6 +336,7 @@ export interface StartExercise {
   apiPerfId?: string;
   prescription?: LoggedExercise["prescription"];
   sets?: LoggedSet[];
+  supersetGroup?: number | null;
 }
 
 /** Blank sets seeded from a target like "4 × 6–8" → 4 sets (1–8, else 3). */
@@ -319,11 +349,12 @@ function seedSets(target: string, reps: number | null = null): LoggedSet[] {
 export function startSession(
   name: string,
   plan: StartExercise[],
-  meta?: { apiId?: string; startedAt?: string },
+  meta?: { apiId?: string; startedAt?: string; templateId?: string },
 ): ActiveSession {
   const session: ActiveSession = {
     id: meta?.apiId ?? uid(),
     apiId: meta?.apiId,
+    templateId: meta?.templateId,
     name,
     startedAt: meta?.startedAt ?? new Date().toISOString(),
     cursor: 0,
@@ -342,6 +373,7 @@ export function startSession(
       deferred: false,
       deferReason: null,
       substitutedFrom: null,
+      supersetGroup: p.supersetGroup ?? null,
       sets: p.sets ?? seedSets(p.target),
     })),
   };
@@ -382,8 +414,95 @@ export function finishSession(
     units,
     prs,
   };
-  write({ ...d, active: null, sessions: [completed, ...d.sessions] });
+  const localTemplates = d.active.templateId
+    ? d.localTemplates.map((t) =>
+        t.id === d.active!.templateId
+          ? { ...t, lastPerformedAt: finishedAt, timesCompleted: t.timesCompleted + 1 }
+          : t,
+      )
+    : d.localTemplates;
+  write({ ...d, active: null, sessions: [completed, ...d.sessions], localTemplates });
   return completed;
+}
+
+// ── workout templates (local build) ─────────────────────────────────────────
+export interface TemplateDraft {
+  name: string;
+  description?: string;
+  targetMuscles?: string[];
+  exercises: TemplateExercise[];
+  sourceId?: string;
+}
+
+export function saveLocalTemplate(draft: TemplateDraft): LocalTemplate {
+  const tpl: LocalTemplate = {
+    id: uid(),
+    name: draft.name,
+    description: draft.description ?? "",
+    targetMuscles: draft.targetMuscles ?? [],
+    exercises: draft.exercises,
+    createdAt: new Date().toISOString(),
+    lastPerformedAt: null,
+    timesCompleted: 0,
+    sourceId: draft.sourceId,
+  };
+  mutate((d) => ({ ...d, localTemplates: [tpl, ...d.localTemplates] }));
+  return tpl;
+}
+
+export function updateLocalTemplate(id: string, patch: Partial<TemplateDraft>): void {
+  mutate((d) => ({
+    ...d,
+    localTemplates: d.localTemplates.map((t) => (t.id === id ? { ...t, ...patch } : t)),
+  }));
+}
+
+export function deleteLocalTemplate(id: string): void {
+  mutate((d) => ({ ...d, localTemplates: d.localTemplates.filter((t) => t.id !== id) }));
+}
+
+export function duplicateLocalTemplate(id: string): LocalTemplate | null {
+  const src = read().localTemplates.find((t) => t.id === id);
+  if (!src) return null;
+  return saveLocalTemplate({
+    name: `${src.name} copy`,
+    description: src.description,
+    targetMuscles: src.targetMuscles,
+    exercises: src.exercises,
+    sourceId: src.id,
+  });
+}
+
+export function getLocalTemplate(id: string, d: FormaData = read()): LocalTemplate | null {
+  return d.localTemplates.find((t) => t.id === id) ?? null;
+}
+
+/** Rebuild a `StartExercise[]` from a past session — the "repeat workout" path. */
+export function repeatFromCompleted(session: CompletedSession): StartExercise[] {
+  return session.exercises
+    .filter((e) => !e.skipped)
+    .map((e) => {
+      const working = e.sets.filter((s) => !s.warmup);
+      const top = [...working]
+        .filter((s) => s.weight != null && s.reps != null)
+        .sort((a, b) => (b.weight ?? 0) * (b.reps ?? 0) - (a.weight ?? 0) * (a.reps ?? 0))[0];
+      const base = working.length ? working : e.sets;
+      return {
+        name: e.name,
+        target: e.target || `${base.length} × ${top?.reps ?? 8}`,
+        exerciseId: e.exerciseId,
+        supersetGroup: e.supersetGroup ?? null,
+        prescription: top
+          ? { weightKg: null, reps: top.reps ?? null, rpe: null, note: "match or beat last time" }
+          : null,
+        sets: base.map((s) => ({
+          weight: s.weight ?? null,
+          reps: s.reps ?? null,
+          rpe: null,
+          done: false,
+        })),
+      };
+    });
 }
 
 export function addCheckin(c: Omit<Checkin, "date" | "createdAt">): void {

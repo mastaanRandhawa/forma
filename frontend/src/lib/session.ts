@@ -87,6 +87,114 @@ export function sessionProgress(session: ActiveSession): SessionProgress {
   };
 }
 
+/** Elapsed training seconds, excluding paused spans. */
+export function sessionElapsedSec(session: ActiveSession, now = Date.now()): number {
+  const extra = session.paused && session.pausedAt ? now - session.pausedAt : 0;
+  return Math.max(
+    0,
+    Math.floor((now - Date.parse(session.startedAt) - (session.pausedMs ?? 0) - extra) / 1000),
+  );
+}
+
+/** "32:14" clock label for the session's elapsed time. */
+export function sessionElapsedLabel(session: ActiveSession, now = Date.now()): string {
+  const sec = sessionElapsedSec(session, now);
+  return `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, "0")}`;
+}
+
+// ── supersets ───────────────────────────────────────────────────────────────
+/** A/B/C… label for a superset group. */
+export const supersetLetter = (group: number): string =>
+  String.fromCharCode(64 + Math.max(1, group));
+
+/** Trainable indices (in running order) sharing the given exercise's group. */
+export function supersetPeers(session: ActiveSession, exIndex: number): number[] {
+  const group = session.exercises[exIndex]?.supersetGroup;
+  if (group == null) return [exIndex];
+  return session.order.filter((i) => session.exercises[i]?.supersetGroup === group && !session.exercises[i].skipped);
+}
+
+export interface SupersetPosition {
+  group: number;
+  letter: string;
+  /** 1-based position of this exercise within the group */
+  position: number;
+  count: number;
+}
+
+export function supersetPosition(session: ActiveSession, exIndex: number): SupersetPosition | null {
+  const group = session.exercises[exIndex]?.supersetGroup;
+  if (group == null) return null;
+  const peers = supersetPeers(session, exIndex);
+  if (peers.length < 2) return null;
+  return {
+    group,
+    letter: supersetLetter(group),
+    position: peers.indexOf(exIndex) + 1,
+    count: peers.length,
+  };
+}
+
+const workingDone = (ex: LoggedExercise): number =>
+  ex.sets.filter((s) => s.done && !s.warmup).length;
+
+/**
+ * After a set is logged on a superset exercise, where does focus go next?
+ *  - `rest:false` → straight to the next peer that still owes this round
+ *  - `rest:true`  → the round is complete; rest, then resume at the lightest peer
+ *  - `null`       → not a superset, or the whole group is done → caller falls
+ *                   back to the normal advance / rest flow
+ */
+export function nextSupersetStep(
+  session: ActiveSession,
+  exIndex: number,
+): { targetIndex: number; rest: boolean } | null {
+  const peers = supersetPeers(session, exIndex);
+  if (peers.length < 2) return null;
+  const incomplete = peers.filter((i) => !isExerciseComplete(session.exercises[i]));
+  if (incomplete.length === 0) return null;
+
+  const cur = workingDone(session.exercises[exIndex]);
+  const rotated = [
+    ...peers.slice(peers.indexOf(exIndex) + 1),
+    ...peers.slice(0, peers.indexOf(exIndex) + 1),
+  ];
+  const owesThisRound = rotated.find(
+    (i) => !isExerciseComplete(session.exercises[i]) && workingDone(session.exercises[i]) < cur,
+  );
+  if (owesThisRound != null) return { targetIndex: owesThisRound, rest: false };
+
+  // everyone caught up → new round after a rest, starting at the lightest peer
+  const next = [...incomplete].sort(
+    (a, b) => workingDone(session.exercises[a]) - workingDone(session.exercises[b]) || peers.indexOf(a) - peers.indexOf(b),
+  )[0];
+  return { targetIndex: next, rest: true };
+}
+
+/** Collapse a builder exercise list into clean contiguous superset groups. */
+export function normalizeSupersets<T extends { supersetGroup?: number | null }>(exs: readonly T[]): T[] {
+  const out = exs.map((e) => ({ ...e })) as Array<T & { supersetGroup?: number | null }>;
+  let groupId = 0;
+  let i = 0;
+  while (i < out.length) {
+    const g = out[i].supersetGroup;
+    if (g == null) {
+      i++;
+      continue;
+    }
+    let j = i;
+    while (j + 1 < out.length && out[j + 1].supersetGroup === g) j++;
+    if (j > i) {
+      groupId++;
+      for (let k = i; k <= j; k++) out[k].supersetGroup = groupId;
+    } else {
+      out[i].supersetGroup = undefined;
+    }
+    i = j + 1;
+  }
+  return out;
+}
+
 // ── queue transitions (return a new session) ────────────────────────────────
 function withOrder(session: ActiveSession, order: number[]): ActiveSession {
   return { ...session, order };
@@ -229,6 +337,7 @@ export type CueEvent =
   | "substituted"
   | "exercise-done"
   | "almost-done"
+  | "superset-next"
   | "finish";
 
 export interface CueContext {
@@ -287,6 +396,10 @@ export function trainerCue(event: CueEvent, ctx: CueContext = {}): string {
         : "That's everything. Let's close it out.";
     case "almost-done":
       return "One exercise left. Finish strong.";
+    case "superset-next":
+      return ctx.exerciseName
+        ? `No rest — straight into ${ctx.exerciseName}.`
+        : "No rest — straight into the next move.";
     case "finish":
       return pick(["Great session.", "That's the work. Well done.", "Strong session — recover well."]);
   }

@@ -15,11 +15,11 @@ export default function SettingsLayout() {
   const atRoot = pathname === "/settings" || pathname === "/settings/";
 
   return (
-    <div className="mx-auto max-w-[1120px]">
+    <div>
       <PageHeader eyebrow="account" title="settings" />
 
-      <div className="mt-2 lg:grid lg:grid-cols-[212px_minmax(0,1fr)] lg:gap-8">
-        <aside className="hidden lg:block">
+      <div className="mt-2 lg:grid lg:grid-cols-[204px_minmax(0,1fr)] lg:items-start lg:gap-8">
+        <aside className="hidden lg:block lg:sticky lg:top-28 lg:self-start">
           <SettingsNav />
         </aside>
 

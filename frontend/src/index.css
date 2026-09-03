@@ -47,3 +47,309 @@ body {
   scrollbar-width: none;
 }
 
+/* =========================================================================
+   LIGHT MODE — translation layer
+   The surface primitives and many components hardcode dark / wine values
+   (white text, wine-tinted shadows, translucent-white fills that vanish on a
+   light ground). This block re-points them for `data-color-mode="light"`,
+   which the theme engine (src/lib/themes.ts) stamps on <html>. Dark mode is
+   untouched. Reference: forma_light_mode_visual_guidelines.md.
+   Every selector is scoped `:root[data-color-mode="light"] …` so it always
+   out-specifies the base rule regardless of load order.
+   ========================================================================= */
+:root[data-color-mode="light"] {
+  color-scheme: light;
+
+  /* neutral, compact shadows — depth, not glow (§4) */
+  --shadow-soft: 0 1px 2px rgba(30, 20, 35, 0.05), 0 8px 20px rgba(30, 20, 35, 0.07);
+  --shadow-deep: 0 2px 6px rgba(30, 20, 35, 0.06), 0 18px 44px rgba(30, 20, 35, 0.1);
+  --shadow-raised: 0 1px 2px rgba(30, 20, 35, 0.05), 0 10px 26px rgba(30, 20, 35, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.7);
+  --shadow-recessed: inset 0 1px 3px rgba(41, 28, 45, 0.08), inset 0 -1px 0 rgba(255, 255, 255, 0.5);
+  --shadow-float: 0 3px 8px rgba(30, 20, 35, 0.09), 0 14px 34px rgba(30, 20, 35, 0.11),
+    inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  --shadow-press: inset 0 3px 8px rgba(41, 28, 45, 0.1);
+  --glow-hero: 0 0 90px -30px rgba(41, 28, 45, 0.14);
+  --glow-cool: 0 0 60px -22px rgba(41, 28, 45, 0.1);
+}
+
+/* ---- named surface primitives ---- */
+:root[data-color-mode="light"] .surface-soft {
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  box-shadow: var(--shadow-soft);
+}
+:root[data-color-mode="light"] .surface-raised {
+  background: var(--surface-raised);
+  border: 1px solid var(--line-soft);
+  box-shadow: var(--shadow-raised);
+}
+:root[data-color-mode="light"] .surface-raised--interactive:hover {
+  filter: none;
+  background: #fff;
+  border-color: var(--line-highlight);
+  box-shadow: var(--shadow-float);
+}
+:root[data-color-mode="light"] .surface-raised--interactive:active {
+  box-shadow: var(--shadow-press);
+}
+:root[data-color-mode="light"] .surface-recessed {
+  background: var(--surface-recessed);
+  border: 1px solid var(--line-soft);
+  box-shadow: var(--shadow-recessed);
+}
+:root[data-color-mode="light"] .surface-glass {
+  background: rgba(255, 255, 255, 0.82);
+  border: 1px solid rgba(35, 25, 40, 0.07);
+  box-shadow: 0 8px 30px rgba(30, 20, 35, 0.07), inset 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+@media (hover: none), (max-width: 640px), (prefers-reduced-transparency: reduce) {
+  :root[data-color-mode="light"] .surface-glass {
+    background: rgba(255, 255, 255, 0.96);
+  }
+}
+:root[data-color-mode="light"] .surface-float {
+  background: radial-gradient(120% 120% at 32% 24%, #ffffff, #f4f1f6 60%);
+  border: 1px solid var(--line-soft);
+  box-shadow: var(--shadow-float);
+}
+:root[data-color-mode="light"] .specular-edge::before {
+  background: radial-gradient(120% 60% at 50% -20%, rgba(255, 255, 255, 0.6), transparent 68%);
+}
+
+/* ---- Notis patterns ---- */
+:root[data-color-mode="light"] .pill-row {
+  background: rgba(41, 28, 45, 0.04);
+  border: 1px solid var(--line-soft);
+}
+:root[data-color-mode="light"] .pill-row:hover {
+  background: rgba(41, 28, 45, 0.07);
+  border-color: var(--line-highlight);
+}
+:root[data-color-mode="light"] .pill-row__dot {
+  border-color: rgba(41, 28, 45, 0.22);
+}
+:root[data-color-mode="light"] .icon-btn {
+  background: rgba(41, 28, 45, 0.05);
+  border: 1px solid var(--line-soft);
+}
+:root[data-color-mode="light"] .icon-btn:hover {
+  background: rgba(41, 28, 45, 0.1);
+}
+:root[data-color-mode="light"] .btn-white {
+  box-shadow: 0 4px 14px -4px rgba(30, 20, 35, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+}
+:root[data-color-mode="light"] .ai-card {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(255, 255, 255, 0.86));
+  border: 1px solid var(--line-soft);
+  box-shadow: var(--shadow-soft);
+}
+:root[data-color-mode="light"] .island {
+  background: #ffffff;
+  border: 1px solid var(--line-soft);
+  box-shadow: var(--shadow-raised);
+}
+
+/* ---- MetricCard ---- */
+:root[data-color-mode="light"] .metric-card {
+  border: 1px solid var(--line-soft);
+  box-shadow: var(--shadow-soft);
+}
+:root[data-color-mode="light"] .metric-card[data-variant="glow"] {
+  background:
+    radial-gradient(70% 58% at 26% 2%, color-mix(in srgb, var(--tone-color) 10%, transparent), transparent 70%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(255, 255, 255, 0.84));
+  box-shadow: var(--shadow-soft);
+}
+:root[data-color-mode="light"] .metric-card--link:hover {
+  border-color: var(--line-highlight);
+  box-shadow: var(--shadow-float);
+}
+:root[data-color-mode="light"] .metric-card__label {
+  color: var(--text-secondary);
+}
+:root[data-color-mode="light"] .metric-card__value {
+  color: var(--text-primary);
+}
+:root[data-color-mode="light"] .metric-card__value .metric-card__value-unit,
+:root[data-color-mode="light"] .metric-card__unit {
+  color: var(--text-tertiary);
+}
+:root[data-color-mode="light"] .metric-card__action {
+  background: rgba(41, 28, 45, 0.06);
+  border: 1px solid var(--line-soft);
+  color: var(--text-secondary);
+}
+:root[data-color-mode="light"] .metric-card__action:hover {
+  background: rgba(41, 28, 45, 0.12);
+  color: var(--text-primary);
+}
+:root[data-color-mode="light"] .metric-card__goal-track {
+  background: rgba(41, 28, 45, 0.08);
+}
+/* the vivid hero tile keeps its bold gradient + white text */
+:root[data-color-mode="light"] .metric-card[data-variant="vivid"] .metric-card__value,
+:root[data-color-mode="light"] .metric-card[data-variant="vivid"] .metric-card__label,
+:root[data-color-mode="light"] .metric-card[data-variant="vivid"] .metric-card__unit {
+  color: #fff;
+}
+@media (hover: hover) and (prefers-reduced-transparency: no-preference) {
+  :root[data-color-mode="light"] .metric-card[data-variant="glow"] {
+    background:
+      radial-gradient(70% 58% at 26% 2%, color-mix(in srgb, var(--tone-color) 12%, transparent), transparent 70%),
+      linear-gradient(180deg, rgba(255, 255, 255, 0.86), rgba(255, 255, 255, 0.76));
+  }
+}
+
+/* ---- daily check-in: an interactive, slightly elevated module (§9) ---- */
+:root[data-color-mode="light"] .checkin-card {
+  background: #ffffff;
+  border: 1px solid var(--line-highlight);
+  box-shadow: var(--shadow-float);
+}
+:root[data-color-mode="light"] .checkin-card .bg-white\/\[0\.06\] {
+  background-color: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--accent);
+}
+:root[data-color-mode="light"] .checkin-card .bg-white\/\[0\.06\]:hover {
+  background-color: color-mix(in srgb, var(--accent) 20%, transparent);
+}
+
+/* ---- right column: distinct surface levels so modules don't merge (§11) ----
+   main-column cards sit at --surface; the aside is one step up (whiter + a
+   real shadow), and the trainer card carries a faint accent tint. */
+:root[data-color-mode="light"] .dash-aside .metric-card[data-variant="glow"],
+:root[data-color-mode="light"] .dash-aside .surface-soft {
+  background:
+    radial-gradient(72% 60% at 24% 0%, color-mix(in srgb, var(--tone-color) 9%, transparent), transparent 70%),
+    #ffffff;
+  border-color: var(--line-highlight);
+  box-shadow: var(--shadow-float);
+}
+:root[data-color-mode="light"] .dash-aside .metric-card[data-variant="vivid"] {
+  box-shadow: var(--shadow-float);
+}
+:root[data-color-mode="light"] .dash-aside .ai-card {
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--accent) 7%, #fff), #ffffff 70%);
+  border: 1px solid color-mix(in srgb, var(--accent) 18%, var(--line-highlight));
+  box-shadow: var(--shadow-float);
+}
+
+/* ---- body-muscles map: on a light ground the "rest" muscles are near-white
+   and vanish — give every muscle a thin neutral outline for definition
+   (the app removes the library's slate stroke in surfaces.css for dark). ---- */
+:root[data-color-mode="light"] .body-muscles .body-chart-muscle {
+  stroke: rgba(41, 28, 45, 0.22);
+  stroke-width: 0.12;
+}
+
+/* ---- navbar: active item is an obvious dark pill (§7) ---- */
+:root[data-color-mode="light"] .nav-active-pill {
+  background: #2A2130;
+  box-shadow: 0 2px 8px rgba(30, 20, 35, 0.18);
+}
+:root[data-color-mode="light"] nav[aria-label="Primary"] [aria-current="page"] span {
+  color: #fff;
+}
+:root[data-color-mode="light"] nav[aria-label="Primary"] [aria-current="page"] span[style*="drop-shadow"] {
+  filter: none !important;
+}
+
+/* ---- focus ring: the outer white halo is invisible on light ---- */
+:root[data-color-mode="light"] .focus-ring:focus-visible {
+  box-shadow: 0 0 0 2px var(--background-soft), 0 0 0 3.5px rgba(41, 28, 45, 0.45);
+}
+
+/* ---- atmosphere: kill the dark vignette, lighten the local glow ---- */
+:root[data-color-mode="light"] .atmosphere__vignette {
+  background: radial-gradient(120% 100% at 50% 30%, transparent 55%, rgba(41, 28, 45, 0.05) 100%);
+}
+/* ambient FX are tuned for a dark ground — hold them right back on light so
+   scanlines / heavy grain don't streak the white canvas */
+:root[data-color-mode="light"] .atmosphere__scanlines {
+  opacity: 0.28;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent 0 2px,
+    rgba(41, 28, 45, 0.045) 3px,
+    transparent 4px
+  );
+}
+:root[data-color-mode="light"] .atmosphere__particles {
+  opacity: 0.3;
+}
+:root[data-color-mode="light"][data-theme-effect="grain-heavy"] .atmosphere__grain {
+  opacity: 0.05 !important;
+}
+:root[data-color-mode="light"] .local-glow {
+  background: radial-gradient(
+    circle,
+    color-mix(in srgb, var(--accent) 16%, transparent),
+    color-mix(in srgb, var(--accent) 6%, transparent) 42%,
+    transparent 74%
+  );
+}
+
+/* ---- inline Tailwind white/* utilities → neutral dark on light ----
+   These are used app-wide as hairline borders, dividers and faint fills.
+   On a white ground `rgba(255,255,255,α)` is invisible, so flip to a dark
+   ink at a comparable (slightly lower) alpha. */
+:root[data-color-mode="light"] .bg-white\/\[0\.02\] { background-color: rgba(41, 28, 45, 0.02); }
+:root[data-color-mode="light"] .bg-white\/\[0\.03\] { background-color: rgba(41, 28, 45, 0.03); }
+:root[data-color-mode="light"] .bg-white\/\[0\.04\] { background-color: rgba(41, 28, 45, 0.035); }
+:root[data-color-mode="light"] .bg-white\/\[0\.05\] { background-color: rgba(41, 28, 45, 0.04); }
+:root[data-color-mode="light"] .bg-white\/\[0\.06\] { background-color: rgba(41, 28, 45, 0.05); }
+:root[data-color-mode="light"] .bg-white\/\[0\.07\] { background-color: rgba(41, 28, 45, 0.055); }
+:root[data-color-mode="light"] .bg-white\/\[0\.08\],
+:root[data-color-mode="light"] .bg-white\/10 { background-color: rgba(41, 28, 45, 0.06); }
+:root[data-color-mode="light"] .bg-white\/\[0\.09\],
+:root[data-color-mode="light"] .bg-white\/\[0\.1\],
+:root[data-color-mode="light"] .bg-white\/12 { background-color: rgba(41, 28, 45, 0.07); }
+:root[data-color-mode="light"] .bg-white\/\[0\.12\],
+:root[data-color-mode="light"] .bg-white\/\[0\.13\],
+:root[data-color-mode="light"] .bg-white\/\[0\.14\],
+:root[data-color-mode="light"] .bg-white\/15 { background-color: rgba(41, 28, 45, 0.09); }
+:root[data-color-mode="light"] .bg-white\/\[0\.2\],
+:root[data-color-mode="light"] .bg-white\/20 { background-color: rgba(41, 28, 45, 0.12); }
+:root[data-color-mode="light"] .bg-white\/90 { background-color: rgba(255, 255, 255, 0.9); }
+
+:root[data-color-mode="light"] .border-white\/\[0\.06\],
+:root[data-color-mode="light"] .border-white\/8,
+:root[data-color-mode="light"] .border-white\/\[0\.07\],
+:root[data-color-mode="light"] .border-white\/\[0\.08\],
+:root[data-color-mode="light"] .border-white\/\[0\.09\],
+:root[data-color-mode="light"] .border-white\/10,
+:root[data-color-mode="light"] .border-white\/12,
+:root[data-color-mode="light"] .border-white\/\[0\.13\] { border-color: rgba(41, 28, 45, 0.08); }
+:root[data-color-mode="light"] .border-white\/15,
+:root[data-color-mode="light"] .border-white\/20 { border-color: rgba(41, 28, 45, 0.12); }
+:root[data-color-mode="light"] .border-white\/25,
+:root[data-color-mode="light"] .border-white\/30,
+:root[data-color-mode="light"] .border-white\/40 { border-color: rgba(41, 28, 45, 0.18); }
+:root[data-color-mode="light"] .border-white\/70 { border-color: rgba(41, 28, 45, 0.3); }
+
+:root[data-color-mode="light"] .text-white\/60,
+:root[data-color-mode="light"] .text-white\/70,
+:root[data-color-mode="light"] .text-white\/75 { color: var(--text-tertiary); }
+:root[data-color-mode="light"] .text-white\/80,
+:root[data-color-mode="light"] .text-white\/85,
+:root[data-color-mode="light"] .text-white\/90,
+:root[data-color-mode="light"] .text-white\/95 { color: var(--text-secondary); }
+
+/* …but keep white where the element genuinely sits on a dark / colour ground:
+   the vivid session tile, the camera viewfinder, and any `.on-swatch` chip. */
+:root[data-color-mode="light"] .metric-card[data-variant="vivid"] [class*="text-white/"],
+:root[data-color-mode="light"] .on-swatch [class*="text-white/"],
+:root[data-color-mode="light"] .on-swatch[class*="text-white/"] {
+  color: rgba(255, 255, 255, 0.86);
+}
+:root[data-color-mode="light"] .metric-card[data-variant="vivid"] .label-instrument {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+/* divider utility used in lists */
+:root[data-color-mode="light"] .divide-\[var\(--line-soft\)\] > :not([hidden]) ~ :not([hidden]) {
+  border-color: var(--line-soft);
+}
+

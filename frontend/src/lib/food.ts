@@ -90,7 +90,17 @@ export const fmtDay = (iso: string): string => {
 };
 
 export const sourceLabel = (s: string | null): string =>
-  s === "usda" ? "USDA" : s === "open_food_facts" ? "Open Food Facts" : s === "custom" ? "custom" : "quick add";
+  s === "usda"
+    ? "USDA"
+    : s === "open_food_facts"
+      ? "Open Food Facts"
+      : s === "nutritionix"
+        ? "Nutritionix"
+        : s === "edamam"
+          ? "Edamam"
+          : s === "custom"
+            ? "custom"
+            : "quick add";
 
 /** "165 kcal · 31 g protein" style meta line for a search row. */
 export function macroMeta(kcalPer100: number, proteinPer100: number, per: string, perServingOnly: boolean): string {

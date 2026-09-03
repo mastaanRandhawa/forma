@@ -1,8 +1,9 @@
 import { ReactNode, useEffect, useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import { AnimatePresence, LayoutGroup, motion, useReducedMotion } from "motion/react";
+import { Sun, Moon, Monitor } from "lucide-react";
 import { CoinBalance } from "../CoinBalance";
-import { useEquippedItem } from "../../lib/customization";
+import { useCustomization, useEquippedItem } from "../../lib/customization";
 import { useProgression } from "../../api/settings";
 import type { FeatureKey } from "../../api/types";
 
@@ -139,6 +140,15 @@ export function TopNav({
           "0 0 0 0 rgba(0, 0, 0, 0), inset 0 1px 0 rgba(255, 255, 255, 0)",
       };
 
+  const cz = useCustomization();
+  const colorMode = (cz.equipped.colorMode ?? "cm-system") as "cm-system" | "cm-light" | "cm-dark";
+  const COLOR_MODE_CYCLE: Record<"cm-system" | "cm-light" | "cm-dark", "cm-system" | "cm-light" | "cm-dark"> = {
+    "cm-system": "cm-light",
+    "cm-light": "cm-dark",
+    "cm-dark": "cm-system",
+  };
+  const ColorModeIcon = colorMode === "cm-light" ? Sun : colorMode === "cm-dark" ? Moon : Monitor;
+
   const menuItems = [...visibleItems, ...secondary, { to: "/settings", label: "settings", icon: <ProfileGlyph /> }];
 
   return (
@@ -191,7 +201,7 @@ export function TopNav({
                   {active && (
                     <motion.span
                       layoutId="nav-active"
-                      className="absolute inset-0 rounded-pill surface-recessed"
+                      className="nav-active-pill absolute inset-0 rounded-pill surface-recessed"
                       aria-hidden
                       transition={
                         reduce ? { duration: 0 } : { type: "spring", stiffness: 420, damping: 34 }
@@ -239,6 +249,15 @@ export function TopNav({
           <span className="hidden sm:block">
             <CoinBalance />
           </span>
+          <button
+            type="button"
+            onClick={() => cz.setColorMode(COLOR_MODE_CYCLE[colorMode])}
+            aria-label="Toggle color mode"
+            title={colorMode === "cm-system" ? "System theme" : colorMode === "cm-light" ? "Light theme" : "Dark theme"}
+            className="focus-ring tactile hidden h-9 w-9 place-items-center rounded-pill text-content-tertiary transition-colors hover:text-content-secondary sm:grid"
+          >
+            <ColorModeIcon size={16} />
+          </button>
           {secondary.map((n) => {
             const active = isActive(n);
             return (

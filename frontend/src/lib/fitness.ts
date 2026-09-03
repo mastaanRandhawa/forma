@@ -245,6 +245,33 @@ export function lastTopSet(
   return [...last.sets].sort((a, b) => b.weight * b.reps - a.weight * a.reps)[0] ?? null;
 }
 
+/**
+ * Volume per muscle group (primary muscles only) over the last `days` days.
+ * Returns entries sorted descending by volume, e.g. [{ muscle:"Chest", kg:4200 }, …].
+ * Pass a catalog lookup fn so this stays pure (no catalog import here).
+ */
+export function volumeByMuscle(
+  sessions: CompletedSession[],
+  getMuscles: (name: string) => string[],
+  days = 30,
+): { muscle: string; kg: number }[] {
+  const cutoff = Date.now() - days * 86400_000;
+  const acc: Record<string, number> = {};
+  for (const s of sessions) {
+    if (Date.parse(s.startedAt) < cutoff) continue;
+    for (const e of s.exercises) {
+      const muscles = getMuscles(e.name);
+      const vol = exerciseVolume(e);
+      if (!vol || !muscles.length) continue;
+      const share = vol / muscles.length;
+      for (const m of muscles) acc[m] = (acc[m] ?? 0) + share;
+    }
+  }
+  return Object.entries(acc)
+    .map(([muscle, kg]) => ({ muscle, kg: Math.round(kg) }))
+    .sort((a, b) => b.kg - a.kg);
+}
+
 /** Exercise names that appear in logged history, most recent first. */
 export function loggedExerciseNames(sessions: CompletedSession[]): string[] {
   const seen: string[] = [];

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useLocation } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { PageHeader } from "../components/PageHeader";
 import { TrainingTabs } from "../components/layout/TrainingTabs";
 import { Reveal } from "../components/Reveal";
@@ -12,7 +12,8 @@ import { useFormaData } from "../lib/localStore";
 import { readinessFromCheckin } from "../api/localDashboard";
 import { DailyCheckinDrawer } from "../components/health/DailyCheckin";
 import { apiSessionToCompleted } from "../lib/lifecycle";
-import { API_ENABLED, useSessionHistory } from "../api/hooks";
+import { API_ENABLED, useSessionHistory, useResource } from "../api/hooks";
+import { api } from "../api/client";
 import { NutritionCard } from "../components/NutritionCard";
 import {
   adherence,
@@ -22,9 +23,11 @@ import {
   longestStreak,
   loggedExerciseNames,
   strengthSeriesFor,
+  volumeByMuscle,
   weeklyVolumeSeries,
   workoutsThisMonth,
 } from "../lib/fitness";
+import type { RepDbCatalogEntry } from "../lib/repdb";
 
 const RANGE = ["1M", "3M", "6M", "1Y"] as const;
 const RANGE_DAYS: Record<(typeof RANGE)[number], number> = { "1M": 30, "3M": 91, "6M": 182, "1Y": 365 };
@@ -191,6 +194,41 @@ export default function Progress() {
   );
   const trainedDays91 = consistency.filter((c) => c > 0).length;
 
+  // lazy-load RepDB catalog for muscle lookup (640KB — off the main bundle)
+  const [catalog, setCatalog] = useState<RepDbCatalogEntry[] | null>(null);
+  useEffect(() => {
+    void import("../lib/repdb.catalog").then((m) => setCatalog(m.REPDB_CATALOG));
+  }, []);
+  const norm = (s: string) =>
+    s.toLowerCase().replace(/[^a-z0-9]+/g, " ").replace(/\s+/g, " ").trim();
+  const getMuscles = useMemo(() => {
+    if (!catalog) return () => [];
+    const byName = new Map(catalog.map((e) => [norm(e.name), e]));
+    return (name: string): string[] => {
+      const key = norm(name);
+      const hit = byName.get(key) ?? catalog.find((e) => norm(e.name).includes(key) || key.includes(norm(e.name)));
+      return hit?.primary ?? [];
+    };
+  }, [catalog]);
+  const muscleVol = useMemo(
+    () => (catalog ? volumeByMuscle(sessions, getMuscles, windowDays) : []),
+    [catalog, sessions, getMuscles, windowDays],
+  );
+  const maxMuscleVol = muscleVol[0]?.kg ?? 1;
+
+  const trainingLoad = useResource(
+    "training-load",
+    () => API_ENABLED ? api.progress.trainingLoad() : Promise.reject(new Error("offline")),
+  );
+  const nutritionCorr = useResource(
+    "nutrition-correlation",
+    () => API_ENABLED ? api.progress.nutritionCorrelation() : Promise.reject(new Error("offline")),
+  );
+  const patterns = useResource(
+    "progress-patterns",
+    () => API_ENABLED ? api.progress.patterns() : Promise.reject(new Error("offline")),
+  );
+
   const hasData = sessions.length > 0;
 
   if (!hasData) {
@@ -235,7 +273,7 @@ export default function Progress() {
         <MetricCard
           tone="amber"
           label="workouts / month"
-          value={String(workoutsThisMonth(sessions))}
+          countTo={workoutsThisMonth(sessions)}
           unit="sessions"
           className="min-h-[168px]"
           viz={<MiniTrend data={weeklyVol.map((v) => v || 0.01)} mode="pulses" color="var(--accent-amber)" fill height={54} />}
@@ -243,7 +281,8 @@ export default function Progress() {
         <MetricCard
           tone="cyan"
           label="avg weekly volume"
-          value={(avgWeeklyVolume(sessions) / 1000).toFixed(1)}
+          countTo={avgWeeklyVolume(sessions) / 1000}
+          countFormat={(n) => n.toFixed(1)}
           unit={`k ${profile.units}`}
           revealDelay={0.08}
           className="min-h-[168px]"
@@ -252,7 +291,7 @@ export default function Progress() {
         <MetricCard
           tone="mauve"
           label="longest streak"
-          value={String(longestStreak(sessions))}
+          countTo={longestStreak(sessions)}
           unit="days"
           revealDelay={0.16}
           className="min-h-[168px]"
@@ -344,7 +383,14 @@ export default function Progress() {
         </div>
 
         <div>
-          <div className="label-soft lowercase">personal records</div>
+          <div className="flex items-center justify-between">
+            <div className="label-soft lowercase">personal records</div>
+            {prs.length > 0 && (
+              <Link to="/records" className="label-instrument hover:text-content-secondary" style={{ color: "var(--accent-pink)" }}>
+                view all →
+              </Link>
+            )}
+          </div>
           {prs.length === 0 ? (
             <EmptyState
               className="mt-4"
@@ -369,6 +415,163 @@ export default function Progress() {
           )}
         </div>
       </Reveal>
+
+      {muscleVol.length > 0 && (
+        <Reveal onView className="mt-14">
+          <div className="label-soft mb-4 lowercase">volume by muscle ({range})</div>
+          <ul className="space-y-2.5">
+            {muscleVol.slice(0, 8).map(({ muscle, kg }) => (
+              <li key={muscle} className="flex items-center gap-3">
+                <span className="w-28 shrink-0 text-[0.82rem] text-content-secondary lowercase truncate">{muscle}</span>
+                <div className="relative h-2 flex-1 overflow-hidden rounded-full bg-white/[0.06]">
+                  <div
+                    className="absolute inset-y-0 left-0 rounded-full"
+                    style={{
+                      width: `${Math.round((kg / maxMuscleVol) * 100)}%`,
+                      background: "var(--accent-pink)",
+                      opacity: 0.7 + 0.3 * (kg / maxMuscleVol),
+                    }}
+                  />
+                </div>
+                <span className="w-16 text-right text-[0.8rem] tabular-nums text-content-tertiary">
+                  {kg >= 1000 ? `${(kg / 1000).toFixed(1)}t` : `${kg}kg`}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </Reveal>
+      )}
+
+      {/* ── Training load (CTL/ATL) ─────────────────────────────────── */}
+      {API_ENABLED && trainingLoad.data && !("insufficient_data" in trainingLoad.data) && (
+        <Reveal onView className="mt-14">
+          <div className="label-soft mb-4 lowercase">training status</div>
+          <div className="flex items-end gap-6">
+            <div className="flex flex-col items-center gap-1">
+              <div
+                className="metric-numeral text-[2rem]"
+                style={{
+                  color: trainingLoad.data.status === "fresh" ? "var(--accent-lime)"
+                    : trainingLoad.data.status === "optimal" ? "var(--accent-cyan)"
+                    : trainingLoad.data.status === "fatigued" ? "var(--accent-amber)"
+                    : "var(--accent-pink)",
+                }}
+              >
+                {trainingLoad.data.status}
+              </div>
+              <div className="label-instrument">
+                TSB {trainingLoad.data.tsb > 0 ? "+" : ""}{trainingLoad.data.tsb}
+              </div>
+            </div>
+            <div className="flex-1 space-y-2">
+              {[
+                { label: "fitness (CTL)", val: trainingLoad.data.ctl, max: 20, color: "var(--accent-cyan)" },
+                { label: "fatigue (ATL)", val: trainingLoad.data.atl, max: 20, color: "var(--accent-pink)" },
+              ].map(({ label, val, max, color }) => (
+                <div key={label} className="flex items-center gap-3">
+                  <span className="w-28 text-[0.8rem] text-content-secondary lowercase">{label}</span>
+                  <div className="relative h-1.5 flex-1 overflow-hidden rounded-full bg-white/[0.06]">
+                    <div
+                      className="absolute inset-y-0 left-0 rounded-full"
+                      style={{ width: `${Math.min(100, (val / max) * 100)}%`, background: color }}
+                    />
+                  </div>
+                  <span className="w-8 text-right text-[0.8rem] tabular-nums text-content-tertiary">{val}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+          {trainingLoad.data.weeklyTrimp.length > 0 && (
+            <MiniTrend
+              data={trainingLoad.data.weeklyTrimp}
+              mode="curve"
+              color="var(--accent-cyan)"
+              fill
+              height={40}
+              className="mt-4"
+            />
+          )}
+        </Reveal>
+      )}
+
+      {/* ── Behavioral pattern insight ───────────────────────────────── */}
+      {API_ENABLED && patterns.data && !("insufficient_data" in patterns.data) && patterns.data.insight && (
+        <Reveal onView className="mt-8">
+          <div className="label-soft mb-3 lowercase">training patterns</div>
+          <p className="text-[0.9rem] leading-relaxed text-content-secondary">{patterns.data.insight}</p>
+          {patterns.data.circadian.filter((b) => b.sessions >= 3).length > 0 && (
+            <ul className="mt-3 space-y-1.5">
+              {patterns.data.circadian
+                .filter((b) => b.sessions >= 3)
+                .map((b) => (
+                  <li key={b.label} className="flex items-center justify-between text-[0.84rem]">
+                    <span className="text-content-secondary lowercase">{b.label}</span>
+                    <span
+                      className="label-instrument"
+                      style={{ color: b.relativePerformance > 5 ? "var(--accent-lime)" : b.relativePerformance < -5 ? "var(--accent-amber)" : "var(--content-tertiary)" }}
+                    >
+                      {b.relativePerformance > 0 ? "+" : ""}{b.relativePerformance}% vol
+                    </span>
+                  </li>
+                ))}
+            </ul>
+          )}
+        </Reveal>
+      )}
+
+      {/* ── Circadian recommendation ─────────────────────────────────── */}
+      {API_ENABLED && patterns.data && !("insufficient_data" in patterns.data) && (() => {
+        const best = [...patterns.data.circadian]
+          .filter((b) => b.sessions >= 3)
+          .sort((a, b) => b.relativePerformance - a.relativePerformance)[0];
+        if (!best || best.relativePerformance <= 5) return null;
+        return (
+          <Reveal onView className="mt-4">
+            <div
+              className="flex items-start gap-3 rounded-[var(--radius-medium)] px-4 py-3"
+              style={{ background: "rgba(var(--accent-lime-rgb,163,230,53),0.07)", border: "1px solid rgba(163,230,53,0.15)" }}
+            >
+              <div className="mt-0.5 h-2 w-2 shrink-0 rounded-full" style={{ background: "var(--accent-lime)" }} />
+              <p className="text-[0.85rem] leading-relaxed text-content-secondary">
+                Your best volume comes during{" "}
+                <span className="font-medium text-content-primary lowercase">{best.label}</span>{" "}
+                — {best.relativePerformance}% above your average. Consider scheduling your hardest sessions then.
+              </p>
+            </div>
+          </Reveal>
+        );
+      })()}
+
+      {/* ── Nutrition-training correlation ───────────────────────────── */}
+      {API_ENABLED && nutritionCorr.data && !("insufficient_data" in nutritionCorr.data) && (
+        <Reveal onView className="mt-8">
+          <div className="label-soft mb-3 lowercase">protein vs. volume</div>
+          <p className="text-[0.9rem] text-content-secondary">
+            Correlation: {" "}
+            <span className="font-medium text-content-primary">{nutritionCorr.data.correlation}</span>
+            {" "}&mdash;{" "}
+            <span className="text-content-tertiary">{nutritionCorr.data.interpretation}</span>
+          </p>
+          {nutritionCorr.data.weeks.length >= 3 && (
+            <div className="mt-4 overflow-x-auto">
+              <div className="flex min-w-0 items-end gap-1" style={{ height: 60 }}>
+                {nutritionCorr.data.weeks.slice(-8).map((w) => {
+                  const maxVol = Math.max(...nutritionCorr.data!.weeks.slice(-8).map((x) => x.totalVolumeKg), 1);
+                  return (
+                    <div key={w.week} className="flex flex-1 flex-col items-center gap-0.5" title={`${w.week}: ${w.avgProteinG}g protein, ${w.totalVolumeKg}kg`}>
+                      <div
+                        className="w-full min-w-[10px] rounded-t-sm"
+                        style={{ height: `${Math.round((w.totalVolumeKg / maxVol) * 52)}px`, background: "var(--accent-pink)", opacity: 0.7 }}
+                      />
+                      <span className="text-[0.6rem] text-content-tertiary">{w.week.slice(6)}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </Reveal>
+      )}
 
       <div id="recovery" className="scroll-mt-24">
         <RecoverySection />

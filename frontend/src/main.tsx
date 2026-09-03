@@ -12,6 +12,7 @@ import type { FeatureKey } from "./api/types";
 const Home = lazy(() => import("./pages/Home"));
 const Workouts = lazy(() => import("./pages/Workouts"));
 const ActiveWorkout = lazy(() => import("./pages/ActiveWorkout"));
+const WorkoutBuilder = lazy(() => import("./pages/WorkoutBuilder"));
 const Trainer = lazy(() => import("./pages/Trainer"));
 const Body = lazy(() => import("./pages/Body"));
 const Progress = lazy(() => import("./pages/Progress"));
@@ -19,6 +20,7 @@ const Nutrition = lazy(() => import("./pages/Nutrition"));
 const Goals = lazy(() => import("./pages/Goals"));
 const Store = lazy(() => import("./pages/Store"));
 const ExerciseLibrary = lazy(() => import("./pages/ExerciseLibrary"));
+const Records = lazy(() => import("./pages/Records"));
 const SettingsLayout = lazy(() => import("./pages/settings/SettingsLayout"));
 const SettingsOverview = lazy(() => import("./pages/settings/SettingsOverview"));
 const TrainingProfile = lazy(() => import("./pages/settings/TrainingProfile"));
@@ -71,6 +73,8 @@ const router = createBrowserRouter([
       { path: "/dashboard", element: <Home /> },
       { path: "/workouts", element: <Workouts /> },
       { path: "/workouts/active", element: <ActiveWorkout /> },
+      { path: "/workouts/builder", element: <WorkoutBuilder /> },
+      { path: "/workouts/builder/:id", element: <WorkoutBuilder /> },
       { path: "/trainer", element: <Trainer /> },
       { path: "/body", element: gated("body_map", <Body />) },
       { path: "/progress", element: gated("progress_basic", <Progress />) },
@@ -79,6 +83,7 @@ const router = createBrowserRouter([
       { path: "/goals", element: gated("goals", <Goals />) },
       { path: "/store", element: gated("store", <Store />) },
       { path: "/exercise-library", element: <ExerciseLibrary /> },
+      { path: "/records", element: <Records /> },
       {
         path: "/settings",
         element: <SettingsLayout />,

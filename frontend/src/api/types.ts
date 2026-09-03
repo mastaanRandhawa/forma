@@ -337,7 +337,7 @@ export interface NutritionDayTotals extends NutritionTotals {
 }
 
 // ── food logging & nutrition tracking ─────────────────────────────────────
-export type FoodSource = "open_food_facts" | "usda" | "custom";
+export type FoodSource = "open_food_facts" | "usda" | "nutritionix" | "edamam" | "custom";
 export type MealType = "breakfast" | "lunch" | "dinner" | "snack";
 
 export interface FoodSearchResult {
@@ -356,7 +356,9 @@ export interface FoodSearchResult {
 export interface FoodSearchResponse {
   query: string;
   results: FoodSearchResult[];
-  sources: { usda: boolean; custom: number };
+  sources: { usda: boolean; nutritionix: boolean; edamam: boolean; custom: number };
+  /** which external tier the results came from */
+  via: FoodSource | null;
   degraded: boolean;
 }
 
@@ -390,7 +392,12 @@ export interface Food {
 
 export interface BarcodeResponse {
   code: string;
-  status: "found" | "not_found" | "source_unavailable";
+  status: "found" | "not_found" | "source_unavailable" | "parsed_from_label";
+  /** which tier answered: a data source, "cache", or "label" (OCR) */
+  via: FoodSource | "cache" | "label" | null;
+  degraded: boolean;
+  /** 0..1 confidence — only set when status is "parsed_from_label" */
+  confidence: number | null;
   food: Food | null;
 }
 
@@ -501,6 +508,8 @@ export interface CustomFoodInput {
 export interface FoodAttribution {
   openFoodFacts: { name: string; url: string; license: string; licenseUrl: string; note: string };
   usda: { name: string; url: string; license: string; note: string };
+  nutritionix: { name: string; url: string; license: string; note: string };
+  edamam: { name: string; url: string; license: string; note: string };
 }
 export interface FoodDayResult {
   entry: FoodLogEntry;
@@ -660,6 +669,8 @@ export interface WorkoutInput {
     targetWeightKg?: number;
     targetRestSec?: number;
     notes?: string;
+    supersetGroup?: number | null;
+    supersetType?: SupersetType;
   }>;
 }
 

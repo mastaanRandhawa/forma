@@ -28,6 +28,7 @@ import { DetailDrawer } from "../components/dashboard/DetailDrawer";
 import { MetricDetailBody } from "../components/dashboard/MetricDetailBody";
 import { apiSessionToCompleted } from "../lib/lifecycle";
 import { Quiet } from "../components/Quiet";
+import { useEquippedItem } from "../lib/customization";
 import { useProgression, usePrefs } from "../api/settings";
 import { API_ENABLED, useDashboard, useSessionHistory } from "../api/hooks";
 
@@ -65,6 +66,7 @@ export default function Home() {
   const localDash = useMemo(() => buildLocalDashboard({ ...data, sessions }), [data, sessions]);
   const dash = API_ENABLED && apiDash.data ? apiDash.data : localDash;
   const dashLoading = API_ENABLED && apiDash.initialLoading;
+  const kaiLookId = useEquippedItem("avatar")?.id;
 
   const hasRecovery = API_ENABLED
     ? (apiDash.data?.readinessAvailable ?? "unavailable") !== "unavailable"
@@ -208,7 +210,7 @@ export default function Home() {
             )}
           </div>
 
-          <aside className="space-y-4">
+          <aside className="dash-aside space-y-4">
             <Reveal onView className="hidden lg:block">
               <SessionCard />
             </Reveal>
@@ -223,7 +225,7 @@ export default function Home() {
               <Quiet widgetKey="kai-message">
                 <Link to="/trainer" className="focus-ring group lift block ai-card p-4">
                   <div className="flex items-start gap-3">
-                    <KaiOrb size={40} state={coachMood(dash)} gaze className="mt-0.5" />
+                    <KaiOrb size={40} state={coachMood(dash)} gaze look={kaiLookId} className="mt-0.5" />
                     <div className="min-w-0">
                       <div className="label-soft lowercase">kai · your trainer</div>
                       <p className="mt-1 line-clamp-3 text-[0.86rem] leading-relaxed text-content-secondary">

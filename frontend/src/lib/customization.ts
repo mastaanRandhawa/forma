@@ -10,8 +10,12 @@ import {
 import { walletStore, useWalletBalance } from "./wallet";
 import {
   ACCENT_MAP,
+  applyFont,
   applyTheme,
   DEFAULT_THEME_ID,
+  LEGACY_THEME_ALIAS,
+  resolveColorMode,
+  resolveThemeId,
   THEME_MAP,
   type ThemeEffect,
 } from "./themes";
@@ -44,6 +48,8 @@ const DEFAULT_EQUIPPED: Record<Slot, string> = {
   frame: "fr-none",
   title: "ti-none",
   badge: "bd-none",
+  colorMode: "cm-system",
+  font: "fn-system",
 };
 
 type State = {
@@ -55,6 +61,19 @@ function defaultOwned(): string[] {
   return customizationItems.filter((i) => i.price === 0).map((i) => i.id);
 }
 
+/**
+ * Fold retired themes onto their surviving hue. When someone was on an old
+ * light-only theme ("cloud" / "dusk") and hasn't picked a color mode, move them
+ * to light so the switch to a mode-based model is invisible.
+ */
+function normalizeEquipped(eq: Record<string, string>): Record<Slot, string> {
+  const out = { ...DEFAULT_EQUIPPED, ...eq } as Record<Slot, string>;
+  const legacyTheme = out.theme in LEGACY_THEME_ALIAS;
+  out.theme = resolveThemeId(out.theme);
+  if (legacyTheme && (!eq.colorMode || eq.colorMode === "cm-system")) out.colorMode = "cm-light";
+  return out;
+}
+
 function load(): State {
   try {
     const raw = localStorage.getItem(LS_KEY);
@@ -62,7 +81,7 @@ function load(): State {
     const p = JSON.parse(raw) as Partial<State>;
     return {
       owned: Array.from(new Set([...(p.owned ?? []), ...defaultOwned()])),
-      equipped: { ...DEFAULT_EQUIPPED, ...(p.equipped ?? {}) },
+      equipped: normalizeEquipped(p.equipped ?? {}),
     };
   } catch {
     return { owned: defaultOwned(), equipped: { ...DEFAULT_EQUIPPED } };
@@ -85,8 +104,10 @@ function emit() {
 
 /** merge an authoritative server bundle into local state */
 function hydrate(remote: { owned?: string[]; equipped?: Record<string, string>; balance?: number }) {
-  if (remote.owned) state.owned = Array.from(new Set([...remote.owned, ...defaultOwned()]));
-  if (remote.equipped) state.equipped = { ...DEFAULT_EQUIPPED, ...remote.equipped };
+  state = {
+    owned: remote.owned ? Array.from(new Set([...remote.owned, ...defaultOwned()])) : state.owned,
+    equipped: remote.equipped ? normalizeEquipped(remote.equipped) : state.equipped,
+  };
   emit();
   if (typeof remote.balance === "number") walletStore.setBalance(remote.balance);
 }
@@ -104,27 +125,38 @@ export const customizationStore = {
     api.customization.get().then(hydrate).catch(() => {});
   },
 
-  /** buy an item — spends coins, adds to owned, does NOT auto-equip */
-  buy(item: CustomizationItem): boolean {
+  /** buy an item — spends coins, adds to owned; pass autoEquip=true to also equip instantly */
+  buy(item: CustomizationItem, autoEquip = false): boolean {
     if (state.owned.includes(item.id)) return false;
     if (!walletStore.spend(item.price, item.name, "purchase")) return false;
-    state.owned = [...state.owned, item.id];
+    state = {
+      owned: [...state.owned, item.id],
+      equipped: autoEquip ? { ...state.equipped, [item.slot]: item.id } : state.equipped,
+    };
     emit();
-    if (API_ENABLED) api.customization.buy(item.id).then(hydrate).catch(() => customizationStore.refresh());
+    if (API_ENABLED) {
+      api.customization.buy(item.id)
+        .then((res) => {
+          hydrate(res);
+          // chain equip only after buy succeeds so the server owns the item first
+          if (autoEquip) return api.customization.equip(item.id).then(hydrate);
+        })
+        .catch(() => customizationStore.refresh());
+    }
     return true;
   },
 
   /** equip an owned item into its slot */
   equip(item: CustomizationItem) {
     if (!state.owned.includes(item.id)) return;
-    state.equipped = { ...state.equipped, [item.slot]: item.id };
+    state = { ...state, equipped: { ...state.equipped, [item.slot]: item.id } };
     emit();
     if (API_ENABLED) api.customization.equip(item.id).then(hydrate).catch(() => customizationStore.refresh());
   },
 
   /** direct slot set (used for the "none" pseudo-items and theme picker) */
   set(slot: Slot, id: string) {
-    state.equipped = { ...state.equipped, [slot]: id };
+    state = { ...state, equipped: { ...state.equipped, [slot]: id } };
     emit();
     if (API_ENABLED) api.customization.setSlot(slot, id).then(hydrate).catch(() => customizationStore.refresh());
   },
@@ -171,9 +203,11 @@ interface CustomizationCtx {
   isOwned: (id: string) => boolean;
   isEquipped: (id: string, slot: Slot) => boolean;
   equippedId: (slot: Slot) => string;
-  buy: (item: CustomizationItem) => boolean;
+  buy: (item: CustomizationItem, autoEquip?: boolean) => boolean;
   equip: (item: CustomizationItem) => void;
   setSlot: (slot: Slot, id: string) => void;
+  /** shortcut for setSlot("colorMode", id) */
+  setColorMode: (id: "cm-system" | "cm-light" | "cm-dark") => void;
   reset: () => void;
 }
 const Ctx = createContext<CustomizationCtx | null>(null);
@@ -201,18 +235,56 @@ export function CustomizationProvider({
     customizationStore.refresh();
   }, [authKey]);
 
-  // apply the live theme whenever the equipped set changes
+  // apply theme + color mode + font whenever equipped set changes
   useEffect(() => {
     const themeId = snap.equipped.theme;
     const accent = ACCENT_MAP[snap.equipped.accent];
-    const effect = reduceMotion
-      ? "none"
-      : resolveEffect(themeId, snap.equipped.effect);
+    const effect = reduceMotion ? "none" : resolveEffect(themeId, snap.equipped.effect);
+    const colorMode = snap.equipped.colorMode ?? "cm-system";
+    const fontId = snap.equipped.font ?? "fn-system";
+
+    const mode = resolveColorMode(colorMode);
     applyTheme(themeId, {
+      mode,
       effect,
-      accentOverride: accent && accent.price >= 0 && accent.id !== "ac-brand" ? accent.color : null,
+      accentOverride: accent && accent.id !== "ac-brand" ? accent.color : null,
     });
-  }, [snap.equipped.theme, snap.equipped.accent, snap.equipped.effect, reduceMotion]);
+
+    applyFont(fontId);
+  }, [
+    snap.equipped.theme,
+    snap.equipped.accent,
+    snap.equipped.effect,
+    snap.equipped.colorMode,
+    snap.equipped.font,
+    reduceMotion,
+  ]);
+
+  // when color mode is "system", re-apply whenever the OS preference flips
+  useEffect(() => {
+    const colorMode = snap.equipped.colorMode ?? "cm-system";
+    if (colorMode !== "cm-system") return;
+    const mq = window.matchMedia("(prefers-color-scheme: dark)");
+    const handler = () => {
+      const effect = reduceMotion
+        ? "none"
+        : resolveEffect(snap.equipped.theme, snap.equipped.effect);
+      const accent = ACCENT_MAP[snap.equipped.accent];
+      applyTheme(snap.equipped.theme, {
+        mode: mq.matches ? "dark" : "light",
+        effect,
+        accentOverride: accent && accent.id !== "ac-brand" ? accent.color : null,
+      });
+    };
+    mq.addEventListener("change", handler);
+    return () => mq.removeEventListener("change", handler);
+  }, [
+    snap.equipped.colorMode,
+    snap.equipped.theme,
+    snap.equipped.effect,
+    snap.equipped.accent,
+    reduceMotion,
+  ]);
 
   const value = useMemo<CustomizationCtx>(
     () => ({
@@ -225,6 +297,8 @@ export function CustomizationProvider({
       buy: customizationStore.buy,
       equip: customizationStore.equip,
       setSlot: customizationStore.set,
+      setColorMode: (id: "cm-system" | "cm-light" | "cm-dark") =>
+        customizationStore.set("colorMode", id),
       reset: customizationStore.reset,
     }),
     [snap, balance],

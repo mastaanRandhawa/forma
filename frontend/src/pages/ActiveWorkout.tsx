@@ -1,9 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import {
   Check,
   ChevronLeft,
+  Circle,
+  Clock,
   Coins,
   Minus,
   Pause,
@@ -14,6 +16,7 @@ import {
   Timer,
   Trophy,
   X,
+  Zap,
 } from "lucide-react";
 import { Reveal } from "../components/Reveal";
 import { EmptyState } from "../components/EmptyState";
@@ -22,16 +25,22 @@ import { KaiOrb } from "../components/KaiOrb";
 import { ExerciseThumb } from "../components/ExerciseThumb";
 import { ExerciseDetailDrawer } from "../components/ExerciseDetailDrawer";
 import { DetailDrawer } from "../components/dashboard/DetailDrawer";
+import { Stepper } from "../components/workout/Stepper";
+import { ExercisePicker } from "../components/workout/ExercisePicker";
 import {
   abandonSession,
   finishSession,
   loadData,
+  repeatFromCompleted,
+  startSession,
   updateActive,
   useFormaData,
+  type CompletedSession,
   type LoggedExercise,
   type LoggedSet,
 } from "../lib/localStore";
-import { detectPRs, lastPerformance, lastTopSet, sessionVolume } from "../lib/fitness";
+import { saveSessionAsTemplate } from "../lib/templates";
+import { detectPRs, epley1RM, lastPerformance, lastTopSet, sessionVolume } from "../lib/fitness";
 import {
   activeSetIndex,
   addWarmupSet,
@@ -40,10 +49,13 @@ import {
   deferExercise,
   focusExercise,
   isExerciseComplete,
+  nextSupersetStep,
   resumeExercise,
   sessionProgress,
   sessionQueue,
   setSkipped,
+  supersetLetter,
+  supersetPosition,
   substituteExercise,
   suggestSubstitutes,
   trainerCue,
@@ -56,8 +68,10 @@ import { walletStore } from "../lib/wallet";
 import { streakData } from "../lib/data";
 import { ALL_TEMPLATES } from "../lib/program";
 import type { RepDbCatalogEntry } from "../lib/repdb";
-import { repdbThumb } from "../lib/repdb";
+import { repdbThumb, repdbImage } from "../lib/repdb";
+import { plateCombo, plateLabel } from "../lib/plates";
 import { API_ENABLED } from "../api/hooks";
+import { api } from "../api/client";
 import {
   abandonApiSession,
   finishApiSession,
@@ -70,6 +84,13 @@ import {
 const EASE = [0.22, 1, 0.36, 1] as const;
 const REST_PRESETS = [60, 90, 120, 180];
 const DEFAULT_REST = 90;
+const COMPOUND_REST = 120;
+const ISOLATION_REST = 75;
+
+function adaptiveRest(mechanic: string | null | undefined, lastRpe: number | null | undefined): number {
+  const base = mechanic === "compound" ? COMPOUND_REST : ISOLATION_REST;
+  return (lastRpe ?? 0) >= 9 ? base + 30 : base;
+}
 
 const EXERCISE_POOL = [
   ...new Set(ALL_TEMPLATES.flatMap((t) => t.exercises.map((e) => e.name))),
@@ -123,59 +144,6 @@ function useElapsed(session: ReturnType<typeof useFormaData>["active"]) {
 const fmtClock = (sec: number) =>
   `${Math.floor(Math.max(0, sec) / 60)}:${String(Math.max(0, sec) % 60).padStart(2, "0")}`;
 
-// ── numeric stepper ─────────────────────────────────────────────────────────
-function Stepper({
-  label,
-  value,
-  step,
-  suffix,
-  onChange,
-}: {
-  label: string;
-  value: number | null;
-  step: number;
-  suffix?: string;
-  onChange: (v: number | null) => void;
-}) {
-  const bump = (dir: number) => {
-    const base = value ?? 0;
-    const next = Math.round((base + dir * step) * 100) / 100;
-    onChange(next < 0 ? 0 : next);
-  };
-  return (
-    <div className="surface-recessed flex flex-1 flex-col items-center rounded-hero px-3 py-3">
-      <span className="label-instrument">{label}</span>
-      <div className="mt-1.5 flex w-full items-center justify-between gap-2">
-        <button
-          aria-label={`decrease ${label}`}
-          onClick={() => bump(-1)}
-          className="focus-ring tactile grid h-11 w-11 shrink-0 place-items-center rounded-full bg-white/[0.06] text-content-secondary hover:bg-white/[0.12] active:scale-95"
-        >
-          <Minus size={18} strokeWidth={2.4} />
-        </button>
-        <input
-          inputMode="decimal"
-          value={value ?? ""}
-          placeholder="—"
-          onChange={(e) => {
-            const raw = e.target.value.replace(",", ".");
-            onChange(raw === "" ? null : Number.isNaN(Number(raw)) ? value : Number(raw));
-          }}
-          className="focus-ring w-full min-w-0 rounded-[var(--radius-small)] bg-transparent text-center text-[1.8rem] font-medium tabular-nums text-content-primary outline-none"
-        />
-        <button
-          aria-label={`increase ${label}`}
-          onClick={() => bump(1)}
-          className="focus-ring tactile grid h-11 w-11 shrink-0 place-items-center rounded-full bg-white/[0.06] text-content-secondary hover:bg-white/[0.12] active:scale-95"
-        >
-          <Plus size={18} strokeWidth={2.4} />
-        </button>
-      </div>
-      {suffix && <span className="label-instrument mt-1">{suffix}</span>}
-    </div>
-  );
-}
-
 // ── progress rail ───────────────────────────────────────────────────────────
 function ProgressRail({ queue, cursor, onJump }: {
   queue: ReturnType<typeof sessionQueue>;
@@ -222,8 +190,11 @@ export default function ActiveWorkout() {
   const [view, setView] = useState<"focus" | "overview">("focus");
   const [subFor, setSubFor] = useState<number | null>(null);
   const [howto, setHowto] = useState(false);
+  const [addingEx, setAddingEx] = useState(false);
+  const [savedAsTemplate, setSavedAsTemplate] = useState(false);
   const [finishing, setFinishing] = useState(false);
   const [endEarly, setEndEarly] = useState(false);
+  const finishedRef = useRef<CompletedSession | null>(null);
   const [cue, setCue] = useState<{ event: CueEvent; ctx: CueContext }>({ event: "start", ctx: {} });
   const [milestone, setMilestone] = useState<null | { kind: "pr" | "exercise"; title: string; detail?: string }>(null);
   const [summary, setSummary] = useState<null | {
@@ -235,6 +206,8 @@ export default function ActiveWorkout() {
     sets: number;
     coins: number;
     muscles: string[];
+    vsLast: { volume: number; duration: number } | null;
+    proteinNudge: { eaten: number; target: number } | null;
   }>(null);
 
   const elapsed = useElapsed(session);
@@ -293,7 +266,7 @@ export default function ActiveWorkout() {
 
   // one-time start cue
   useEffect(() => {
-    if (session && cue.event === "start" && !cue.ctx.totalExercises) {
+    if (session && cue.event === "start" && cue.ctx.totalExercises === undefined) {
       setCue({
         event: "start",
         ctx: {
@@ -439,19 +412,47 @@ export default function ActiveWorkout() {
     const live = fresh.exercises.filter((e) => !e.skipped);
     const exercisesLeft = live.filter((e) => !isExerciseComplete(e)).length - (done ? 0 : 1);
 
+    // PR / completion feedback whenever an exercise wraps
+    let hadPr = false;
     if (done) {
       const prs = detectPRs({ exercises: [freshEx] }, priorSessions);
       if (prs.length) {
+        hadPr = true;
         setMilestone({ kind: "pr", title: "new personal record", detail: prs[0] });
         setCue({ event: "pr", ctx: { prDetail: prs[0].split("— ")[1] } });
         vibrate([20, 40, 20]);
       } else {
         setMilestone({ kind: "exercise", title: `${freshEx.name} complete`, detail: `${freshEx.sets.filter((s) => s.done && !s.warmup).length} sets` });
+      }
+    }
+
+    // ── superset routing: interleave peers, rest only between rounds ────────
+    const step = freshEx.supersetGroup != null ? nextSupersetStep(fresh, cursor) : null;
+    if (step) {
+      updateActive((s) => focusExercise(s, step.targetIndex));
+      const peerName = fresh.exercises[step.targetIndex]?.name;
+      if (step.rest) {
+        const doneWrk = freshEx.sets.filter((s) => s.done && !s.warmup);
+        const lastRpe = doneWrk[doneWrk.length - 1]?.rpe;
+        const restSec = adaptiveRest(catEntry?.mechanic, lastRpe);
+        startRest(restSec);
+        setCue({ event: "rest", ctx: { restSeconds: restSec } });
+      } else {
+        setCue({ event: "superset-next", ctx: { exerciseName: peerName } });
+      }
+      const after = loadData().active;
+      if (after && after.exercises.filter((e) => !e.skipped).every(isExerciseComplete)) {
+        setTimeout(() => void finish(), 1000);
+      }
+      return;
+    }
+
+    if (done) {
+      if (!hadPr)
         setCue({
           event: exercisesLeft <= 0 ? "finish" : exercisesLeft === 1 ? "almost-done" : "exercise-done",
           ctx: { exercisesLeft, exerciseName: freshEx.name },
         });
-      }
       updateActive((s) => advance(s));
       const after = loadData().active;
       if (after && after.exercises.filter((e) => !e.skipped).every(isExerciseComplete)) {
@@ -461,7 +462,9 @@ export default function ActiveWorkout() {
       }
     } else {
       const setsLeft = freshEx.sets.filter((s) => !s.done).length;
-      const restSec = catEntry?.mechanic === "compound" ? 120 : DEFAULT_REST;
+      const doneWrk2 = freshEx.sets.filter((s) => s.done && !s.warmup);
+      const lastRpe2 = doneWrk2[doneWrk2.length - 1]?.rpe;
+      const restSec = adaptiveRest(catEntry?.mechanic, lastRpe2);
       startRest(restSec);
       setCue({ event: "rest", ctx: { restSeconds: restSec, setsLeftInExercise: setsLeft } });
     }
@@ -493,7 +496,12 @@ export default function ActiveWorkout() {
     }
 
     const before = walletStore.snapshot().lifetimeEarned;
-    finishSession(volume, units, prs, session.apiId);
+    const completed = finishSession(volume, units, prs, session.apiId);
+    finishedRef.current = completed;
+    const lastSame = priorSessions.find((s) => s.name === session.name) ?? null;
+    const vsLast = lastSame
+      ? { volume: volume - lastSame.volume, duration: durationSec - lastSame.durationSec }
+      : null;
     grantWorkoutRewards({
       sessionId: session.apiId ?? session.startedAt,
       volume,
@@ -519,6 +527,16 @@ export default function ActiveWorkout() {
       /* offline / no catalog */
     }
 
+    let proteinNudge: { eaten: number; target: number } | null = null;
+    if (API_ENABLED && data.nutritionTargets?.protein) {
+      try {
+        const foodDay = await api.food.day();
+        const eaten = Math.round(foodDay.totals?.protein ?? 0);
+        const target = data.nutritionTargets.protein;
+        if (eaten < target * 0.85) proteinNudge = { eaten, target };
+      } catch { /* offline — skip nudge */ }
+    }
+
     setSummary({
       durationSec,
       volume,
@@ -528,6 +546,8 @@ export default function ActiveWorkout() {
       sets: session.exercises.reduce((n, e) => n + e.sets.filter((s) => s.done && !s.warmup).length, 0),
       coins,
       muscles,
+      vsLast,
+      proteinNudge,
     });
     setFinishing(false);
   };
@@ -584,6 +604,29 @@ export default function ActiveWorkout() {
         </div>
       </header>
 
+      {session && session.exercises.length === 0 && (
+        <div className="surface-soft mb-5 p-6 text-center sm:p-8">
+          <h2 className="text-heading text-content-primary lowercase">empty workout</h2>
+          <p className="mx-auto mt-2 max-w-[34ch] text-[0.88rem] text-content-secondary lowercase">
+            add exercises as you go. log your sets, rest between them, and finish when you're done.
+          </p>
+          <button
+            onClick={() => setAddingEx(true)}
+            className="focus-ring tactile mt-6 rounded-hero bg-[var(--accent-pink)] px-6 py-3.5 text-[0.95rem] font-semibold lowercase text-white active:scale-[0.99]"
+          >
+            + add your first exercise
+          </button>
+        </div>
+      )}
+      <ExercisePicker
+        open={addingEx}
+        onClose={() => setAddingEx(false)}
+        onPick={(n) => {
+          addExercise(n);
+          setAddingEx(false);
+        }}
+      />
+
       {session?.paused && (
         <div className="surface-recessed mb-5 flex items-center justify-between rounded-hero p-4">
           <span className="text-[0.9rem] lowercase text-content-secondary">workout paused</span>
@@ -597,35 +640,55 @@ export default function ActiveWorkout() {
       <AnimatePresence>
         {milestone && (
           <motion.div
-            initial={reduce ? { opacity: 0 } : { opacity: 0, y: -12, scale: 0.97 }}
+            initial={reduce ? { opacity: 0 } : { opacity: 0, y: -16, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.97 }}
-            transition={{ duration: 0.28, ease: EASE }}
-            className="mb-5 flex items-center gap-3 rounded-hero border p-4"
+            exit={reduce ? { opacity: 0 } : { opacity: 0, scale: 0.96, y: -8 }}
+            transition={{ duration: 0.32, ease: EASE }}
+            className="mb-5 overflow-hidden rounded-[var(--radius-large)]"
             style={{
-              borderColor:
-                milestone.kind === "pr"
-                  ? "color-mix(in srgb, var(--accent-lime) 40%, transparent)"
-                  : "var(--line-soft)",
-              background:
-                milestone.kind === "pr"
-                  ? "color-mix(in srgb, var(--accent-lime) 9%, transparent)"
-                  : "rgba(255,255,255,0.03)",
+              border: milestone.kind === "pr"
+                ? "1px solid color-mix(in srgb, var(--accent-lime) 45%, transparent)"
+                : "1px solid var(--line-soft)",
+              background: milestone.kind === "pr"
+                ? "radial-gradient(120% 180% at 10% -20%, color-mix(in srgb, var(--accent-lime) 18%, transparent), transparent 60%), color-mix(in srgb, var(--accent-lime) 6%, transparent)"
+                : "rgba(255,255,255,0.03)",
+              boxShadow: milestone.kind === "pr"
+                ? "0 0 40px -12px color-mix(in srgb, var(--accent-lime) 40%, transparent)"
+                : "none",
             }}
           >
-            <div
-              className="grid h-9 w-9 shrink-0 place-items-center rounded-full"
-              style={{ background: milestone.kind === "pr" ? "var(--accent-lime)" : "rgba(255,255,255,0.08)" }}
-            >
-              {milestone.kind === "pr" ? (
-                <Trophy size={16} strokeWidth={2.2} className="text-[#0c0c0c]" />
-              ) : (
-                <Check size={16} strokeWidth={2.6} className="text-content-primary" />
-              )}
-            </div>
-            <div>
-              <div className="text-[0.9rem] lowercase text-content-primary">{milestone.title}</div>
-              {milestone.detail && <div className="label-instrument mt-0.5">{milestone.detail}</div>}
+            <div className="flex items-center gap-4 p-4 sm:p-5">
+              <motion.div
+                animate={milestone.kind === "pr" && !reduce ? { scale: [0.6, 1.18, 0.96, 1.04, 1] } : {}}
+                transition={{ duration: 0.5, ease: EASE }}
+                className="grid shrink-0 place-items-center rounded-full"
+                style={{
+                  width: milestone.kind === "pr" ? 48 : 36,
+                  height: milestone.kind === "pr" ? 48 : 36,
+                  background: milestone.kind === "pr" ? "var(--accent-lime)" : "rgba(255,255,255,0.08)",
+                  boxShadow: milestone.kind === "pr" ? "0 0 20px -4px rgba(216,255,99,0.6)" : "none",
+                }}
+              >
+                {milestone.kind === "pr" ? (
+                  <Trophy size={20} strokeWidth={2.2} className="text-[#0c0c0c]" />
+                ) : (
+                  <Check size={15} strokeWidth={2.6} className="text-content-primary" />
+                )}
+              </motion.div>
+              <div className="min-w-0">
+                <div
+                  className="font-semibold lowercase leading-tight"
+                  style={{
+                    fontSize: milestone.kind === "pr" ? "1.05rem" : "0.9rem",
+                    color: milestone.kind === "pr" ? "var(--accent-lime)" : "var(--text-primary)",
+                  }}
+                >
+                  {milestone.title}
+                </div>
+                {milestone.detail && (
+                  <div className="label-instrument mt-0.5 text-content-secondary">{milestone.detail}</div>
+                )}
+              </div>
             </div>
           </motion.div>
         )}
@@ -645,6 +708,11 @@ export default function ActiveWorkout() {
           workingCount={workingSets.length}
           trainablePos={trainablePos}
           trainableTotal={trainableTotal}
+          supersetLabel={
+            session && supersetPosition(session, cursor)
+              ? `superset ${supersetPosition(session, cursor)!.letter} · ${supersetPosition(session, cursor)!.position}/${supersetPosition(session, cursor)!.count}`
+              : null
+          }
           last={last}
           rxWeight={rxWeight}
           rxReps={rxReps}
@@ -652,6 +720,11 @@ export default function ActiveWorkout() {
           onStopRest={stopRest}
           onStartRest={startRest}
           onPatchActiveSet={patchActiveSet}
+          onUsePrevious={() => {
+            if (!currentEx) return;
+            const top = lastTopSet(priorSessions, currentEx.name);
+            if (top) patchActiveSet((s) => ({ ...s, weight: top.weight, reps: top.reps }));
+          }}
           onCompleteSet={completeActiveSet}
           onAddSet={(w) => addSet(cursor, w)}
           onToggleWarmup={() =>
@@ -668,18 +741,25 @@ export default function ActiveWorkout() {
         <div className="mt-4">
           <div className="label-soft mb-2 lowercase">sets</div>
           <div className="space-y-1.5">
-            {currentEx.sets.map((s, si) => (
+            {currentEx.sets.map((s, si) => {
+              const workingIdx = currentEx.sets.slice(0, si + 1).filter((x) => !x.warmup).length - 1;
+              const prevSet = !s.warmup && last?.sets[workingIdx] ? last.sets[workingIdx] : null;
+              return (
               <div
                 key={si}
-                className={`flex items-center gap-3 rounded-[var(--radius-medium)] px-3 py-2 text-[0.88rem] ${
+                className={`rounded-[var(--radius-medium)] px-3 py-2 text-[0.88rem] ${
                   si === activeIdx && !s.done ? "surface-recessed" : ""
                 }`}
               >
+                <div className="flex items-center gap-3">
                 <span className="w-10 shrink-0 label-instrument">
                   {s.warmup ? "w/u" : `#${currentEx.sets.slice(0, si + 1).filter((x) => !x.warmup).length}`}
                 </span>
                 <span className="flex-1 tabular-nums text-content-secondary">
-                  {s.weight != null ? `${s.weight} ${units}` : "—"} × {s.reps ?? "—"}
+                  {s.weight != null ? `${s.weight} ${units}` : "—"} ×{" "}
+                  {s.isAmrap ? (
+                    <span className="rounded-sm px-1 text-[0.72rem] font-semibold uppercase tracking-wider" style={{ background: "rgba(var(--accent-amber-rgb,250,170,58),0.18)", color: "var(--accent-amber)" }}>amrap</span>
+                  ) : (s.reps ?? "—")}
                   {s.rpe != null ? ` @ ${s.rpe}` : ""}
                 </span>
                 <button
@@ -700,8 +780,15 @@ export default function ActiveWorkout() {
                 >
                   <X size={13} strokeWidth={2} />
                 </button>
+                </div>
+                {prevSet && !s.done && (
+                  <div className="ml-10 mt-0.5 label-instrument" style={{ color: "var(--content-tertiary)" }}>
+                    last time: {prevSet.weight} {units} × {prevSet.reps}
+                  </div>
+                )}
               </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
@@ -749,20 +836,29 @@ export default function ActiveWorkout() {
       <AnimatePresence>
         {endEarly && progress && (
           <Scrim onClose={() => setEndEarly(false)}>
-            <h2 className="text-heading text-content-primary lowercase">end workout?</h2>
+            <h2 className="text-heading text-content-primary lowercase">leave workout?</h2>
             <p className="mx-auto mt-2 max-w-[34ch] text-[0.88rem] text-content-secondary">
               {progress.exercisesDone} / {progress.exercisesTotal} exercises · {progress.setsDone} / {progress.setsTotal} sets logged.
             </p>
             <div className="mt-6 flex flex-col gap-2.5">
-              <Button onClick={() => void finish()} disabled={finishing} className="w-full">
-                {finishing ? "saving…" : "save workout"}
-              </Button>
               <button
                 onClick={() => setEndEarly(false)}
+                className="focus-ring rounded-pill surface-recessed px-5 py-2.5 text-[0.86rem] lowercase text-content-primary"
+              >
+                continue workout
+              </button>
+              <button
+                onClick={() => {
+                  if (!session?.paused) togglePause();
+                  nav("/workouts");
+                }}
                 className="focus-ring rounded-pill px-5 py-2.5 text-[0.86rem] lowercase text-content-secondary hover:text-content-primary"
               >
-                keep going
+                pause &amp; exit — resume later
               </button>
+              <Button onClick={() => void finish()} disabled={finishing} className="w-full">
+                {finishing ? "saving…" : "finish & save workout"}
+              </Button>
               <button
                 onClick={() => {
                   const a = loadData().active;
@@ -798,7 +894,9 @@ export default function ActiveWorkout() {
                 <KaiOrb size={40} state="done" />
                 <div>
                   <div className="label-instrument">workout complete</div>
-                  <h2 className="text-heading text-content-primary lowercase">{session?.name ?? "session"}</h2>
+                  <h2 className="text-heading text-content-primary lowercase">
+                    {session?.name ?? finishedRef.current?.name ?? "session"}
+                  </h2>
                 </div>
               </div>
 
@@ -852,20 +950,82 @@ export default function ActiveWorkout() {
                 <p className="mt-3 label-instrument">{summary.skipped} exercise(s) skipped</p>
               )}
 
+              {summary.vsLast && (
+                <p className="mt-3 label-instrument">
+                  vs last time:{" "}
+                  <span
+                    style={{
+                      color:
+                        summary.vsLast.volume >= 0 ? "var(--accent-lime)" : "var(--accent-amber)",
+                    }}
+                  >
+                    {summary.vsLast.volume >= 0 ? "+" : ""}
+                    {Math.round(summary.vsLast.volume).toLocaleString()} {units} volume
+                  </span>
+                  {" · "}
+                  {summary.vsLast.duration >= 0 ? "+" : ""}
+                  {Math.round(summary.vsLast.duration / 60)} min
+                </p>
+              )}
+
+              {summary.proteinNudge && (
+                <div className="mt-3 flex items-start gap-2 rounded-2xl p-3.5 text-[0.84rem] text-content-secondary"
+                  style={{ border: "1px solid rgba(245,158,11,0.3)", background: "rgba(245,158,11,0.08)" }}>
+                  <Zap size={14} className="mt-0.5 shrink-0" style={{ color: "var(--accent-amber)" }} />
+                  <span>
+                    protein today:{" "}
+                    <span className="font-medium text-content-primary">{summary.proteinNudge.eaten}g</span>
+                    {" of "}
+                    <span className="font-medium text-content-primary">{summary.proteinNudge.target}g</span>
+                    {" - log a meal to hit your goal."}
+                  </span>
+                </div>
+              )}
+
               <p className="mt-4 flex items-start gap-2 text-[0.9rem] italic leading-relaxed text-content-secondary">
-                <span aria-hidden>“</span>
+                <span aria-hidden>"</span>
                 {trainerCue("finish")}
               </p>
 
-              <div className="mt-6 flex gap-2.5">
-                <Link to="/workouts" className="flex-1">
-                  <Button className="w-full">done</Button>
-                </Link>
-                <Link to="/progress" className="flex-1">
-                  <Button variant="ghost" className="w-full">
-                    progress
-                  </Button>
-                </Link>
+              <div className="mt-6 flex flex-col gap-2.5">
+                <div className="flex gap-2.5">
+                  <Link to="/workouts" className="flex-1">
+                    <Button className="w-full">done</Button>
+                  </Link>
+                  <Link to="/progress" className="flex-1">
+                    <Button variant="ghost" className="w-full">
+                      progress
+                    </Button>
+                  </Link>
+                </div>
+                <div className="flex gap-2.5">
+                  <button
+                    onClick={() => {
+                      const s = finishedRef.current;
+                      if (!s) return;
+                      startSession(s.name, repeatFromCompleted(s));
+                      setSummary(null);
+                      nav("/workouts/active");
+                    }}
+                    className="focus-ring surface-recessed flex-1 rounded-pill py-2.5 text-[0.82rem] lowercase text-content-secondary hover:text-content-primary"
+                  >
+                    repeat workout
+                  </button>
+                  <button
+                    onClick={() => {
+                      const s = finishedRef.current;
+                      if (!s || savedAsTemplate) return;
+                      void saveSessionAsTemplate(s);
+                      setSavedAsTemplate(true);
+                    }}
+                    disabled={savedAsTemplate}
+                    className="focus-ring surface-recessed flex-1 rounded-pill py-2.5 text-[0.82rem] lowercase text-content-secondary hover:text-content-primary disabled:opacity-50"
+                  >
+                    {savedAsTemplate ? (
+                      <span className="flex items-center justify-center gap-1.5"><Check size={12} strokeWidth={2.5} /> saved</span>
+                    ) : "save as template"}
+                  </button>
+                </div>
               </div>
             </motion.div>
           </motion.div>
@@ -913,6 +1073,7 @@ function RestOrFocus(props: {
   workingCount: number;
   trainablePos: number;
   trainableTotal: number;
+  supersetLabel: string | null;
   last: ReturnType<typeof lastPerformance>;
   rxWeight: number | null;
   rxReps: number | null;
@@ -920,6 +1081,7 @@ function RestOrFocus(props: {
   onStopRest: () => void;
   onStartRest: (s: number) => void;
   onPatchActiveSet: (fn: (s: LoggedSet) => LoggedSet) => void;
+  onUsePrevious: () => void;
   onCompleteSet: () => void;
   onAddSet: (warmup: boolean) => void;
   onToggleWarmup: () => void;
@@ -929,7 +1091,18 @@ function RestOrFocus(props: {
 }) {
   const { session, currentEx, catEntry, units, activeSet, cueText } = props;
   const [now, setNow] = useState(() => Date.now());
+  const [imgFrame, setImgFrame] = useState(0);
   const restEndsAt = session.restEndsAt;
+
+  // Animate between start/end RepDB frames when resting or viewing the card
+  const imgStart = catEntry?.imgStart ? repdbImage(catEntry.imgStart) : null;
+  const imgEnd = catEntry?.imgEnd ? repdbImage(catEntry.imgEnd) : null;
+  const hasAnim = !!(imgStart && imgEnd);
+  useEffect(() => {
+    if (!hasAnim) return;
+    const id = setInterval(() => setImgFrame((f) => (f === 0 ? 1 : 0)), 800);
+    return () => clearInterval(id);
+  }, [hasAnim]);
 
   useEffect(() => {
     if (!restEndsAt) return;
@@ -949,35 +1122,73 @@ function RestOrFocus(props: {
   if (!currentEx) return null;
 
   const thumb = repdbThumb(currentEx.name);
+  const animSrc = hasAnim ? (imgFrame === 0 ? imgStart! : imgEnd!) : thumb;
 
   // ── REST STATE ──────────────────────────────────────────────────────────
   if (restEndsAt && remaining > 0) {
+    const totalRest = restEndsAt
+      ? Math.round((restEndsAt - (restEndsAt - remaining * 1000 - (Date.now() - (restEndsAt - remaining * 1000)))) / 1000)
+      : remaining;
+    const pct = Math.max(0, Math.min(1, remaining / Math.max(totalRest, remaining)));
+    const R = 52;
+    const circumference = 2 * Math.PI * R;
+    const dash = pct * circumference;
+
     return (
-      <div className="surface-soft p-6 text-center sm:p-8">
-        <div className="label-soft lowercase flex items-center justify-center gap-1.5">
-          <Timer size={13} /> rest
-        </div>
-        <div className="metric-numeral my-3 text-[3.4rem] leading-none text-content-primary tabular-nums">
-          {fmtClock(remaining)}
-        </div>
-        <div className="flex justify-center gap-2">
-          <button onClick={() => props.onStartRest(remaining + 15)} className="focus-ring tactile rounded-pill bg-white/[0.06] px-4 py-2 text-[0.85rem] tabular-nums text-content-primary hover:bg-white/[0.12]">
-            +15s
-          </button>
-          <button onClick={() => props.onStartRest(Math.max(1, remaining - 15))} className="focus-ring tactile rounded-pill bg-white/[0.06] px-4 py-2 text-[0.85rem] tabular-nums text-content-primary hover:bg-white/[0.12]">
-            −15s
-          </button>
-          <button onClick={props.onStopRest} className="focus-ring tactile rounded-pill bg-[var(--accent-lime)] px-5 py-2 text-[0.85rem] lowercase text-[#0c0c0c]">
-            ready
-          </button>
+      <div className="surface-soft overflow-hidden">
+        {/* cinematic rest header */}
+        <div className="flex flex-col items-center px-6 pt-10 pb-6 text-center">
+          <div className="label-soft lowercase flex items-center gap-1.5 mb-6">
+            <Timer size={12} /> rest
+          </div>
+
+          {/* circular countdown ring */}
+          <div className="relative mb-4" style={{ width: 140, height: 140 }}>
+            <svg width={140} height={140} style={{ transform: "rotate(-90deg)" }}>
+              {/* track */}
+              <circle cx={70} cy={70} r={R} fill="none" stroke="rgba(255,255,255,0.07)" strokeWidth={6} />
+              {/* progress */}
+              <circle
+                cx={70} cy={70} r={R}
+                fill="none"
+                stroke="var(--accent-lime)"
+                strokeWidth={6}
+                strokeLinecap="round"
+                strokeDasharray={`${dash} ${circumference}`}
+                style={{ transition: "stroke-dasharray 0.25s linear", filter: "drop-shadow(0 0 8px var(--accent-lime))" }}
+              />
+            </svg>
+            <div className="absolute inset-0 flex flex-col items-center justify-center">
+              <div
+                className="metric-numeral tabular-nums leading-none text-content-primary"
+                style={{ fontSize: "clamp(2.6rem, 10vw, 3.4rem)" }}
+              >
+                {fmtClock(remaining)}
+              </div>
+            </div>
+          </div>
+
+          {/* controls */}
+          <div className="flex items-center gap-2 mb-6">
+            <button onClick={() => props.onStartRest(remaining + 15)} className="focus-ring tactile rounded-pill bg-white/[0.06] px-4 py-2 text-[0.85rem] tabular-nums text-content-primary hover:bg-white/[0.12]">
+              +15s
+            </button>
+            <button onClick={props.onStopRest} className="btn-primary px-7 py-3 text-[0.95rem]">
+              ready
+            </button>
+            <button onClick={() => props.onStartRest(Math.max(1, remaining - 15))} className="focus-ring tactile rounded-pill bg-white/[0.06] px-4 py-2 text-[0.85rem] tabular-nums text-content-primary hover:bg-white/[0.12]">
+              -15s
+            </button>
+          </div>
         </div>
 
-        <div className="surface-recessed mt-6 rounded-hero p-4 text-left">
-          <div className="label-instrument">next</div>
-          <div className="mt-1 flex items-center gap-3">
-            <ExerciseThumb src={thumb} alt="" size={40} />
-            <div>
-              <div className="text-[0.95rem] lowercase text-content-primary">{currentEx.name}</div>
+        {/* next up */}
+        <div className="surface-recessed mx-5 mb-5 rounded-hero p-4 text-left">
+          <div className="label-instrument mb-2">next up</div>
+          <div className="flex items-center gap-3">
+            <ExerciseThumb src={thumb} alt="" size={44} />
+            <div className="min-w-0">
+              <div className="truncate text-[0.95rem] lowercase text-content-primary">{currentEx.name}</div>
               <div className="label-instrument mt-0.5 tabular-nums">
                 set {props.workingDone + 1} / {props.workingCount}
                 {activeSet?.weight != null ? ` · ${activeSet.weight} ${units} × ${activeSet.reps ?? "—"}` : ""}
@@ -986,7 +1197,7 @@ function RestOrFocus(props: {
           </div>
         </div>
 
-        <div className="mt-4 flex items-start gap-2.5 text-left">
+        <div className="mx-5 mb-5 flex items-start gap-2.5">
           <KaiOrb size={26} state="idle" />
           <p className="text-[0.86rem] italic leading-relaxed text-content-secondary">{cueText}</p>
         </div>
@@ -998,9 +1209,15 @@ function RestOrFocus(props: {
   const isBodyweight = catEntry?.bodyweight ?? false;
   return (
     <div className="surface-soft overflow-hidden">
-      {thumb && (
+      {animSrc && (
         <div className="relative aspect-[16/10] w-full bg-[#150c12]">
-          <img src={thumb} alt={currentEx.name} className="h-full w-full object-cover opacity-90" loading="eager" />
+          <img
+            key={animSrc}
+            src={animSrc}
+            alt={currentEx.name}
+            className="h-full w-full object-cover opacity-90 transition-opacity duration-300"
+            loading="eager"
+          />
           <button
             onClick={props.onHowto}
             className="focus-ring absolute bottom-3 right-3 rounded-pill bg-[rgba(12,6,10,0.7)] px-3 py-1.5 text-[0.76rem] lowercase text-content-primary backdrop-blur-sm hover:bg-[rgba(12,6,10,0.85)]"
@@ -1012,22 +1229,58 @@ function RestOrFocus(props: {
 
       <div className="p-5 sm:p-6">
         <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <div className="label-instrument">
-              exercise {props.trainablePos} / {props.trainableTotal}
-              {currentEx.substitutedFrom ? ` · swapped from ${currentEx.substitutedFrom}` : ""}
+          <div className="min-w-0 flex-1">
+            <div className="label-instrument flex flex-wrap items-center gap-x-2">
+              {props.supersetLabel && (
+                <span
+                  className="rounded-pill px-2 py-0.5 text-[0.68rem] uppercase tracking-[0.08em]"
+                  style={{
+                    background: "color-mix(in srgb, var(--accent-mauve) 16%, transparent)",
+                    color: "var(--accent-mauve)",
+                  }}
+                >
+                  {props.supersetLabel}
+                </span>
+              )}
+              <span>
+                exercise {props.trainablePos} / {props.trainableTotal}
+                {currentEx.substitutedFrom ? ` · swapped from ${currentEx.substitutedFrom}` : ""}
+              </span>
             </div>
-            <h2 className="mt-0.5 text-[1.5rem] font-medium lowercase text-content-primary">{currentEx.name}</h2>
-            <div className="label-instrument mt-0.5">
-              set {props.workingDone + 1} / {props.workingCount} · target {currentEx.target}
+            {/* hero: exercise name at display scale */}
+            <h2
+              className="mt-1 font-medium lowercase text-content-primary leading-[1.0]"
+              style={{ fontSize: "clamp(1.7rem, 6vw, 2.6rem)", letterSpacing: "-0.02em" }}
+            >
+              {currentEx.name}
+            </h2>
+            {/* set counter — prominent, accent color */}
+            <div className="mt-2 flex items-baseline gap-2">
+              <span
+                className="font-semibold tabular-nums leading-none"
+                style={{ fontSize: "clamp(2.4rem, 9vw, 3.6rem)", color: "var(--accent-pink)", letterSpacing: "-0.03em" }}
+              >
+                {props.workingDone + 1}
+              </span>
+              <span className="text-[1rem] text-content-tertiary">
+                / {props.workingCount}
+              </span>
+              <span className="label-instrument ml-1">sets · {currentEx.target}</span>
             </div>
           </div>
         </div>
 
         {/* previous / today */}
         <div className="mt-4 grid grid-cols-2 gap-2.5">
-          <div className="surface-recessed rounded-hero p-3">
-            <div className="label-instrument">previous</div>
+          <button
+            onClick={props.onUsePrevious}
+            disabled={!props.last?.sets.length}
+            className="focus-ring surface-recessed rounded-hero p-3 text-left disabled:cursor-default"
+          >
+            <div className="label-instrument flex items-center justify-between">
+              previous
+              {props.last?.sets.length ? <span className="text-content-tertiary">tap to fill</span> : null}
+            </div>
             <div className="mt-0.5 text-[0.95rem] tabular-nums text-content-secondary">
               {props.last?.sets.length
                 ? props.last.sets
@@ -1036,7 +1289,7 @@ function RestOrFocus(props: {
                     .join("  ")
                 : "first time"}
             </div>
-          </div>
+          </button>
           <div className="surface-recessed rounded-hero p-3">
             <div className="label-instrument" style={{ color: "var(--accent-mauve)" }}>
               today
@@ -1048,6 +1301,18 @@ function RestOrFocus(props: {
               {currentEx.prescription?.note ? (
                 <span className="label-instrument block">{currentEx.prescription.note}</span>
               ) : null}
+              {(() => {
+                if (props.rxWeight == null || !props.last?.sets.length) return null;
+                const bestE1rm = Math.max(...props.last.sets.map((s) => epley1RM(s.weight, s.reps)));
+                if (bestE1rm <= 0) return null;
+                const pct = Math.round((props.rxWeight / bestE1rm) * 100);
+                if (pct < 40 || pct > 115) return null;
+                return (
+                  <span className="label-instrument block" style={{ color: "var(--accent-mauve)" }}>
+                    {pct}% of est. 1RM
+                  </span>
+                );
+              })()}
             </div>
           </div>
         </div>
@@ -1077,9 +1342,28 @@ function RestOrFocus(props: {
           />
         </div>
 
+        {/* plate calculator — shown when a weight is set and exercise uses a barbell */}
+        {activeSet?.weight != null && !isBodyweight && (() => {
+          const barKg = units === "kg" ? 20 : 45;
+          const result = plateCombo(activeSet.weight, barKg, units as "kg" | "lb");
+          if (!result.perSide.length) return null;
+          return (
+            <div className="mt-2 flex items-center gap-2 rounded-hero px-3 py-2" style={{ background: "rgba(255,255,255,0.04)" }}>
+              <span className="label-instrument shrink-0">plates/side</span>
+              <span className="flex-1 tabular-nums text-[0.82rem] text-content-secondary">{plateLabel(result.perSide)}</span>
+              {result.loaded !== activeSet.weight && (
+                <span className="label-instrument shrink-0 tabular-nums" style={{ color: "var(--accent-amber)" }}>
+                  {result.loaded} {units}
+                </span>
+              )}
+            </div>
+          );
+        })()}
+
         <button
           onClick={props.onCompleteSet}
-          className="focus-ring tactile mt-3 w-full rounded-hero bg-[var(--accent-lime)] py-4 text-[1rem] font-semibold lowercase text-[#0c0c0c] active:scale-[0.99]"
+          className="focus-ring btn-primary mt-3 w-full rounded-[var(--radius-large)] py-4 text-[1.05rem]"
+          style={{ borderRadius: "var(--radius-large)" }}
         >
           complete set {props.workingDone + 1}
         </button>
@@ -1093,6 +1377,12 @@ function RestOrFocus(props: {
           </button>
           <button onClick={props.onToggleWarmup} className="focus-ring hover:text-content-secondary">
             {activeSet?.warmup ? "unmark warmup" : "this is a warmup"}
+          </button>
+          <button
+            onClick={() => props.onPatchActiveSet((s) => ({ ...s, isAmrap: !s.isAmrap, reps: s.isAmrap ? s.reps : null }))}
+            className={`focus-ring hover:text-content-secondary ${activeSet?.isAmrap ? "text-[var(--accent-amber)]" : ""}`}
+          >
+            {activeSet?.isAmrap ? "unmark amrap" : "amrap set"}
           </button>
           <button onClick={props.onDeferBusy} className="focus-ring hover:text-content-secondary">
             <SkipForward size={11} className="mr-1 inline" />
@@ -1136,26 +1426,43 @@ function OverviewBody({
   onAddExercise: (name: string) => void;
 }) {
   const [adding, setAdding] = useState(false);
-  const glyph: Record<string, string> = {
-    done: "✓",
-    active: "●",
-    deferred: "⏳",
-    skipped: "○",
-    pending: "○",
+  const phaseIcon: Record<string, React.ReactNode> = {
+    done:     <Check  size={13} strokeWidth={2.5} />,
+    active:   <Play   size={11} strokeWidth={2.5} />,
+    deferred: <Clock  size={12} strokeWidth={2} />,
+    skipped:  <Circle size={11} strokeWidth={1.5} />,
+    pending:  <Circle size={11} strokeWidth={1.5} />,
   };
   return (
     <div className="space-y-2">
-      {queue.map((r) => {
+      {queue.map((r, qi) => {
         const done = r.ex.sets.filter((s) => s.done && !s.warmup).length;
         const total = r.ex.sets.filter((s) => !s.warmup).length;
+        const grp = r.ex.supersetGroup ?? null;
+        const prevGrp = qi > 0 ? queue[qi - 1].ex.supersetGroup ?? null : null;
+        const groupHeader = grp != null && grp !== prevGrp;
         return (
+          <div key={r.index}>
+            {groupHeader && (
+              <div className="mb-1 mt-2 flex items-center gap-2 px-1">
+                <span
+                  className="rounded-pill px-2 py-0.5 text-[0.66rem] uppercase tracking-[0.1em]"
+                  style={{
+                    background: "color-mix(in srgb, var(--accent-mauve) 16%, transparent)",
+                    color: "var(--accent-mauve)",
+                  }}
+                >
+                  superset {supersetLetter(grp)}
+                </span>
+                <span className="label-instrument">back-to-back · rest after the round</span>
+              </div>
+            )}
           <div
-            key={r.index}
-            className={`rounded-[var(--radius-medium)] p-3 ${r.index === cursor ? "surface-recessed" : ""}`}
+            className={`rounded-[var(--radius-medium)] p-3 ${grp != null ? "border-l-2 border-[color-mix(in_srgb,var(--accent-mauve)_45%,transparent)]" : ""} ${r.index === cursor ? "surface-recessed" : ""}`}
           >
             <div className="flex items-center gap-3">
               <span
-                className="w-4 shrink-0 text-center text-[0.9rem]"
+                className="flex w-4 shrink-0 items-center justify-center"
                 style={{
                   color:
                     r.phase === "done"
@@ -1167,7 +1474,7 @@ function OverviewBody({
                       : "var(--content-tertiary)",
                 }}
               >
-                {glyph[r.phase]}
+                {phaseIcon[r.phase]}
               </span>
               <button
                 onClick={() => onJump(r.index)}
@@ -1206,33 +1513,25 @@ function OverviewBody({
               )}
             </div>
           </div>
+          </div>
         );
       })}
 
       <div className="border-t border-[var(--line-soft)] pt-3">
-        {adding ? (
-          <div className="flex flex-wrap gap-1.5">
-            {EXERCISE_POOL.map((n) => (
-              <button
-                key={n}
-                onClick={() => {
-                  onAddExercise(n);
-                  setAdding(false);
-                }}
-                className="focus-ring tactile rounded-pill bg-white/[0.05] px-3 py-1.5 text-[0.78rem] text-content-primary hover:bg-white/[0.12]"
-              >
-                {n}
-              </button>
-            ))}
-          </div>
-        ) : (
-          <button
-            onClick={() => setAdding(true)}
-            className="focus-ring w-full rounded-[var(--radius-large)] border border-dashed border-[var(--line-soft)] py-3 text-[0.82rem] lowercase text-content-tertiary hover:text-content-secondary"
-          >
-            <Plus size={13} className="mr-1.5 inline" /> add exercise
-          </button>
-        )}
+        <button
+          onClick={() => setAdding(true)}
+          className="focus-ring w-full rounded-[var(--radius-large)] border border-dashed border-[var(--line-soft)] py-3 text-[0.82rem] lowercase text-content-tertiary hover:text-content-secondary"
+        >
+          <Plus size={13} className="mr-1.5 inline" /> add exercise
+        </button>
+        <ExercisePicker
+          open={adding}
+          onClose={() => setAdding(false)}
+          onPick={(n) => {
+            onAddExercise(n);
+            setAdding(false);
+          }}
+        />
       </div>
       <p className="label-instrument pt-1">
         changes apply to today's session only — your saved plan isn't touched.
@@ -1308,8 +1607,9 @@ function SubstituteSheet({
         )}
       </DetailDrawer>
 
-      <LibraryPicker
+      <ExercisePicker
         open={showLib}
+        title="exercise library"
         onClose={() => {
           setShowLib(false);
           onClose();
@@ -1320,50 +1620,5 @@ function SubstituteSheet({
         }}
       />
     </>
-  );
-}
-
-function LibraryPicker({
-  open,
-  onClose,
-  onPick,
-}: {
-  open: boolean;
-  onClose: () => void;
-  onPick: (name: string) => void;
-}) {
-  const [q, setQ] = useState("");
-  const [cat, setCat] = useState<RepDbCatalogEntry[]>([]);
-  useEffect(() => {
-    if (open && cat.length === 0) void import("../lib/repdb.catalog").then((m) => setCat(m.REPDB_CATALOG));
-  }, [open, cat.length]);
-  const shown = useMemo(() => {
-    const n = q.trim().toLowerCase();
-    return (n ? cat.filter((e) => e.name.toLowerCase().includes(n)) : cat).slice(0, 40);
-  }, [q, cat]);
-  return (
-    <DetailDrawer open={open} onClose={onClose} title="exercise library">
-      <input
-        value={q}
-        onChange={(e) => setQ(e.target.value)}
-        placeholder="search…"
-        className="focus-ring surface-recessed mb-3 w-full rounded-pill px-4 py-2.5 text-[0.9rem] text-content-primary outline-none placeholder:text-content-tertiary"
-      />
-      <div className="divide-y divide-[var(--line-soft)]">
-        {shown.map((e) => (
-          <button
-            key={e.id}
-            onClick={() => onPick(e.name)}
-            className="focus-ring flex w-full items-center gap-3 py-2.5 text-left"
-          >
-            <ExerciseThumb src={repdbThumb(e.name)} alt="" size={40} />
-            <span className="min-w-0 flex-1">
-              <span className="block truncate text-[0.92rem] lowercase text-content-primary">{e.name}</span>
-              <span className="label-instrument">{(e.primary[0] ?? e.bodyPart) + " · " + e.equipment}</span>
-            </span>
-          </button>
-        ))}
-      </div>
-    </DetailDrawer>
   );
 }

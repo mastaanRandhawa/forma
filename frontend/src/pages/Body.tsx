@@ -14,35 +14,59 @@ import { useMuscleMap, API_ENABLED, errorMessage } from "../api/hooks";
 
 const VIEWS = ["Front", "Back"] as const;
 const RANGE = ["Today", "Week", "Month"] as const;
+const MODES = ["Activation", "Fatigue"] as const;
 
 export default function Body() {
   const [range, setRange] = useState<(typeof RANGE)[number]>("Today");
+  const [mode, setMode] = useState<(typeof MODES)[number]>("Activation");
   return (
     <div className="mx-auto max-w-[1120px]">
       <TrainingTabs className="mb-6" />
       <PageHeader eyebrow="body" title="muscle" ghost="map">
-        <PillSelector options={RANGE} value={range} onChange={setRange} />
+        <div className="flex flex-wrap gap-2">
+          <PillSelector options={MODES} value={mode} onChange={setMode} />
+          <PillSelector options={RANGE} value={range} onChange={setRange} />
+        </div>
       </PageHeader>
-      <BodyView range={range} />
+      <BodyView range={range} mode={mode} />
+    </div>
+  );
+}
+
+const ACTIVATION_LEGEND: [string, string][] = [["rest", "#E5E7EB"], ["light", "#FCA5A5"], ["heavy", "#B91C1C"]];
+const FATIGUE_LEGEND: [string, string][] = [["recovered", "#86EFAC"], ["moderate", "#FCA5A5"], ["fatigued", "#B91C1C"]];
+
+function LegendRow({ mode }: { mode: (typeof MODES)[number] }) {
+  const items = mode === "Activation" ? ACTIVATION_LEGEND : FATIGUE_LEGEND;
+  return (
+    <div className="mt-5 flex items-center gap-4 label-instrument">
+      {items.map(([l, c]) => (
+        <span key={l} className="flex items-center gap-1.5">
+          <span className="h-2.5 w-2.5 rounded-full" style={{ background: c }} />
+          {l}
+        </span>
+      ))}
     </div>
   );
 }
 
 /** The muscle-map view without the page chrome, reused inside Workouts. */
-export function BodyView({ range = "Today" }: { range?: (typeof RANGE)[number] }) {
+export function BodyView({ range = "Today", mode = "Activation" }: { range?: (typeof RANGE)[number]; mode?: (typeof MODES)[number] }) {
   const [view, setView] = useState<(typeof VIEWS)[number]>("Front");
   const [picked, setPicked] = useState<string | null>(null);
   const map = useMuscleMap(range.toLowerCase() as "today" | "week" | "month");
 
-  // Drive the muscle heatmap from the workouts completed in the selected range.
-  // Falls back to the static sample when no muscle-map data is available yet.
+  // Activation: raw score 0–1 (high = worked a lot).
+  // Fatigue overlay: invert score — high score = less recovery remaining.
   const activation = useMemo(() => {
     const rows = map.data?.muscles ?? [];
     if (rows.length === 0) return muscleActivation;
     const out: Record<string, number> = {};
-    for (const m of rows) out[m.key] = m.score;
+    for (const m of rows) {
+      out[m.key] = mode === "Fatigue" ? Math.max(0, 1 - m.score) : m.score;
+    }
     return out;
-  }, [map.data]);
+  }, [map.data, mode]);
 
   const ranked = API_ENABLED
     ? [...(map.data?.muscles ?? [])]
@@ -72,18 +96,7 @@ export function BodyView({ range = "Today" }: { range?: (typeof RANGE)[number] }
             className="w-full max-w-[280px] [&_svg]:h-auto [&_svg]:w-full"
             onSelect={(_id, name) => setPicked(name)}
           />
-          <div className="mt-5 flex items-center gap-4 label-instrument">
-            {[
-              ["rest", "#E5E7EB"],
-              ["light", "#FCA5A5"],
-              ["heavy", "#B91C1C"],
-            ].map(([l, c]) => (
-              <span key={l} className="flex items-center gap-1.5">
-                <span className="h-2.5 w-2.5 rounded-full" style={{ background: c }} />
-                {l}
-              </span>
-            ))}
-          </div>
+          <LegendRow mode={mode} />
           <div className="mt-2 h-5 label-instrument" style={{ color: "var(--accent-cyan)" }}>
             {picked ?? ""}
           </div>

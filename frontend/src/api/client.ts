@@ -380,13 +380,20 @@ export const api = {
     comparePhotos: (a: string, b: string) =>
       get<{ a: T.ProgressPhoto; b: T.ProgressPhoto }>("/progress/photos/compare", { a, b }),
     report: (days?: number) => get<unknown>("/progress/report", { days }),
+    trainingLoad: () => get<{ ctl: number; atl: number; tsb: number; status: string; weeklyTrimp: number[] }>("/progress/training-load"),
+    nutritionCorrelation: () => get<{ correlation: number; interpretation: string; weeks: { week: string; avgProteinG: number; totalVolumeKg: number }[]; insufficient_data?: boolean }>("/progress/nutrition-correlation"),
+    patterns: () => get<{ insight: string | null; bestDay: string | null; bestTimeWindow: string | null; adherenceByDay: { day: string; sessions: number; completionRate: number }[]; circadian: { label: string; sessions: number; avgVolumeKg: number; relativePerformance: number }[]; insufficient_data?: boolean }>("/progress/patterns"),
+    cohort: (exercise: string) => get<{ percentile?: number; yourE1rm?: number; cohortSize: number; insufficient_data?: boolean; no_pr?: boolean }>("/progress/cohort", { exercise }),
   },
 
   // food logging & nutrition tracking
   food: {
     attribution: () => get<T.FoodAttribution>("/food/attribution"),
     search: (q: string) => get<T.FoodSearchResponse>("/food/search", { q }),
-    barcode: (code: string) => get<T.BarcodeResponse>(`/food/barcode/${encodeURIComponent(code)}`),
+    barcode: (code: string, image?: string) =>
+      image
+        ? post<T.BarcodeResponse>(`/food/barcode/${encodeURIComponent(code)}`, { image })
+        : get<T.BarcodeResponse>(`/food/barcode/${encodeURIComponent(code)}`),
     item: (source: T.FoodSource, sourceId: string) =>
       get<T.Food>(`/food/item/${source}/${encodeURIComponent(sourceId)}`),
     customs: () => get<T.Food[]>("/food/custom"),

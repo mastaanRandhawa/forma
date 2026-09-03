@@ -1,4 +1,4 @@
-import { memo } from "react";
+import { memo, useState } from "react";
 
 type Props = {
   data: number[];
@@ -11,11 +11,14 @@ type Props = {
   caption?: string;
   /** stretch to the container width instead of a fixed pixel width */
   fill?: boolean;
+  /** format a data value for the hover tooltip; defaults to rounded integer */
+  tooltipFormat?: (v: number, i: number) => string;
 };
 
 /**
  * MiniTrend — a tiny visual signal, no chart chrome, no axes.
  * A thin glowing curve, a dotted cadence, or micro vertical pulses.
+ * Hover any point to see a value bubble (rendered via overflow:visible).
  */
 export const MiniTrend = memo(function MiniTrend({
   data,
@@ -26,19 +29,75 @@ export const MiniTrend = memo(function MiniTrend({
   className = "",
   caption,
   fill = false,
+  tooltipFormat,
 }: Props) {
+  const [hovered, setHovered] = useState<number | null>(null);
+
   const max = Math.max(...data);
   const min = Math.min(...data);
   const span = max - min || 1;
   const x = (i: number) => (i / (data.length - 1)) * width;
   const y = (d: number) => height - ((d - min) / span) * (height - 4) - 2;
 
+  const fmt = tooltipFormat ?? ((v: number) => String(Math.round(v)));
+
+  const tipEl = hovered !== null && data[hovered] !== undefined && (
+    (() => {
+      const px = x(hovered);
+      const py = y(data[hovered]!);
+      const label = fmt(data[hovered]!, hovered);
+      const tipW = Math.max(label.length * 6.5 + 14, 28);
+      const tipH = 17;
+      const tipX = Math.min(Math.max(px - tipW / 2, 0), width - tipW);
+      const tipY = py - tipH - 6;
+      return (
+        <g pointerEvents="none">
+          <rect
+            x={tipX} y={tipY} width={tipW} height={tipH}
+            rx={tipH / 2}
+            fill="rgba(24,13,20,0.93)"
+            stroke={color}
+            strokeWidth={0.8}
+            strokeOpacity={0.55}
+          />
+          <text
+            x={tipX + tipW / 2} y={tipY + tipH / 2 + 0.5}
+            textAnchor="middle"
+            dominantBaseline="middle"
+            fontSize={9}
+            fontFamily="var(--font-mono, ui-monospace, monospace)"
+            fontWeight={600}
+            fill={color}
+          >
+            {label}
+          </text>
+        </g>
+      );
+    })()
+  );
+
+  // invisible wider hit targets per data point
+  const hitW = data.length > 1 ? width / (data.length - 1) : width;
+  const hitTargets = data.map((_d, i) => (
+    <rect
+      key={i}
+      x={Math.max(x(i) - hitW / 2, 0)}
+      y={0}
+      width={hitW}
+      height={height}
+      fill="transparent"
+      onMouseEnter={() => setHovered(i)}
+      onMouseLeave={() => setHovered(null)}
+      style={{ cursor: "crosshair" }}
+    />
+  ));
+
   return (
     <svg
       width={fill ? "100%" : width}
       height={height}
       viewBox={`0 0 ${width} ${height}`}
-      className={`${fill ? "block w-full" : "overflow-visible"} ${className}`}
+      className={`${fill ? "block w-full" : ""} overflow-visible ${className}`}
       role="img"
       aria-label={caption ?? "trend"}
       preserveAspectRatio={fill ? "none" : undefined}
@@ -68,28 +127,44 @@ export const MiniTrend = memo(function MiniTrend({
             strokeLinejoin="round"
             style={{ filter: `drop-shadow(0 0 4px ${color})` }}
           />
+          {hovered !== null && data[hovered] !== undefined && (
+            <circle
+              cx={x(hovered)} cy={y(data[hovered]!)} r={3}
+              fill={color}
+              stroke="rgba(24,13,20,0.8)"
+              strokeWidth={1.5}
+              pointerEvents="none"
+            />
+          )}
         </>
       )}
 
       {mode === "dots" &&
         data.map((d, i) => (
-          <circle key={i} cx={x(i)} cy={y(d)} r={1.7} fill={color} opacity={0.5 + 0.5 * ((d - min) / span)} />
+          <circle
+            key={i} cx={x(i)} cy={y(d)}
+            r={hovered === i ? 2.5 : 1.7}
+            fill={color}
+            opacity={hovered === i ? 1 : 0.5 + 0.5 * ((d - min) / span)}
+            style={{ transition: "r 0.1s, opacity 0.1s" }}
+          />
         ))}
 
       {mode === "pulses" &&
         data.map((d, i) => (
           <line
             key={i}
-            x1={x(i)}
-            x2={x(i)}
-            y1={height}
-            y2={y(d)}
+            x1={x(i)} x2={x(i)} y1={height} y2={y(d)}
             stroke={color}
-            strokeWidth={2}
+            strokeWidth={hovered === i ? 3 : 2}
             strokeLinecap="round"
-            opacity={0.35 + 0.65 * ((d - min) / span)}
+            opacity={hovered === i ? 1 : 0.35 + 0.65 * ((d - min) / span)}
+            style={{ transition: "stroke-width 0.1s, opacity 0.1s" }}
           />
         ))}
+
+      {hitTargets}
+      {tipEl}
     </svg>
   );
 });

@@ -33,6 +33,8 @@ interface Picked {
   preloaded?: Food;
   quantity?: number;
   servingUnit?: "serving" | "g" | "oz";
+  /** shown as a banner on the serving screen — e.g. a low-confidence OCR warning */
+  note?: string;
 }
 
 export function AddFoodSheet({
@@ -233,7 +235,9 @@ function ScanTab({
   onPhoto: (dataUrl: string) => void;
 }) {
   const [code, setCode] = useState<string | null>(null);
-  const [state, setState] = useState<"idle" | "looking" | "not-found" | "unavailable">("idle");
+  const [state, setState] = useState<
+    "idle" | "looking" | "parsing" | "not-found" | "unavailable" | "label-failed"
+  >("idle");
 
   const lookup = async (raw: string) => {
     setCode(raw);
@@ -246,9 +250,40 @@ function ScanTab({
     setState(r?.status === "source_unavailable" ? "unavailable" : "not-found");
   };
 
+  // a label photo — feed it to OCR when we have a barcode that missed every
+  // source; otherwise hand it to the manual tab as a fill-in reference.
+  const handlePhoto = async (dataUrl: string) => {
+    if (!code || (state !== "not-found" && state !== "unavailable" && state !== "label-failed")) {
+      onPhoto(dataUrl);
+      return;
+    }
+    setState("parsing");
+    const r = await api.food.barcode(code, dataUrl).catch(() => null);
+    if (r?.status === "parsed_from_label" && r.food) {
+      const low = (r.confidence ?? 0) < 0.75;
+      onPick({
+        source: r.food.source,
+        sourceId: r.food.sourceId,
+        name: r.food.name,
+        preloaded: r.food,
+        note: low
+          ? "read from your label photo — some numbers may be off. double-check them before logging."
+          : "read from your label photo. give the numbers a quick check.",
+      });
+      return;
+    }
+    if (r?.food) {
+      onPick({ source: r.food.source, sourceId: r.food.sourceId, name: r.food.name, preloaded: r.food });
+      return;
+    }
+    setState("label-failed");
+  };
+
+  const missed = state === "not-found" || state === "unavailable" || state === "label-failed";
+
   return (
     <div className="space-y-4">
-      <BarcodeScanner onDetected={lookup} onPhoto={onPhoto} />
+      <BarcodeScanner onDetected={lookup} onPhoto={handlePhoto} />
 
       <div className="flex items-center gap-2">
         <input
@@ -267,15 +302,27 @@ function ScanTab({
           <Loader2 size={13} className="animate-spin" /> looking up {code}…
         </p>
       )}
-      {(state === "not-found" || state === "unavailable") && (
+      {state === "parsing" && (
+        <p className="flex items-center gap-2 text-[0.82rem] text-content-tertiary">
+          <Loader2 size={13} className="animate-spin" /> reading the nutrition label…
+        </p>
+      )}
+      {missed && (
         <div className="surface-recessed rounded-[var(--radius-large)] p-4">
           <p className="text-[0.88rem] text-content-primary">
-            {state === "unavailable" ? "open food facts is unreachable right now" : "product not found"}
+            {state === "unavailable"
+              ? "food databases are unreachable right now"
+              : state === "label-failed"
+                ? "couldn't read that label clearly"
+                : "not found in any food database"}
           </p>
           <p className="mt-1 text-[0.8rem] text-content-tertiary">
-            {code ? `barcode ${code}. ` : ""}search for it by name or add it as a custom food.
+            {code ? `barcode ${code}. ` : ""}
+            {state === "label-failed"
+              ? "try another photo — fill the frame with the nutrition facts panel — or add it manually."
+              : "photograph the nutrition facts label with the camera above, or add it another way."}
           </p>
-          <div className="mt-3 flex gap-2">
+          <div className="mt-3 flex flex-wrap gap-2">
             <button onClick={onManual} className="focus-ring tactile rounded-pill bg-white/[0.08] px-3.5 py-2 text-[0.8rem] lowercase text-content-primary hover:bg-white/[0.14]">
               search manually
             </button>
@@ -708,6 +755,11 @@ function FoodDetail({
 
   return (
     <div className="space-y-5">
+      {picked.note && (
+        <p className="rounded-[var(--radius-large)] border border-[var(--accent-amber)]/30 bg-[var(--accent-amber)]/[0.08] p-3 text-[0.8rem] leading-snug text-[var(--accent-amber)]">
+          {picked.note}
+        </p>
+      )}
       <div className="flex items-start gap-3">
         {food.imageUrl && (
           <img

@@ -1,6 +1,6 @@
 import { Outlet, useLocation, useNavigation } from "react-router-dom";
 import { Suspense, useEffect, useState } from "react";
-import { House, Dumbbell, MessageSquare, Apple, Library } from "lucide-react";
+import { House, Dumbbell, MessageSquare, Apple, Library, Trophy } from "lucide-react";
 import { API_ENABLED } from "../api/hooks";
 import { useFormaData } from "../lib/localStore";
 import { grantDailyBonus } from "../lib/rewards";
@@ -10,6 +10,7 @@ import { TopNav, type NavItem } from "./layout/TopNav";
 import { RouteProgress } from "./layout/RouteProgress";
 import { ScrollProgress } from "./layout/ScrollProgress";
 import { QuickActions } from "./layout/QuickActions";
+import { WorkoutInProgressBar } from "./workout/WorkoutInProgressBar";
 import { PageSkeleton } from "./skeleton/PageSkeleton";
 
 const ICON = { size: 19, strokeWidth: 1.75 } as const;
@@ -28,6 +29,7 @@ const NAV: NavItem[] = [
 ];
 
 const SECONDARY: NavItem[] = [
+  { to: "/records", label: "Records", icon: <Trophy {...ICON} /> },
   { to: "/exercise-library", label: "Exercise library", icon: <Library {...ICON} /> },
 ];
 
@@ -64,6 +66,7 @@ export function AppShell() {
       </main>
 
       <QuickActions />
+      <WorkoutInProgressBar />
       <CoinToast />
       <LocalDataBadge />
     </div>
@@ -78,7 +81,7 @@ function LocalDataBadge() {
   const fresh = !profile.onboardedAt && sessions.length === 0;
   return (
     <div className="fixed bottom-4 left-4 z-[60] max-w-[15rem]">
-      <div className="flex items-start gap-2 rounded-2xl border border-white/10 bg-[rgba(24,13,20,0.92)] px-3 py-2 text-[0.72rem] leading-snug text-content-tertiary shadow-[0_16px_36px_-14px_rgba(0,0,0,0.6)] backdrop-blur-md">
+      <div className="flex items-start gap-2 rounded-2xl border border-[var(--line-soft)] bg-[var(--surface-opaque)] px-3 py-2 text-[0.72rem] leading-snug text-content-tertiary shadow-[0_16px_36px_-14px_rgba(20,12,18,0.32)] backdrop-blur-md">
         <span>
           {fresh
             ? "Demo build · running on template defaults. Finish setup to make it yours — data stays in this browser."
