@@ -123,7 +123,7 @@ export function BarcodeScanner({
 
   return (
     <div>
-      <div className="relative aspect-[4/3] w-full overflow-hidden rounded-[var(--radius-large)] bg-black/40">
+      <div className="on-swatch relative aspect-[4/3] w-full overflow-hidden rounded-[var(--radius-large)] bg-black/40">
         <video ref={videoRef} className="h-full w-full object-cover" muted playsInline aria-label="Camera view" />
 
         {!active && (

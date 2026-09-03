@@ -54,15 +54,22 @@ export default function Appearance() {
       >
         <Link
           to="/settings/customization"
-          className="focus-ring tactile flex items-center gap-3 rounded-2xl border border-white/10 p-3 transition-colors hover:border-white/25"
-          style={{ background: theme?.swatch }}
+          className="focus-ring tactile on-swatch flex items-center gap-3 rounded-2xl border p-3 transition-colors"
+          style={{ background: theme?.swatch, borderColor: "rgba(255,255,255,0.14)" }}
         >
-          <span className="grid h-10 w-10 place-items-center rounded-lg border border-white/15 bg-black/25 text-[0.7rem] lowercase text-white/90 backdrop-blur-sm" />
+          <span
+            className="grid h-10 w-10 place-items-center rounded-lg backdrop-blur-sm"
+            style={{ background: "rgba(0,0,0,0.25)", border: "1px solid rgba(255,255,255,0.15)" }}
+          />
           <span className="flex-1">
-            <span className="block text-[0.9rem] lowercase text-white">{theme?.name ?? "current theme"}</span>
-            <span className="block text-[0.72rem] lowercase text-white/75">open customization</span>
+            <span className="block text-[0.9rem] lowercase" style={{ color: "#fff" }}>
+              {theme?.name ?? "current theme"}
+            </span>
+            <span className="block text-[0.72rem] lowercase" style={{ color: "rgba(255,255,255,0.78)" }}>
+              open customization
+            </span>
           </span>
-          <ArrowRight size={16} className="text-white/80" />
+          <ArrowRight size={16} style={{ color: "rgba(255,255,255,0.82)" }} />
         </Link>
       </Section>
 

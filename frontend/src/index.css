@@ -329,6 +329,17 @@ body {
 :root[data-color-mode="light"] .text-white\/90,
 :root[data-color-mode="light"] .text-white\/95 { color: var(--text-secondary); }
 
+/* …but keep white where the element genuinely sits on a dark / colour ground:
+   the vivid session tile, the camera viewfinder, and any `.on-swatch` chip. */
+:root[data-color-mode="light"] .metric-card[data-variant="vivid"] [class*="text-white/"],
+:root[data-color-mode="light"] .on-swatch [class*="text-white/"],
+:root[data-color-mode="light"] .on-swatch[class*="text-white/"] {
+  color: rgba(255, 255, 255, 0.86);
+}
+:root[data-color-mode="light"] .metric-card[data-variant="vivid"] .label-instrument {
+  color: rgba(255, 255, 255, 0.7);
+}
+
 /* divider utility used in lists */
 :root[data-color-mode="light"] .divide-\[var\(--line-soft\)\] > :not([hidden]) ~ :not([hidden]) {
   border-color: var(--line-soft);

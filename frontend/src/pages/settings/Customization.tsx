@@ -149,16 +149,25 @@ export default function Customization() {
               <button
                 key={t.id}
                 onClick={() => cz.setSlot("theme", t.id)}
-                className={`focus-ring tactile relative overflow-hidden rounded-2xl border p-3 text-left transition-colors ${
-                  active ? "border-white/40" : "border-white/10 hover:border-white/25"
-                }`}
-                style={{ background: t.swatch }}
+                className="focus-ring tactile relative overflow-hidden rounded-2xl border p-3 text-left transition-colors"
+                style={{
+                  background: t.swatch,
+                  borderColor: active ? "rgba(255,255,255,0.55)" : "rgba(255,255,255,0.14)",
+                }}
               >
-                <span className="block h-10 w-full rounded-lg border border-white/15 bg-black/25 backdrop-blur-sm" />
-                <span className="mt-2 flex items-center justify-between">
-                  <span className="text-[0.76rem] lowercase text-white/95">{t.name}</span>
+                <span
+                  className="block h-10 w-full rounded-lg backdrop-blur-sm"
+                  style={{ background: "rgba(0,0,0,0.25)", border: "1px solid rgba(255,255,255,0.15)" }}
+                />
+                <span className="mt-2 block text-[0.76rem] lowercase" style={{ color: "rgba(255,255,255,0.96)" }}>
+                  {t.name}
                 </span>
-                <span className="mt-0.5 block text-[0.54rem] uppercase tracking-wide text-white/60">included</span>
+                <span
+                  className="mt-0.5 block text-[0.54rem] uppercase tracking-wide"
+                  style={{ color: "rgba(255,255,255,0.62)" }}
+                >
+                  included
+                </span>
                 {active && <Check size={13} strokeWidth={3} className="absolute right-2 top-2 text-white" />}
               </button>
             );
@@ -179,7 +188,7 @@ export default function Customization() {
                 onClick={() => cz.setSlot("accent", a.id)}
                 title={a.name}
                 className={`focus-ring relative h-9 w-9 rounded-full border-2 transition-transform ${
-                  active ? "scale-110 border-white" : "border-white/20 hover:scale-105"
+                  active ? "scale-110 border-white/70" : "border-white/20 hover:scale-105"
                 }`}
                 style={{ background: a.swatch }}
               >
