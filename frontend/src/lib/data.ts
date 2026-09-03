@@ -331,18 +331,14 @@ export type CustomizationItem = {
   glyph?: string;
 };
 
-const RARITY_FROM_THEME: Record<string, CustomizationRarity> = {
-  free: "common", rare: "rare", epic: "epic", legendary: "legendary",
-};
-
 const themeItems: CustomizationItem[] = THEMES.map((t) => ({
   id: t.id,
   slot: "theme" as const,
   group: "Themes" as const,
   name: t.name,
   detail: t.blurb,
-  price: t.price,
-  rarity: RARITY_FROM_THEME[t.rarity],
+  price: 0,
+  rarity: "common",
   swatch: t.swatch,
 }));
 
@@ -351,9 +347,9 @@ const accentItems: CustomizationItem[] = ACCENTS.map((a) => ({
   slot: "accent" as const,
   group: "Accents" as const,
   name: a.name,
-  detail: a.price === 0 ? "the built-in accent" : "recolours buttons, links, rings and glyphs app-wide",
-  price: a.price,
-  rarity: a.price >= 200 ? "rare" : "common",
+  detail: "recolours buttons, links, rings and glyphs — works in light and dark",
+  price: 0,
+  rarity: "common",
   swatch: a.color,
 }));
 
@@ -437,7 +433,7 @@ const colorModeItems: CustomizationItem[] = [
     slot: "colorMode",
     group: "Appearance",
     name: "Always light",
-    detail: "bright surface mode — pairs with Cloud or Warm Dusk themes",
+    detail: "bright surface mode — your theme's colours carry over",
     price: 0,
     rarity: "common",
     glyph: "Sun",

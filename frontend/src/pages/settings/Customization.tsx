@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { Check, Lock } from "lucide-react";
+import { Check, Lock, Monitor, Moon, Sun } from "lucide-react";
 import { Section } from "../../components/settings/ui";
 import { customizationItems, type CustomizationSlot } from "../../lib/data";
 import { THEMES } from "../../lib/themes";
@@ -20,6 +20,12 @@ const OTHER_SLOTS: { slot: CustomizationSlot; title: string; desc: string }[] = 
   { slot: "frame", title: "profile frame", desc: "the ring around your avatar in the top bar." },
   { slot: "title", title: "profile title", desc: "shown under your name across the app." },
   { slot: "badge", title: "profile badge", desc: "a small mark next to your name." },
+];
+
+const COLOR_MODES: { id: "cm-light" | "cm-dark" | "cm-system"; label: string; icon: typeof Sun }[] = [
+  { id: "cm-light", label: "light", icon: Sun },
+  { id: "cm-dark", label: "dark", icon: Moon },
+  { id: "cm-system", label: "system", icon: Monitor },
 ];
 
 function LockedNote({ count }: { count: number }) {
@@ -84,7 +90,7 @@ export default function Customization() {
   const { balance } = useWallet();
   const ownedCount = customizationItems.filter((i) => cz.isOwned(i.id)).length;
   const accents = customizationItems.filter((i) => i.slot === "accent");
-  const lockedThemes = THEMES.filter((t) => !cz.isOwned(t.id)).length;
+  const mode = (cz.equippedId("colorMode") ?? "cm-system") as "cm-light" | "cm-dark" | "cm-system";
 
   return (
     <div className="space-y-5">
@@ -107,55 +113,77 @@ export default function Customization() {
       </Section>
 
       <Section
+        title="appearance mode"
+        description="light or dark is a switch, not a colour choice. every theme below works in both."
+      >
+        <div className="grid grid-cols-3 gap-2">
+          {COLOR_MODES.map(({ id, label, icon: Icon }) => {
+            const active = mode === id;
+            return (
+              <button
+                key={id}
+                onClick={() => cz.setColorMode(id)}
+                className={`focus-ring tactile flex flex-col items-center gap-1.5 rounded-2xl border px-3 py-3.5 text-center transition-colors ${
+                  active ? "border-white/40 bg-white/[0.08]" : "border-white/10 hover:border-white/25"
+                }`}
+              >
+                <Icon size={17} strokeWidth={1.75} className={active ? "text-content-primary" : "text-content-tertiary"} />
+                <span className="text-[0.78rem] lowercase text-content-primary">{label}</span>
+                <span className="text-[0.56rem] uppercase tracking-wide text-content-tertiary">
+                  {active ? "active" : "free"}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </Section>
+
+      <Section
         title="theme"
-        description="a theme repaints the whole app — background, cards, buttons, accents, gradients and ambient motion."
+        description="a colour world — accent family, background hue, corner radius and ambient motion. all free, all render in light and dark."
       >
         <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
           {THEMES.map((t) => {
-            const owned = cz.isOwned(t.id);
             const active = cz.equippedId("theme") === t.id;
             return (
               <button
                 key={t.id}
-                onClick={() => owned && cz.setSlot("theme", t.id)}
+                onClick={() => cz.setSlot("theme", t.id)}
                 className={`focus-ring tactile relative overflow-hidden rounded-2xl border p-3 text-left transition-colors ${
                   active ? "border-white/40" : "border-white/10 hover:border-white/25"
-                } ${!owned ? "opacity-70" : ""}`}
+                }`}
                 style={{ background: t.swatch }}
               >
                 <span className="block h-10 w-full rounded-lg border border-white/15 bg-black/25 backdrop-blur-sm" />
                 <span className="mt-2 flex items-center justify-between">
                   <span className="text-[0.76rem] lowercase text-white/95">{t.name}</span>
-                  {!owned && <Lock size={11} className="text-white/70" />}
                 </span>
-                <span className={`mt-0.5 block text-[0.54rem] uppercase tracking-wide ${RARITY_TEXT[t.rarity] ?? "text-white/60"}`}>
-                  {t.rarity === "free" ? "included" : t.rarity}
-                </span>
+                <span className="mt-0.5 block text-[0.54rem] uppercase tracking-wide text-white/60">included</span>
                 {active && <Check size={13} strokeWidth={3} className="absolute right-2 top-2 text-white" />}
               </button>
             );
           })}
         </div>
-        <LockedNote count={lockedThemes} />
       </Section>
 
-      <Section title="accent colour" description="one colour for buttons, links, rings and active states.">
+      <Section
+        title="accent colour"
+        description="one colour for buttons, links, rings and active states. free, and carried into light mode with the contrast adjusted."
+      >
         <div className="flex flex-wrap gap-2">
           {accents.map((a) => {
-            const owned = cz.isOwned(a.id);
             const active = cz.equippedId("accent") === a.id;
             return (
               <button
                 key={a.id}
-                onClick={() => owned && cz.setSlot("accent", a.id)}
+                onClick={() => cz.setSlot("accent", a.id)}
                 title={a.name}
                 className={`focus-ring relative h-9 w-9 rounded-full border-2 transition-transform ${
                   active ? "scale-110 border-white" : "border-white/20 hover:scale-105"
-                } ${!owned ? "opacity-40" : ""}`}
+                }`}
                 style={{ background: a.swatch }}
               >
                 {active && <Check size={13} strokeWidth={3} className="absolute inset-0 m-auto text-white" />}
-                {!owned && <Lock size={11} className="absolute inset-0 m-auto text-white/90" />}
               </button>
             );
           })}

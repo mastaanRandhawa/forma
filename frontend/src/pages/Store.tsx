@@ -15,11 +15,15 @@ import { useWallet } from "../lib/wallet";
 import { useCustomization } from "../lib/customization";
 import { EARN_WAYS, useChallenges, challengeStore, type EarnWay } from "../lib/rewards";
 
-const TABS = ["all", "themes", "accents", "effects", "kai", "chat", "profile", "appearance", "font"] as const;
+// Themes, accent colours and light/dark are all free and managed in
+// Settings › Customization — the store only sells the paid cosmetics.
+const TABS = ["all", "effects", "kai", "chat", "profile", "font"] as const;
 const TAB_GROUP: Record<string, CustomizationItem["group"] | null> = {
-  all: null, themes: "Themes", accents: "Accents", effects: "Effects",
-  kai: "Kai", chat: "Chat", profile: "Profile", appearance: "Appearance", font: "Font",
+  all: null, effects: "Effects",
+  kai: "Kai", chat: "Chat", profile: "Profile", font: "Font",
 };
+const STORE_SLOTS = new Set(["effect", "avatar", "chatTheme", "frame", "title", "badge", "font"]);
+const storeCatalogue = customizationItems.filter((i) => STORE_SLOTS.has(i.slot));
 
 const GLYPHS: Record<string, LucideIcon> = {
   Wand2, Minus, Sun, Moon, Sparkles, Waves, Grip, Monitor, Circle, CircleDot, Award,
@@ -63,7 +67,7 @@ export default function Store() {
 
   const shown = useMemo(() => {
     const group = TAB_GROUP[tab];
-    return customizationItems.filter((i) => {
+    return storeCatalogue.filter((i) => {
       if (group && i.group !== group) return false;
       if (ownedOnly && !cz.isOwned(i.id)) return false;
       return true;
@@ -72,7 +76,7 @@ export default function Store() {
 
   const featured = useMemo(
     () =>
-      customizationItems
+      storeCatalogue
         .filter((i) => (i.rarity === "legendary" || i.rarity === "epic") && !cz.isOwned(i.id))
         .slice(0, 3),
     [cz],

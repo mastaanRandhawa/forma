@@ -10,10 +10,12 @@ import {
 import { walletStore, useWalletBalance } from "./wallet";
 import {
   ACCENT_MAP,
-  applyColorModeOverrides,
   applyFont,
   applyTheme,
   DEFAULT_THEME_ID,
+  LEGACY_THEME_ALIAS,
+  resolveColorMode,
+  resolveThemeId,
   THEME_MAP,
   type ThemeEffect,
 } from "./themes";
@@ -59,6 +61,19 @@ function defaultOwned(): string[] {
   return customizationItems.filter((i) => i.price === 0).map((i) => i.id);
 }
 
+/**
+ * Fold retired themes onto their surviving hue. When someone was on an old
+ * light-only theme ("cloud" / "dusk") and hasn't picked a color mode, move them
+ * to light so the switch to a mode-based model is invisible.
+ */
+function normalizeEquipped(eq: Record<string, string>): Record<Slot, string> {
+  const out = { ...DEFAULT_EQUIPPED, ...eq } as Record<Slot, string>;
+  const legacyTheme = out.theme in LEGACY_THEME_ALIAS;
+  out.theme = resolveThemeId(out.theme);
+  if (legacyTheme && (!eq.colorMode || eq.colorMode === "cm-system")) out.colorMode = "cm-light";
+  return out;
+}
+
 function load(): State {
   try {
     const raw = localStorage.getItem(LS_KEY);
@@ -66,7 +81,7 @@ function load(): State {
     const p = JSON.parse(raw) as Partial<State>;
     return {
       owned: Array.from(new Set([...(p.owned ?? []), ...defaultOwned()])),
-      equipped: { ...DEFAULT_EQUIPPED, ...(p.equipped ?? {}) },
+      equipped: normalizeEquipped(p.equipped ?? {}),
     };
   } catch {
     return { owned: defaultOwned(), equipped: { ...DEFAULT_EQUIPPED } };
@@ -91,7 +106,7 @@ function emit() {
 function hydrate(remote: { owned?: string[]; equipped?: Record<string, string>; balance?: number }) {
   state = {
     owned: remote.owned ? Array.from(new Set([...remote.owned, ...defaultOwned()])) : state.owned,
-    equipped: remote.equipped ? { ...DEFAULT_EQUIPPED, ...remote.equipped } : state.equipped,
+    equipped: remote.equipped ? normalizeEquipped(remote.equipped) : state.equipped,
   };
   emit();
   if (typeof remote.balance === "number") walletStore.setBalance(remote.balance);
@@ -228,15 +243,12 @@ export function CustomizationProvider({
     const colorMode = snap.equipped.colorMode ?? "cm-system";
     const fontId = snap.equipped.font ?? "fn-system";
 
+    const mode = resolveColorMode(colorMode);
     applyTheme(themeId, {
+      mode,
       effect,
-      accentOverride: accent && accent.price >= 0 && accent.id !== "ac-brand" ? accent.color : null,
+      accentOverride: accent && accent.id !== "ac-brand" ? accent.color : null,
     });
-
-    const theme = THEME_MAP[themeId] ?? THEME_MAP[DEFAULT_THEME_ID];
-    const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-    const isLight = colorMode === "cm-light" || (colorMode === "cm-system" && !prefersDark);
-    applyColorModeOverrides(isLight, theme.vars);
 
     applyFont(fontId);
   }, [
@@ -254,13 +266,25 @@ export function CustomizationProvider({
     if (colorMode !== "cm-system") return;
     const mq = window.matchMedia("(prefers-color-scheme: dark)");
     const handler = () => {
-      const themeId = snap.equipped.theme;
-      const theme = THEME_MAP[themeId] ?? THEME_MAP[DEFAULT_THEME_ID];
-      applyColorModeOverrides(!mq.matches, theme.vars);
+      const effect = reduceMotion
+        ? "none"
+        : resolveEffect(snap.equipped.theme, snap.equipped.effect);
+      const accent = ACCENT_MAP[snap.equipped.accent];
+      applyTheme(snap.equipped.theme, {
+        mode: mq.matches ? "dark" : "light",
+        effect,
+        accentOverride: accent && accent.id !== "ac-brand" ? accent.color : null,
+      });
     };
     mq.addEventListener("change", handler);
     return () => mq.removeEventListener("change", handler);
-  }, [snap.equipped.colorMode, snap.equipped.theme]);
+  }, [
+    snap.equipped.colorMode,
+    snap.equipped.theme,
+    snap.equipped.effect,
+    snap.equipped.accent,
+    reduceMotion,
+  ]);
 
   const value = useMemo<CustomizationCtx>(
     () => ({
