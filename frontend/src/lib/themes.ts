@@ -154,37 +154,34 @@ function buildVars(p: PaletteSpec): Record<string, string> {
   };
 }
 
-// ── light render (same spec, light ground) ─────────────────────────────────
+// ── light render — a NEUTRAL off-white canvas that keeps only the theme's
+//    accent identity. Not an inverted dark theme: cards are white glass,
+//    shadows are neutral, the hue shows up only as a faint ambient wash and
+//    in the accents / the one bold fill tile. (See the light-mode override
+//    layer at the end of index.css for the surface-class translations.)
 function buildLightVars(p: PaletteSpec): Record<string, string> {
   const r = RADII[p.radius];
   const hue = hexToRgb(p.accent);
   const cool = hexToRgb(onLight(p.accentContrast));
-  const soft = hexToRgb(onLight(p.accentSoft));
-  const white: RGB = [255, 255, 255];
-
-  const bg = mix(white, hue, 0.05);
-  const bgDeep = mix(white, hue, 0.11);
-  const bgSoft = mix(white, hue, 0.015);
-  const ink = mix([16, 12, 20], hue, 0.05);
   const hs = `${clamp255(hue[0])}, ${clamp255(hue[1])}, ${clamp255(hue[2])}`;
   const cs = `${clamp255(cool[0])}, ${clamp255(cool[1])}, ${clamp255(cool[2])}`;
 
   return {
-    "--app-bg": rgbToHex(bg),
-    "--background": rgbToHex(bg),
-    "--background-deep": rgbToHex(bgDeep),
-    "--background-soft": rgbToHex(bgSoft),
+    "--app-bg": "#F7F5F8",
+    "--background": "#F7F5F8",
+    "--background-deep": "#F1EEF4",
+    "--background-soft": "#FFFFFF",
 
-    "--surface": "rgba(255,255,255,0.72)",
-    "--surface-glass": "rgba(255,255,255,0.60)",
-    "--surface-raised": "rgba(255,255,255,0.90)",
-    "--surface-recessed": rgba(ink, 0.055),
-    "--surface-opaque": rgbToHex(bgSoft),
-    "--surface-float": "rgba(255,255,255,0.96)",
+    "--surface": "rgba(255, 255, 255, 0.78)",
+    "--surface-glass": "rgba(255, 255, 255, 0.55)",
+    "--surface-raised": "rgba(255, 255, 255, 0.94)",
+    "--surface-recessed": "rgba(41, 28, 45, 0.06)",
+    "--surface-opaque": "#FFFFFF",
+    "--surface-float": "rgba(255, 255, 255, 0.96)",
 
-    "--text-primary": rgba(ink, 0.92),
-    "--text-secondary": rgba(ink, 0.6),
-    "--text-tertiary": rgba(ink, 0.4),
+    "--text-primary": "#211A24",
+    "--text-secondary": "#5B5162",
+    "--text-tertiary": "#8C8391",
 
     "--accent": onLight(p.accent),
     "--accent-pink": onLight(p.accent),
@@ -198,13 +195,13 @@ function buildLightVars(p: PaletteSpec): Record<string, string> {
     "--accent-lime": onLight(p.lime ?? "#5CA018"),
     "--accent-jade": onLight(p.lime ?? "#1EA870"),
 
-    "--line-soft": rgba(ink, 0.1),
-    "--line-highlight": rgba(ink, 0.22),
-    "--specular": rgba(ink, 0.07),
+    "--line-soft": "rgba(41, 28, 45, 0.07)",
+    "--line-highlight": "rgba(41, 28, 45, 0.12)",
+    "--specular": "rgba(41, 28, 45, 0.05)",
 
     "--glass-tint-rgb": "255, 255, 255",
-    "--glass-blur": `${Math.min(p.glassBlur, 22)}px`,
-    "--glass-opacity": "0.56",
+    "--glass-blur": `${Math.min(p.glassBlur, 24)}px`,
+    "--glass-opacity": "0.82",
 
     "--radius-small": r.small,
     "--radius-medium": r.medium,
@@ -215,20 +212,21 @@ function buildLightVars(p: PaletteSpec): Record<string, string> {
     "--fill-coral": p.fill,
     "--fill-on-color": p.fillInk ?? "rgba(255, 250, 248, 0.96)",
 
+    // mostly-neutral canvas; the theme hue is a faint corner wash only
     "--atmosphere-bg": [
-      `radial-gradient(120% 90% at 50% -14%, rgba(${hs},0.12), transparent 62%)`,
-      `radial-gradient(90% 70% at 8% 2%, rgba(${cs},0.07), transparent 55%)`,
-      `radial-gradient(90% 78% at 88% 98%, rgba(${hs},0.08), transparent 58%)`,
-      `linear-gradient(168deg, ${rgba(bg, 0.95)} 0%, ${rgba(bgDeep, 0.9)} 100%)`,
+      `radial-gradient(760px circle at 16% 6%, rgba(${hs}, 0.06), transparent 55%)`,
+      `radial-gradient(820px circle at 84% 96%, rgba(${cs}, 0.045), transparent 55%)`,
+      `linear-gradient(168deg, #F7F5F8 0%, #F1EEF4 100%)`,
     ].join(","),
-    "--aurora-1": `rgba(${hs},0.1)`,
-    "--aurora-2": `rgba(${clamp255(soft[0])}, ${clamp255(soft[1])}, ${clamp255(soft[2])},0.08)`,
-    "--aurora-3": `rgba(${hs},0.07)`,
-    "--grain-opacity": "0.012",
+    "--aurora-1": `rgba(${hs}, 0.05)`,
+    "--aurora-2": `rgba(${cs}, 0.04)`,
+    "--aurora-3": `rgba(${hs}, 0.035)`,
+    "--grain-opacity": "0.009",
 
-    "--btn-white": "#F8F2FC",
-    "--btn-white-ink": "#180A1E",
-    "--inner-hi": "rgba(255,255,255,0.65)",
+    // circular action button / active pill → dark on light (see guideline §7)
+    "--btn-white": "#2A2130",
+    "--btn-white-ink": "#FFFFFF",
+    "--inner-hi": "rgba(255, 255, 255, 0.7)",
   };
 }
 

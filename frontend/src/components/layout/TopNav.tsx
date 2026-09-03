@@ -201,7 +201,7 @@ export function TopNav({
                   {active && (
                     <motion.span
                       layoutId="nav-active"
-                      className="absolute inset-0 rounded-pill surface-recessed"
+                      className="nav-active-pill absolute inset-0 rounded-pill surface-recessed"
                       aria-hidden
                       transition={
                         reduce ? { duration: 0 } : { type: "spring", stiffness: 420, damping: 34 }
