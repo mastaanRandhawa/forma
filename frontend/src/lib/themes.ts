@@ -219,15 +219,16 @@ function buildLightVars(p: PaletteSpec): Record<string, string> {
     "--fill-coral": p.fill,
     "--fill-on-color": p.fillInk ?? "rgba(255, 250, 248, 0.96)",
 
-    // the theme hue as a visible-but-soft canvas + corner washes
+    // the theme hue as a soft canvas tint + restrained corner washes —
+    // enough that themes read differently, not so much it's a colour wash
     "--atmosphere-bg": [
-      `radial-gradient(760px circle at 8% 0%, rgba(${hs}, 0.09), transparent 55%)`,
-      `radial-gradient(820px circle at 94% 100%, rgba(${cs}, 0.065), transparent 55%)`,
+      `radial-gradient(560px circle at 4% -4%, rgba(${hs}, 0.055), transparent 52%)`,
+      `radial-gradient(600px circle at 98% 102%, rgba(${cs}, 0.04), transparent 52%)`,
       `linear-gradient(168deg, ${bg} 0%, ${bgDeep} 100%)`,
     ].join(","),
-    "--aurora-1": `rgba(${hs}, 0.07)`,
-    "--aurora-2": `rgba(${cs}, 0.05)`,
-    "--aurora-3": `rgba(${hs}, 0.045)`,
+    "--aurora-1": `rgba(${hs}, 0.045)`,
+    "--aurora-2": `rgba(${cs}, 0.03)`,
+    "--aurora-3": `rgba(${hs}, 0.03)`,
     "--grain-opacity": "0.009",
 
     // circular action button / active pill → dark on light (see guideline §7)
