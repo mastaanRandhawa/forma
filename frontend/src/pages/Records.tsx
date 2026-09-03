@@ -22,10 +22,10 @@ function PRCard({ row, sessions, units, top }: { row: PRRow; sessions: ReturnTyp
         top
           ? {
               background:
-                "radial-gradient(ellipse 80% 60% at 85% 40%, rgba(163,230,53,0.13), transparent 65%), var(--surface-soft, rgba(255,255,255,0.04))",
+                "radial-gradient(ellipse 80% 60% at 85% 40%, rgba(163,230,53,0.13), transparent 65%), var(--surface-raised)",
               boxShadow: "0 0 0 1px rgba(163,230,53,0.22), 0 8px 32px -12px rgba(163,230,53,0.25)",
             }
-          : { background: "var(--surface-soft, rgba(255,255,255,0.04))" }
+          : { background: "var(--surface-raised)" }
       }
     >
       <div className="flex items-start justify-between gap-3">

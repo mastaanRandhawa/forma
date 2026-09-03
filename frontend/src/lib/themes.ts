@@ -167,24 +167,25 @@ function buildLightVars(p: PaletteSpec): Record<string, string> {
   const hs = `${clamp255(hue[0])}, ${clamp255(hue[1])}, ${clamp255(hue[2])}`;
   const cs = `${clamp255(cool[0])}, ${clamp255(cool[1])}, ${clamp255(cool[2])}`;
 
-  // a light ground that clearly carries the theme's hue — as a tint of
-  // near-white, not a wash. Cards stay crisp white; the hue lives in the
-  // canvas, the atmosphere and the accents.
-  const bg = rgbToHex(mix(white, hue, 0.06));
-  const bgDeep = rgbToHex(mix(white, hue, 0.13));
+  // a near-neutral off-white ground with only a whisper of the theme hue —
+  // the theme's identity in light mode is carried by the ACCENT (buttons,
+  // rings, links, active states), not by tinting the whole canvas. Cards are
+  // near-opaque white so they never pick up the ground colour.
+  const bg = rgbToHex(mix(white, hue, 0.035));
+  const bgDeep = rgbToHex(mix(white, hue, 0.05));
 
   return {
     "--app-bg": bg,
     "--background": bg,
     "--background-deep": bgDeep,
-    "--background-soft": rgbToHex(mix(white, hue, 0.02)),
+    "--background-soft": "#FFFFFF",
 
-    "--surface": "rgba(255, 255, 255, 0.8)",
-    "--surface-glass": "rgba(255, 255, 255, 0.58)",
-    "--surface-raised": "rgba(255, 255, 255, 0.95)",
-    "--surface-recessed": `rgba(${hs}, 0.07)`,
-    "--surface-opaque": rgbToHex(mix(white, hue, 0.015)),
-    "--surface-float": "rgba(255, 255, 255, 0.97)",
+    "--surface": "rgba(255, 255, 255, 0.9)",
+    "--surface-glass": "rgba(255, 255, 255, 0.78)",
+    "--surface-raised": "rgba(255, 255, 255, 0.97)",
+    "--surface-recessed": "rgba(41, 28, 45, 0.055)",
+    "--surface-opaque": "#FFFFFF",
+    "--surface-float": "rgba(255, 255, 255, 0.98)",
 
     "--text-primary": "#211A24",
     "--text-secondary": "#5B5162",
@@ -219,16 +220,16 @@ function buildLightVars(p: PaletteSpec): Record<string, string> {
     "--fill-coral": p.fill,
     "--fill-on-color": p.fillInk ?? "rgba(255, 250, 248, 0.96)",
 
-    // the theme hue as a soft canvas tint + restrained corner washes —
-    // enough that themes read differently, not so much it's a colour wash
+    // a faint corner breath of the hue over a near-flat ground (bg≈bgDeep so
+    // there's no visible band where the fixed atmosphere layer ends)
     "--atmosphere-bg": [
-      `radial-gradient(560px circle at 4% -4%, rgba(${hs}, 0.055), transparent 52%)`,
-      `radial-gradient(600px circle at 98% 102%, rgba(${cs}, 0.04), transparent 52%)`,
+      `radial-gradient(460px circle at 2% -6%, rgba(${hs}, 0.03), transparent 50%)`,
+      `radial-gradient(520px circle at 100% 104%, rgba(${cs}, 0.022), transparent 50%)`,
       `linear-gradient(168deg, ${bg} 0%, ${bgDeep} 100%)`,
     ].join(","),
-    "--aurora-1": `rgba(${hs}, 0.045)`,
-    "--aurora-2": `rgba(${cs}, 0.03)`,
-    "--aurora-3": `rgba(${hs}, 0.03)`,
+    "--aurora-1": `rgba(${hs}, 0.025)`,
+    "--aurora-2": `rgba(${cs}, 0.018)`,
+    "--aurora-3": `rgba(${hs}, 0.016)`,
     "--grain-opacity": "0.009",
 
     // circular action button / active pill → dark on light (see guideline §7)
