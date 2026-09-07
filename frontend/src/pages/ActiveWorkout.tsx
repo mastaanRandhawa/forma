@@ -879,22 +879,22 @@ export default function ActiveWorkout() {
       <AnimatePresence>
         {summary && (
           <motion.div
-            className="fixed inset-0 z-[90] grid place-items-center overflow-y-auto bg-[rgba(16,10,17,0.85)] p-4 backdrop-blur-sm"
+            className="fixed inset-0 z-[90] flex items-start justify-center overflow-y-auto bg-[rgba(16,10,17,0.85)] p-4 backdrop-blur-sm"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
           >
             <motion.div
-              className="w-full max-w-md surface-glass rounded-shell p-8"
+              className="my-auto w-full max-w-md surface-glass rounded-shell p-5 sm:p-8"
               initial={reduce ? { opacity: 0 } : { opacity: 0, y: 16, scale: 0.97 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               transition={{ duration: 0.3, ease: EASE }}
             >
               <div className="flex items-center gap-3">
                 <KaiOrb size={40} state="done" />
-                <div>
+                <div className="min-w-0 flex-1">
                   <div className="label-instrument">workout complete</div>
-                  <h2 className="text-heading text-content-primary lowercase">
+                  <h2 className="truncate text-heading text-content-primary lowercase">
                     {session?.name ?? finishedRef.current?.name ?? "session"}
                   </h2>
                 </div>
@@ -1040,14 +1040,14 @@ function Scrim({ children, onClose }: { children: React.ReactNode; onClose: () =
   const reduce = useReducedMotion();
   return (
     <motion.div
-      className="fixed inset-0 z-[85] grid place-items-center bg-[rgba(16,10,17,0.72)] p-4 backdrop-blur-sm"
+      className="fixed inset-0 z-[85] flex items-start justify-center overflow-y-auto bg-[rgba(16,10,17,0.72)] p-4 backdrop-blur-sm"
       onClick={onClose}
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
     >
       <motion.div
-        className="w-full max-w-sm surface-glass rounded-shell p-7 text-center"
+        className="my-auto w-full max-w-sm surface-glass rounded-shell p-6 text-center sm:p-7"
         onClick={(e) => e.stopPropagation()}
         initial={reduce ? { opacity: 0 } : { opacity: 0, y: 14, scale: 0.97 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
