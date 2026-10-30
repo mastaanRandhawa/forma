@@ -21,13 +21,13 @@ The generic gym-management flows in the audit brief (memberships, classes, booki
 |---|---|---|
 | Frontend type safety | Good — `tsc` clean | Unit (ran) |
 | Backend type safety | Good — `tsc` clean | Unit (ran) |
-| Backend unit tests | 102/105 pass; 3 fail only because no database is reachable | Unit (ran) + probe |
+| Backend unit tests | 114/117 pass after Milestone 3; the same 3 fail only because no database is reachable. Tests now load without a `.env` and never call the paid Claude API | Unit (ran) + probe |
 | E2E (Playwright, 130 tests) | **Not runnable** here — needs backend + seeded DB | — |
 | Deployment | Frontend on GitHub Pages in no-backend mode; **API not deployed**; the Render test DB in `backend/.env` is unreachable (free Render Postgres expires after 30 days) | Probe |
 | Security | 1 critical, 1 high issue (below); auth/session model otherwise solid | Static |
 | Data integrity | Two persistence modes; no-backend mode mixes real data with fabricated demo data | Static |
-| CI | None — only a deploy workflow | Static |
-| Lint | No lint script in either package | Static |
+| CI | Workflows added for both repos (T-15); not yet run on GitHub | Static |
+| Lint | ESLint in both packages, in CI: 0 errors. Frontend keeps 45 React Compiler readiness warnings (T-34) | Unit (ran) |
 
 ## 3. Architecture in one paragraph
 
@@ -55,6 +55,16 @@ Coins, challenges and cosmetics are a client-side economy (`lib/wallet.ts`, `lib
 | F-11 | High | Body page **balance and "undertrained" sections are literals** (62/51/58, "push ~60% ahead of pull", "Hamstrings, Calves, Rear Delts 2× / month"), shown to every user in both modes. Found during implementation. | `frontend/src/pages/Body.tsx` (pre-fix lines 145-190) |
 | F-12 | Medium | `apiSessionToCompleted` dropped `isWarmup`, so in API mode warm-up sets counted as working volume in Progress, Records and the strength series. Found during implementation. | `frontend/src/lib/lifecycle.ts:146-169` |
 
+### Found during Milestone 3
+
+| ID | Severity | Finding | Location | Status |
+|---|---|---|---|---|
+| F-13 | Medium | `walletStore` mutated its state in place, so `useWallet()` (via `useSyncExternalStore`) never saw a new snapshot: Store, CoinBalance and Customization only refreshed when something else re-rendered them. | `frontend/src/lib/wallet.ts` `emit()` | Fixed (runtime: balance updates on claim) |
+| F-14 | High | Weekly challenges started from fake `seed` progress ("so the demo looks lived-in": 2/4 workouts, 61,000 lb, 3/5 groups). "Early sets", "Mix it up" and "Dial it in" could never progress. 4 of 9 "ways to earn" had no payer (form, goal, weekly target; achievements only in API mode). | `frontend/src/lib/rewards.ts` | Fixed (T-37) |
+| F-15 | High | CSV data export never worked: `GET /me/export` was registered twice, the JSON handler always won, and `Account.tsx` read the token from `forma_access_token` (the client stores `forma.access`), so the request went out unauthenticated and the error was swallowed. CSV also didn't escape quotes in session/exercise names. | `backend/src/modules/me.ts`, `frontend/src/pages/settings/Account.tsx` | Fixed (T-32) |
+| F-16 | High | Live Kai replies read only `content[0].text`. On Claude Sonnet 5 thinking is on unless disabled, so a leading thinking block made every reply fall back to canned copy; `max_tokens: 400` also had to cover thinking. The canned copy invented user facts ("bench 1RM trending up about 12% over the last 8 weeks"). | `backend/src/services/ai.ts` | Fixed (T-33), unit-tested; no live call made |
+| F-17 | High | Dependency advisories. Backend: 18 (3 critical). The ones on the request path are `proxy-addr` (critical) and `body-parser`/`qs` via Express, plus `nodemailer` and `zod`; the `vitest`/`tinypool` criticals are dev-only. Frontend: 6 (`vite` high, dev server; `react-router-dom` moderate, runtime). | `npm audit` in each package | Open (T-39) |
+
 ## 5. Other findings
 
 ### Security / auth (static)
@@ -62,21 +72,21 @@ Coins, challenges and cosmetics are a client-side economy (`lib/wallet.ts`, `lib
 - **Good:** `requireAuth` re-checks the session row, revocation, expiry and soft-deletion on every request; the role comes from the DB, never the client (`backend/src/middleware/auth.ts`). Every user-scoped query I sampled filters by `userId`, including sessions via `ownSession()`, workouts, goals, programs, food and set-level writes (`sessions.ts:223-245`). 500 details are hidden in production (`middleware/error.ts`). CORS allows localhost only outside production.
 - **Medium — store purchase TOCTOU:** the balance check and decrement are separate statements (`store.ts:76-87`, `customization.ts:62-73`). Two concurrent buys can drive the balance negative. Fix: conditional `updateMany({ where: { balance: { gte: price } } })`.
 - **Low — subscription plan prices hard-coded** in the API (`subscription.ts:12-16`). The real prices will be the store prices; this needs a product decision.
-- `AI_MODEL` defaults to `claude-sonnet-5` (`backend/src/env.ts:26`). This ID was not verified against Anthropic's current model list.
+- `AI_MODEL` defaults to `claude-sonnet-5` (`backend/src/env.ts:26`). Verified in Milestone 3: a valid, still-served model (the previous Sonnet generation). `claude-sonnet-5-5` is its same-price successor; changing the default is a cost/product call, so it is left as is (T-40).
 
 ### Functional
 
-- **Dead hooks:** `useNotifications`, `useMuscleBalance`, `useProgressOverview`, `useReadiness`, `useWallet` (the API one) and `useStoreItems` in `api/hooks.ts` have no consumers. Dead component: `components/dashboard/WeeklySummary.tsx` renders static `weeklySummary`, but nothing renders it.
-- **Duplicate API base URL:** `pages/settings/Account.tsx:8-10` re-derives the base URL and calls `fetch` directly for export, bypassing the client's token refresh. `pages/settings/Privacy.tsx` already uses `api.me.export`.
+- **Dead code (removed in T-30):** 8 hooks with no consumers (`useNotifications`, `useMuscleBalance`, `useProgressOverview`, `useReadiness`, the API `useWallet`, `useStoreItems`, `useWorkoutTemplates`, `useConsistency`), 6 demo builders, `WeeklySummary.tsx`, 23 unused `lib/data.ts` declarations (633 → 292 lines), and `MetricDetailBody`'s unreachable mock-trend fallback.
+- **Duplicate API base URL:** `pages/settings/Account.tsx:8-10` re-derived the base URL and called `fetch` directly for export, bypassing the client's token refresh. Fixed in T-32 (see F-15).
 - **Duplicated catalogue:** cosmetic prices exist in both `frontend/src/lib/data.ts` and `backend/src/data/customization.ts`. I diffed them by script: they are in sync (71 vs 73 ids; `cloud` and `dusk` are backend-only). This is drift-prone, but the server enforces prices on buy.
 - **No-backend Trainer chat** answers with canned replies. That's expected without an AI backend, but it isn't labelled as offline.
 - **Feature gating:** onboarding enables gating only for users who choose "calm mode" (`backend/src/modules/me.ts:402`). The schema default is `true` for rows created outside onboarding (`schema.prisma`, `UserProgression.gatingEnabled`). Old `PLAN.md` asked for gating default OFF; the onboarding path already does that.
 
 ### Testing / tooling
 
-- Backend tests call `process.exit(1)` at import time unless `DATABASE_URL` and the JWT secrets are set (`backend/src/env.ts:60-63`), so a bare `npm test` fails 14 of 21 files.
+- Backend tests called `process.exit(1)` at import time unless `DATABASE_URL` and the JWT secrets were set (`backend/src/env.ts:60-63`). Fixed in T-35: `src/test-setup.ts` loads `.env`, fills placeholders for what's missing (the DB placeholder is deliberately unreachable), and clears `ANTHROPIC_API_KEY`.
 - The 3 failing auth tests do DB lookups (unknown refresh token, verify token, forgot-password) and fail with `PrismaClientInitializationError` when no DB is reachable.
-- The E2E suite assumes a running API on `:4000` and a seeded `alex@forma.app` user (`frontend/tests/e2e/helpers.ts`).
+- The E2E suite assumes a running API on `:4000` and a seeded `alex@forma.app` user (`frontend/tests/e2e/helpers.ts`). T-36 adds `npm run test:e2e:stack` (frontend): migrates and seeds a **local** database from `DATABASE_URL`, then Playwright starts the API and Vite itself.
 
 ## 6. Blockers to full verification
 
