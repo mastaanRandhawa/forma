@@ -32,6 +32,18 @@ Last updated: 2026-10-30 (after Milestone 3).
 | T-34 | ESLint + CI | **Verified** (lint ran) | `frontend/eslint.config.js`, `backend/eslint.config.js` (new), both `package.json`, both CI workflows, fixes in `auth-shared.tsx`, `ai-orb-face.tsx`, `Connections.tsx`, `CircularDial.tsx`, `client.ts`, `templates.ts`, `Workouts.tsx`, `FoodLog.tsx`, `Home.tsx`, `ActiveWorkout.tsx`, `dashboard.spec.ts`, backend `coach.ts`, `programs.ts`, `progress.ts`, `notify.ts`, `food/index.ts`, `food/ocr.ts` | `npm run lint` both: 0 errors (frontend 45 compiler-readiness warnings); typecheck, build, tests; fresh-tab browser pass over Trainer, Dashboard, Store, Account, Body, quick start: no console errors | pass | CI lint step not yet run on GitHub |
 | T-31 | Single cosmetic catalogue | **Blocked** by T-23 | — | re-diffed FE/BE: prices and slots match (backend adds `cloud`, `dusk`) | — | Drift still possible until T-23 is decided |
 
+## With a database (2026-10-30, disposable Render Postgres supplied by the user)
+
+The database was empty; `prisma migrate deploy` applied all 13 migrations and the seed created reference data plus the demo user.
+
+| ID | Task | State | Changed files | Checks run | Result | Outstanding risk |
+|---|---|---|---|---|---|---|
+| — | Backend suite against a real DB | **Verified** | — | `npm test` with `DATABASE_URL` | 117/117 pass, including the 3 auth tests that had only failed for lack of a DB | — |
+| T-25 | Purchases can't overdraw or double-charge | **Verified** (DB integration test) | `backend/src/modules/customization.ts`, `backend/src/modules/store.ts`, `backend/src/modules/purchase.test.ts` (new) | new test registers a user, fires concurrent buys. **Old code: both buys succeed (201, 201)**, overdrawing and charging twice. Fixed code: [201, 400] and [201, 409], balance 0 / 120, one spend row; 3 runs in a row | pass | Also fixed: two first-touch requests raced to create the customization row (unique-key 409). `/store/items/:id/buy` got the same guarded decrement; its test is not written (legacy store, no UI) |
+| — | Playwright E2E suite | **Verified** | — | `E2E_ALLOW_DB_HOST=… DATABASE_URL=… npm run test:e2e:stack` | **130/130 pass** (6.1 min) against the real API + DB, chat on canned replies | — |
+| T-32 | Signed-in CSV export | **Verified** (runtime, API mode) | — | signed in as the demo user in the browser; `GET /me/export.csv` with the stored token → 200 `text/csv`, both sections | pass | Row-level check is in `frontend/tests/e2e/export.spec.ts` (new, not yet run: port 5178 was held by another Vite server) |
+| T-36 | E2E script accepts a named disposable host | **Verified** (guard) | `frontend/scripts/e2e-stack.mjs` | refuses remote hosts unless `E2E_ALLOW_DB_HOST` names that exact host; clears `ANTHROPIC_API_KEY` for the run | pass | — |
+
 ## Whole-project checks after Milestone 3
 
 | Check | Command | Result |

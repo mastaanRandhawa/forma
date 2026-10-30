@@ -7,8 +7,14 @@
  *   npm run test:e2e:stack -- tests/e2e/auth.spec.ts      (extra args go to Playwright)
  *
  * The API reads its other settings (JWT secrets, …) from backend/.env, but the
- * DATABASE_URL given here wins. The seed creates the demo user
- * alex@forma.app / forma1234, so this refuses any database not on this machine.
+ * DATABASE_URL given here wins, and ANTHROPIC_API_KEY is cleared so chat tests
+ * get canned replies instead of billing a real key.
+ *
+ * The seed creates the demo user alex@forma.app / forma1234, so this refuses any
+ * database not on this machine — unless E2E_ALLOW_DB_HOST names that exact host,
+ * for a disposable hosted test database:
+ *
+ *   E2E_ALLOW_DB_HOST=dpg-xxxx.oregon-postgres.render.com DATABASE_URL=… npm run test:e2e:stack
  */
 import { spawnSync } from "node:child_process";
 import path from "node:path";
@@ -26,8 +32,11 @@ try {
 } catch {
   fail("DATABASE_URL is not a valid URL.");
 }
-if (!LOCAL_HOSTS.has(host)) {
-  fail(`refusing to seed "${host}": the seed creates a demo user with a known password. Use a database on this machine.`);
+if (!LOCAL_HOSTS.has(host) && process.env.E2E_ALLOW_DB_HOST !== host) {
+  fail(
+    `refusing to seed "${host}": the seed creates a demo user with a known password. ` +
+      `Use a database on this machine, or set E2E_ALLOW_DB_HOST=${host} if it is a disposable test database.`,
+  );
 }
 
 run("npx prisma migrate deploy", backend);
@@ -37,7 +46,7 @@ const tests = spawnSync(`npx playwright test ${args}`, {
   cwd: frontend,
   stdio: "inherit",
   shell: true,
-  env: { ...process.env, E2E_START_STACK: "1" },
+  env: { ...process.env, E2E_START_STACK: "1", ANTHROPIC_API_KEY: "" },
 });
 process.exit(tests.status ?? 1);
 
