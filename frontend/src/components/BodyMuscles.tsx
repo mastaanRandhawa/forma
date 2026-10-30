@@ -92,9 +92,10 @@ const GROUP_TO_IDS: Record<string, string[]> = {
  * paths map to one group (left/right pecs, both biceps, the lat stack, …) they
  * all receive the same level.
  */
-function buildState(activation: Record<string, number>): BodyState {
+function buildState(activation: Record<string, number>, normalize: boolean): BodyState {
   const state: BodyState = {};
-  const max = Math.max(0, ...Object.values(activation).filter((v) => Number.isFinite(v)));
+  // absolute mode: values are already 0–1 (e.g. fatigue), so 1 is the top level
+  const max = normalize ? Math.max(0, ...Object.values(activation).filter((v) => Number.isFinite(v))) : 1;
 
   for (const [group, ids] of Object.entries(GROUP_TO_IDS)) {
     const value = activation[group] ?? 0;
@@ -109,11 +110,14 @@ export function BodyMuscles({
   activation,
   view = "front",
   className = "",
+  normalize = true,
   onSelect,
 }: {
   activation: Record<string, number>;
   view?: "front" | "back";
   className?: string;
+  /** scale to the hardest-hit group (default); false = values are absolute 0–1 */
+  normalize?: boolean;
   onSelect?: (id: string, name: string) => void;
 }) {
   const hostRef = useRef<HTMLDivElement>(null);
@@ -121,7 +125,7 @@ export function BodyMuscles({
   const onSelectRef = useRef(onSelect);
   onSelectRef.current = onSelect;
 
-  const bodyState = useMemo(() => buildState(activation), [activation]);
+  const bodyState = useMemo(() => buildState(activation, normalize), [activation, normalize]);
   const side = view === "back" ? ViewSide.BACK : ViewSide.FRONT;
 
   useEffect(() => {

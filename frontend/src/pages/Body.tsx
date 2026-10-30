@@ -4,13 +4,22 @@ import { TrainingTabs } from "../components/layout/TrainingTabs";
 import { Reveal } from "../components/Reveal";
 import { PillSelector } from "../components/primitives";
 import { BarProgress } from "../components/health/ProgressIndicator";
-import { MiniTrend } from "../components/health/MiniTrend";
 import { BodyMuscles } from "../components/BodyMuscles";
 import { EmptyState } from "../components/EmptyState";
 import { ErrorState } from "../components/ErrorState";
 import { Skel } from "../components/skeleton/Skeleton";
-import { muscleActivation, rankedMuscles } from "../lib/data";
-import { useMuscleMap, API_ENABLED, errorMessage } from "../api/hooks";
+import { useMuscleMap, useSessionHistory, API_ENABLED, errorMessage } from "../api/hooks";
+import { useFormaData } from "../lib/localStore";
+import { apiSessionToCompleted } from "../lib/lifecycle";
+import { useMuscleLookup } from "../lib/muscleLookup";
+import {
+  foldToBodyGroups,
+  muscleBalance,
+  muscleFatigue,
+  muscleSets,
+  sessionsPerGroup,
+  sumToBodyGroups,
+} from "../lib/fitness";
 
 const VIEWS = ["Front", "Back"] as const;
 const RANGE = ["Today", "Week", "Month"] as const;
@@ -50,29 +59,64 @@ function LegendRow({ mode }: { mode: (typeof MODES)[number] }) {
   );
 }
 
-/** The muscle-map view without the page chrome, reused inside Workouts. */
+/** One line on the push / pull split, from the push share of hard sets (0–100). */
+function pushPullNote(pushShare: number): string {
+  if (pushShare >= 100) return "All of your upper-body sets in the last 4 weeks were push work.";
+  if (pushShare <= 0) return "All of your upper-body sets in the last 4 weeks were pull work.";
+  const ahead = (a: number, b: number) => Math.round((a / b - 1) * 100);
+  if (pushShare >= 58) return `Push work is running ~${ahead(pushShare, 100 - pushShare)}% ahead of pull over the last 4 weeks.`;
+  if (pushShare <= 42) return `Pull work is running ~${ahead(100 - pushShare, pushShare)}% ahead of push over the last 4 weeks.`;
+  return "Push and pull are roughly even over the last 4 weeks.";
+}
+
+/** The muscle-map view without the page chrome. */
 export function BodyView({ range = "Today", mode = "Activation" }: { range?: (typeof RANGE)[number]; mode?: (typeof MODES)[number] }) {
   const [view, setView] = useState<(typeof VIEWS)[number]>("Front");
   const [picked, setPicked] = useState<string | null>(null);
   const map = useMuscleMap(range.toLowerCase() as "today" | "week" | "month");
+  const data = useFormaData();
+  const apiHist = useSessionHistory();
+  const sessions = useMemo(
+    () => (API_ENABLED ? (apiHist.data ?? []).map((s) => apiSessionToCompleted(s, data.profile.units)) : data.sessions),
+    [apiHist.data, data.sessions, data.profile.units],
+  );
+  const muscleOf = useMuscleLookup();
+  const fatigue = mode === "Fatigue";
 
-  // Activation: raw score 0–1 (high = worked a lot).
-  // Fatigue overlay: invert score — high score = less recovery remaining.
-  const activation = useMemo(() => {
-    const rows = map.data?.muscles ?? [];
-    if (rows.length === 0) return muscleActivation;
-    const out: Record<string, number> = {};
-    for (const m of rows) {
-      out[m.key] = mode === "Fatigue" ? Math.max(0, 1 - m.score) : m.score;
-    }
-    return out;
-  }, [map.data, mode]);
+  // Activation: the server's muscle map in API builds, otherwise hard sets in
+  // the range from local history. Fatigue: sets from the last 72 h decaying to
+  // zero, on an absolute scale (see lib/fitness `muscleFatigue`).
+  const activation = useMemo<Record<string, number>>(() => {
+    if (fatigue) return muscleOf ? muscleFatigue(sessions, muscleOf) : {};
+    if (API_ENABLED) return foldToBodyGroups(map.data?.muscles ?? []);
+    if (!muscleOf) return {};
+    const windowH = range === "Today" ? new Date().getHours() + new Date().getMinutes() / 60 : range === "Week" ? 168 : 720;
+    return sumToBodyGroups(muscleSets(sessions, muscleOf, (h) => (h >= 0 && h <= windowH ? 1 : 0)));
+  }, [fatigue, muscleOf, sessions, map.data, range]);
 
-  const ranked = API_ENABLED
-    ? [...(map.data?.muscles ?? [])]
+  const ranked = useMemo(() => {
+    if (API_ENABLED && !fatigue) {
+      return [...(map.data?.muscles ?? [])]
         .sort((a, b) => b.score - a.score)
-        .map((m) => ({ name: m.name, pct: Math.round(m.score * 100), trend: [] as number[] }))
-    : rankedMuscles;
+        .map((m) => ({ name: m.name, pct: Math.round(m.score * 100) }));
+    }
+    const max = fatigue ? 1 : Math.max(0, ...Object.values(activation));
+    return Object.entries(activation)
+      .filter(([, v]) => v > 0)
+      .sort((a, b) => b[1] - a[1])
+      .map(([name, v]) => ({ name, pct: max > 0 ? Math.round((v / max) * 100) : 0 }));
+  }, [fatigue, map.data, activation]);
+  const rankedLoading = API_ENABLED && !fatigue ? map.initialLoading : !muscleOf || (API_ENABLED && apiHist.initialLoading);
+  const rankedError = API_ENABLED ? (fatigue ? apiHist.error : map.error) : null;
+
+  // Balance + undertrained: last 4 weeks of hard sets, in every build.
+  const month = useMemo(
+    () => (muscleOf ? muscleSets(sessions, muscleOf, (h) => (h >= 0 && h <= 28 * 24 ? 1 : 0)) : {}),
+    [muscleOf, sessions],
+  );
+  const balance = muscleBalance(month);
+  const under = useMemo(() => (muscleOf ? sessionsPerGroup(sessions, muscleOf, 28).slice(0, 3) : []), [muscleOf, sessions]);
+  const hasMonth = Object.keys(month).length > 0;
 
   return (
     <>
@@ -94,6 +138,7 @@ export function BodyView({ range = "Today", mode = "Activation" }: { range?: (ty
             activation={activation}
             view={view.toLowerCase() as "front" | "back"}
             className="w-full max-w-[280px] [&_svg]:h-auto [&_svg]:w-full"
+            normalize={!fatigue}
             onSelect={(_id, name) => setPicked(name)}
           />
           <LegendRow mode={mode} />
@@ -104,20 +149,30 @@ export function BodyView({ range = "Today", mode = "Activation" }: { range?: (ty
 
         <div className="space-y-10">
           <Reveal onView delay={0.06}>
-            <div className="label-soft lowercase">ranked · {range.toLowerCase()}</div>
-            {map.initialLoading ? (
+            <div className="label-soft lowercase">
+              {fatigue ? "fatigue · last 3 days" : `ranked · ${range.toLowerCase()}`}
+            </div>
+            {rankedLoading ? (
               <div className="mt-4 space-y-4">
                 {[0, 1, 2, 3, 4].map((i) => (
                   <Skel key={i} className="h-5 rounded-md" />
                 ))}
               </div>
-            ) : map.error && ranked.length === 0 ? (
-              <ErrorState className="mt-4" message={errorMessage(map.error)} onRetry={map.refetch} />
+            ) : rankedError && ranked.length === 0 ? (
+              <ErrorState
+                className="mt-4"
+                message={errorMessage(rankedError)}
+                onRetry={fatigue ? apiHist.refetch : map.refetch}
+              />
             ) : ranked.length === 0 ? (
               <EmptyState
                 className="mt-4"
-                title="nothing trained yet"
-                body="finish a session and your worked muscles will rank here by load."
+                title={fatigue ? "fully recovered" : "nothing trained yet"}
+                body={
+                  fatigue
+                    ? "no hard sets in the last 3 days, so every muscle reads as recovered."
+                    : "finish a session and your worked muscles will rank here by load."
+                }
                 action={{ label: "start training", to: "/workouts" }}
               />
             ) : (
@@ -133,9 +188,6 @@ export function BodyView({ range = "Today", mode = "Activation" }: { range?: (ty
                       ariaLabel={`${m.name} ${m.pct} percent`}
                     />
                     <span className="w-10 text-right label-instrument tabular-nums">{m.pct}%</span>
-                    {m.trend.length > 0 && (
-                      <MiniTrend data={m.trend} mode="dots" color="var(--accent-cyan)" width={60} height={20} />
-                    )}
                   </li>
                 ))}
               </ul>
@@ -144,13 +196,17 @@ export function BodyView({ range = "Today", mode = "Activation" }: { range?: (ty
 
           <Reveal onView delay={0.1} className="grid gap-8 sm:grid-cols-2">
             <div>
-              <div className="label-soft lowercase">balance</div>
+              <div className="label-soft lowercase">balance · 4 weeks</div>
+              {!hasMonth && (
+                <p className="mt-4 text-[0.85rem] leading-relaxed text-content-secondary">
+                  Log a few sessions and your push / pull and front / back split will show here.
+                </p>
+              )}
               <div className="mt-4 space-y-4">
                 {([
-                  ["push / pull", 62],
-                  ["left / right", 51],
-                  ["anterior / posterior", 58],
-                ] as [string, number][]).map(([label, v]) => (
+                  ["push / pull", balance.pushPull],
+                  ["anterior / posterior", balance.antPost],
+                ] as [string, number | null][]).flatMap(([label, v]) => (v == null ? [] : [[label, v] as const])).map(([label, v]) => (
                   <div key={label}>
                     <div className="label-instrument mb-1.5">{label}</div>
                     <div className="surface-recessed relative h-2.5 rounded-pill">
@@ -160,33 +216,41 @@ export function BodyView({ range = "Today", mode = "Activation" }: { range?: (ty
                       />
                       <div
                         className="absolute top-1/2 h-3.5 w-3.5 -translate-y-1/2 rounded-full surface-float"
-                        style={{ left: `calc(${v}% - 7px)` }}
+                        // leans toward the dominant side's label (left = push / anterior)
+                        style={{ left: `calc(${100 - v}% - 7px)` }}
                       />
                     </div>
                   </div>
                 ))}
               </div>
-              <p className="mt-4 text-[0.85rem] leading-relaxed text-content-secondary">
-                Push volume is running ~60% ahead of pull this month. Next week prioritizes
-                back work.
-              </p>
+              {balance.pushPull != null && (
+                <p className="mt-4 text-[0.85rem] leading-relaxed text-content-secondary">
+                  {pushPullNote(balance.pushPull)}
+                </p>
+              )}
             </div>
 
             <div>
-              <div className="label-soft lowercase">undertrained</div>
-              <ul className="mt-4 space-y-2.5 text-[0.9rem]">
-                {["Hamstrings", "Calves", "Rear Delts"].map((m) => (
-                  <li
-                    key={m}
-                    className="flex items-center justify-between surface-recessed rounded-pill px-4 py-2.5"
-                  >
-                    <span className="text-content-primary lowercase">{m}</span>
-                    <span className="label-instrument" style={{ color: "var(--accent-orange)" }}>
-                      2× / month
-                    </span>
-                  </li>
-                ))}
-              </ul>
+              <div className="label-soft lowercase">undertrained · 4 weeks</div>
+              {hasMonth ? (
+                <ul className="mt-4 space-y-2.5 text-[0.9rem]">
+                  {under.map((m) => (
+                    <li
+                      key={m.group}
+                      className="flex items-center justify-between surface-recessed rounded-pill px-4 py-2.5"
+                    >
+                      <span className="text-content-primary lowercase">{m.group}</span>
+                      <span className="label-instrument" style={{ color: "var(--accent-orange)" }}>
+                        {m.sessions}× / 4 wk
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="mt-4 text-[0.85rem] leading-relaxed text-content-secondary">
+                  Muscles you rarely train will be flagged here once you have some history.
+                </p>
+              )}
             </div>
           </Reveal>
         </div>

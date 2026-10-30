@@ -160,6 +160,7 @@ export function apiSessionToCompleted(s: WorkoutSession, units: Units): Complete
         reps: set.reps ?? null,
         rpe: set.rpe ?? null,
         done: !!set.completedAt,
+        warmup: set.isWarmup || undefined,
       })),
     })),
     volume: units === "kg" ? Math.round(s.totalVolumeKg) : Math.round(s.totalVolumeKg * 2.2046226218),

@@ -27,7 +27,7 @@ import {
   weeklyVolumeSeries,
   workoutsThisMonth,
 } from "../lib/fitness";
-import type { RepDbCatalogEntry } from "../lib/repdb";
+import { useMuscleLookup } from "../lib/muscleLookup";
 
 const RANGE = ["1M", "3M", "6M", "1Y"] as const;
 const RANGE_DAYS: Record<(typeof RANGE)[number], number> = { "1M": 30, "3M": 91, "6M": 182, "1Y": 365 };
@@ -194,25 +194,11 @@ export default function Progress() {
   );
   const trainedDays91 = consistency.filter((c) => c > 0).length;
 
-  // lazy-load RepDB catalog for muscle lookup (640KB — off the main bundle)
-  const [catalog, setCatalog] = useState<RepDbCatalogEntry[] | null>(null);
-  useEffect(() => {
-    void import("../lib/repdb.catalog").then((m) => setCatalog(m.REPDB_CATALOG));
-  }, []);
-  const norm = (s: string) =>
-    s.toLowerCase().replace(/[^a-z0-9]+/g, " ").replace(/\s+/g, " ").trim();
-  const getMuscles = useMemo(() => {
-    if (!catalog) return () => [];
-    const byName = new Map(catalog.map((e) => [norm(e.name), e]));
-    return (name: string): string[] => {
-      const key = norm(name);
-      const hit = byName.get(key) ?? catalog.find((e) => norm(e.name).includes(key) || key.includes(norm(e.name)));
-      return hit?.primary ?? [];
-    };
-  }, [catalog]);
+  // RepDB muscle lookup (catalog lazy-loads off the main bundle)
+  const muscleOf = useMuscleLookup();
   const muscleVol = useMemo(
-    () => (catalog ? volumeByMuscle(sessions, getMuscles, windowDays) : []),
-    [catalog, sessions, getMuscles, windowDays],
+    () => (muscleOf ? volumeByMuscle(sessions, (name) => muscleOf(name)?.primary ?? [], windowDays) : []),
+    [muscleOf, sessions, windowDays],
   );
   const maxMuscleVol = muscleVol[0]?.kg ?? 1;
 

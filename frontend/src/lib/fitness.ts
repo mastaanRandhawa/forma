@@ -272,6 +272,147 @@ export function volumeByMuscle(
     .sort((a, b) => b.kg - a.kg);
 }
 
+// ── body map: per-muscle load, fatigue, balance ─────────────────────────────
+/** Muscle groups the anatomy chart can draw. */
+export const BODY_GROUPS = [
+  "chest", "shoulders", "triceps", "biceps", "abs",
+  "back", "quads", "glutes", "hamstrings", "calves",
+] as const;
+export type BodyGroup = (typeof BODY_GROUPS)[number];
+
+/** "Rear delts" / "rear-delts" / "rear_delts" → "rear_delts". */
+const muscleKey = (m: string) => m.toLowerCase().trim().replace(/[\s-]+/g, "_");
+
+/**
+ * RepDB muscle names and API muscle keys → the chart group that draws them.
+ * Forearms and adductors have no region on the chart and are dropped.
+ */
+const MUSCLE_GROUP: Record<string, BodyGroup> = {
+  chest: "chest",
+  shoulders: "shoulders",
+  rear_delts: "shoulders",
+  triceps: "triceps",
+  biceps: "biceps",
+  abs: "abs",
+  obliques: "abs",
+  back: "back",
+  lats: "back",
+  traps: "back",
+  quads: "quads",
+  glutes: "glutes",
+  hamstrings: "hamstrings",
+  calves: "calves",
+};
+
+export const bodyGroupOf = (muscle: string): BodyGroup | null => MUSCLE_GROUP[muscleKey(muscle)] ?? null;
+
+/** Fold per-muscle 0–1 scores onto chart groups, keeping the strongest per group. */
+export function foldToBodyGroups(rows: { key: string; score: number }[]): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const r of rows) {
+    const g = bodyGroupOf(r.key);
+    if (g) out[g] = Math.max(out[g] ?? 0, r.score);
+  }
+  return out;
+}
+
+type MuscleOf = (exerciseName: string) => { primary: string[]; secondary: string[] } | null;
+
+/**
+ * Hard working sets per muscle (keyed like "rear_delts"): primary muscles get
+ * the full set count, secondary muscles half. `weightOf(hoursAgo)` scales each
+ * session; return 0 to leave it out.
+ */
+export function muscleSets(
+  sessions: CompletedSession[],
+  muscleOf: MuscleOf,
+  weightOf: (hoursAgo: number) => number,
+  now = Date.now(),
+): Record<string, number> {
+  const acc: Record<string, number> = {};
+  for (const s of sessions) {
+    const w = weightOf((now - Date.parse(s.finishedAt)) / 3_600_000);
+    if (!(w > 0)) continue;
+    for (const e of s.exercises) {
+      const sets = e.sets.filter((x) => x.done && !x.warmup).length;
+      const hit = sets ? muscleOf(e.name) : null;
+      if (!hit) continue;
+      for (const m of hit.primary) acc[muscleKey(m)] = (acc[muscleKey(m)] ?? 0) + sets * w;
+      for (const m of hit.secondary) acc[muscleKey(m)] = (acc[muscleKey(m)] ?? 0) + sets * w * 0.5;
+    }
+  }
+  return acc;
+}
+
+/** Sum per-muscle values onto chart groups. */
+export function sumToBodyGroups(perMuscle: Record<string, number>): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const [m, v] of Object.entries(perMuscle)) {
+    const g = bodyGroupOf(m);
+    if (g) out[g] = (out[g] ?? 0) + v;
+  }
+  return out;
+}
+
+/** Hours for a session's load on a muscle to decay to fully recovered. */
+export const RECOVERY_HOURS = 72;
+/** Decayed hard sets at which a group reads as fully fatigued. */
+const FATIGUE_FULL_SETS = 10;
+
+/**
+ * Per-group fatigue, 0–1 on an absolute scale: hard sets from the last 72 h,
+ * each decaying linearly to zero as it ages, so ~10 fresh sets reads as fully
+ * fatigued and a muscle trained three days ago reads as recovered.
+ */
+export function muscleFatigue(sessions: CompletedSession[], muscleOf: MuscleOf, now = Date.now()): Record<string, number> {
+  const decayed = sumToBodyGroups(
+    muscleSets(sessions, muscleOf, (h) => (h < 0 ? 0 : Math.max(0, 1 - h / RECOVERY_HOURS)), now),
+  );
+  const out: Record<string, number> = {};
+  for (const [g, v] of Object.entries(decayed)) out[g] = Math.min(1, v / FATIGUE_FULL_SETS);
+  return out;
+}
+
+const PUSH = ["chest", "shoulders", "triceps"];
+const PULL = ["back", "lats", "traps", "biceps", "rear_delts"];
+const ANTERIOR = ["chest", "abs", "obliques", "quads"];
+const POSTERIOR = ["back", "lats", "glutes", "hamstrings", "calves"];
+
+const share = (perMuscle: Record<string, number>, a: string[], b: string[]): number | null => {
+  const sa = a.reduce((n, m) => n + (perMuscle[m] ?? 0), 0);
+  const sb = b.reduce((n, m) => n + (perMuscle[m] ?? 0), 0);
+  return sa + sb > 0 ? Math.round((sa / (sa + sb)) * 100) : null;
+};
+
+/** Push and anterior share of hard sets, 0–100 (50 = even), or null with no data. */
+export function muscleBalance(perMuscle: Record<string, number>): { pushPull: number | null; antPost: number | null } {
+  return { pushPull: share(perMuscle, PUSH, PULL), antPost: share(perMuscle, ANTERIOR, POSTERIOR) };
+}
+
+/** Every chart group with the number of sessions in the last `days` that trained it as a primary mover, fewest first. */
+export function sessionsPerGroup(
+  sessions: CompletedSession[],
+  muscleOf: MuscleOf,
+  days: number,
+  now = Date.now(),
+): { group: BodyGroup; sessions: number }[] {
+  const counts = new Map<BodyGroup, number>(BODY_GROUPS.map((g) => [g, 0]));
+  const cutoff = now - days * 86_400_000;
+  for (const s of sessions) {
+    if (Date.parse(s.finishedAt) < cutoff) continue;
+    const hit = new Set<BodyGroup>();
+    for (const e of s.exercises) {
+      if (!e.sets.some((x) => x.done && !x.warmup)) continue;
+      for (const m of muscleOf(e.name)?.primary ?? []) {
+        const g = bodyGroupOf(m);
+        if (g) hit.add(g);
+      }
+    }
+    hit.forEach((g) => counts.set(g, (counts.get(g) ?? 0) + 1));
+  }
+  return BODY_GROUPS.map((group) => ({ group, sessions: counts.get(group) ?? 0 })).sort((a, b) => a.sessions - b.sessions);
+}
+
 /** Exercise names that appear in logged history, most recent first. */
 export function loggedExerciseNames(sessions: CompletedSession[]): string[] {
   const seen: string[] = [];
