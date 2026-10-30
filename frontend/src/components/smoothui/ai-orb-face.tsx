@@ -137,27 +137,28 @@ const AIOrbFace = ({
     };
   }, []);
 
-  // Snap shut, ease back open — an even-timed blink reads as a machine.
+  // Snap shut, ease back open — an even-timed blink reads as a machine. A double
+  // blink reopens fast the first time and eases open only after the second.
   const blink = useCallback(
     async (double = false) => {
       const closeT = { duration: 0.07, ease: EASE_IN };
       const openT = { duration: 0.16, ease: EASE_OUT };
-      if (!mountedRef.current) {
-        return;
-      }
-      await Promise.all([
-        leftLid.start({ scaleY: 0.08 }, closeT),
-        rightLid.start({ scaleY: 0.08 }, closeT),
-      ]);
-      if (!mountedRef.current) {
-        return;
-      }
-      await Promise.all([
-        leftLid.start({ scaleY: 1 }, double ? closeT : openT),
-        rightLid.start({ scaleY: 1 }, double ? closeT : openT),
-      ]);
-      if (double) {
-        await blink(false);
+      for (let left = double ? 2 : 1; left > 0; left--) {
+        if (!mountedRef.current) {
+          return;
+        }
+        await Promise.all([
+          leftLid.start({ scaleY: 0.08 }, closeT),
+          rightLid.start({ scaleY: 0.08 }, closeT),
+        ]);
+        if (!mountedRef.current) {
+          return;
+        }
+        const reopen = left > 1 ? closeT : openT;
+        await Promise.all([
+          leftLid.start({ scaleY: 1 }, reopen),
+          rightLid.start({ scaleY: 1 }, reopen),
+        ]);
       }
     },
     [leftLid, rightLid]

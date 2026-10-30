@@ -61,7 +61,7 @@ export function CircularDial({
   const onKey = (e: React.KeyboardEvent) => {
     if (!onChange) return;
     const big = step * 10;
-    let next = value;
+    let next: number;
     if (["ArrowUp", "ArrowRight"].includes(e.key)) next = value + step;
     else if (["ArrowDown", "ArrowLeft"].includes(e.key)) next = value - step;
     else if (e.key === "PageUp") next = value + big;

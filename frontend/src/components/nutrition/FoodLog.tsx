@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import {
-  Plus, ChevronLeft, ChevronRight, Trash2, Pencil, Calendar,
+  Plus, ChevronLeft, ChevronRight, Trash2, Pencil,
   CopyPlus, Sparkles, Utensils,
 } from "lucide-react";
 import { PageHeader } from "../PageHeader";

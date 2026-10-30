@@ -332,7 +332,7 @@ export async function startFromPreset(preset: WorkoutTemplate, units: Units): Pr
   await attachApiSession(preset.name, units);
 }
 
-export async function startQuick(units: Units): Promise<void> {
+export async function startQuick(): Promise<void> {
   startSession("quick workout", []);
   if (API_ENABLED) {
     try {

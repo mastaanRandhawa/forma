@@ -106,7 +106,7 @@ function ConnectionsLive() {
     setMsg(null);
     try {
       const r = await api.me.connectDevice(key as "whoop" | "oura" | "garmin");
-      if (r.authorizeUrl) window.location.href = r.authorizeUrl;
+      if (r.authorizeUrl) window.location.assign(r.authorizeUrl);
       else setMsg(r.message ?? `${key} isn't configured on this deployment.`);
     } catch (e) {
       setMsg(e instanceof Error ? e.message : `${key} isn't available.`);

@@ -298,22 +298,25 @@ export function OAuthButtons({
 }) {
   const cfg = useAuthConfig();
   if (!cfg || (!cfg.providers.google && !cfg.providers.apple)) return null;
-  const Btn = ({ p, label }: { p: "google" | "apple"; label: string }) => (
-    <button
-      type="button"
-      onClick={() => onProvider?.(p)}
-      className="focus-ring tactile flex h-11 w-full items-center justify-center gap-2 rounded-pill border border-white/12 bg-white/[0.04] text-[0.85rem] text-content-primary hover:bg-white/[0.08]"
-    >
-      Continue with {label}
-    </button>
-  );
   return (
     <div className="space-y-2">
       <div className="my-4 flex items-center gap-3 text-[0.72rem] uppercase tracking-wider text-content-tertiary">
         <span className="h-px flex-1 bg-white/10" /> or <span className="h-px flex-1 bg-white/10" />
       </div>
-      {cfg.providers.google && <Btn p="google" label="Google" />}
-      {cfg.providers.apple && <Btn p="apple" label="Apple" />}
+      {cfg.providers.google && <ProviderButton label="Google" onClick={() => onProvider?.("google")} />}
+      {cfg.providers.apple && <ProviderButton label="Apple" onClick={() => onProvider?.("apple")} />}
     </div>
+  );
+}
+
+function ProviderButton({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="focus-ring tactile flex h-11 w-full items-center justify-center gap-2 rounded-pill border border-white/12 bg-white/[0.04] text-[0.85rem] text-content-primary hover:bg-white/[0.08]"
+    >
+      Continue with {label}
+    </button>
   );
 }

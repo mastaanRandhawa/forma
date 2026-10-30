@@ -33,7 +33,7 @@ test("page title is set correctly", async ({ page }) => {
   expect(title).toMatch(/forma/i);
 });
 
-test("API: dashboard endpoint returns data for authed user", async ({ page, context }) => {
+test("API: dashboard endpoint returns data for authed user", async ({ page }) => {
   // get the stored access token from localStorage
   const at = await page.evaluate(() => localStorage.getItem("forma.access"));
   const res = await page.request.get(`${API}/dashboard`, {

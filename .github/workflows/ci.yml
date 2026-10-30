@@ -24,6 +24,7 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
 
       - run: npm ci
+      - run: npm run lint
       # `build` runs `tsc -b` first, so this is the typecheck too. No VITE_API_URL:
       # this checks the no-backend build that GitHub Pages ships.
       - run: npm run build

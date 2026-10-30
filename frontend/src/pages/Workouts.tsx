@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { Dumbbell, History as HistoryIcon, Pencil, Plus, Zap, CalendarDays } from "lucide-react";
+import { Dumbbell, History as HistoryIcon, Plus, Zap, CalendarDays } from "lucide-react";
 import { PageHeader } from "../components/PageHeader";
 import { TrainingTabs } from "../components/layout/TrainingTabs";
 import { Reveal } from "../components/Reveal";
@@ -122,7 +122,7 @@ export default function Workouts() {
     go();
   });
   const quickStart = useAction(async () => {
-    await startQuick(units);
+    await startQuick();
     go();
   });
   const repeat = useAction(async (s: CompletedSession) => {

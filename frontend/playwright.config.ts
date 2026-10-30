@@ -27,6 +27,25 @@ export default defineConfig({
       testIgnore: /global-setup\.spec\.ts/,
     },
   ],
-  // dev server is started separately; we just connect to it
-  webServer: undefined,
+  // With E2E_START_STACK=1 (set by `npm run test:e2e:stack`) Playwright starts
+  // the API and Vite itself; otherwise it connects to servers you already run.
+  // Either way the API needs a migrated, seeded database.
+  webServer: process.env.E2E_START_STACK
+    ? [
+        {
+          command: "npx tsx src/index.ts",
+          cwd: "../backend",
+          url: "http://localhost:4000/api/v1/health",
+          reuseExistingServer: true,
+          timeout: 60_000,
+        },
+        {
+          command: "npx vite --port 5178 --strictPort",
+          url: "http://localhost:5178",
+          env: { VITE_API_URL: "http://localhost:4000/api/v1" },
+          reuseExistingServer: true,
+          timeout: 60_000,
+        },
+      ]
+    : undefined,
 });
