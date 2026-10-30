@@ -1,7 +1,6 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Reveal } from "../components/Reveal";
-import { Skel } from "../components/skeleton/Skeleton";
 import { Greeting } from "../components/dashboard/Greeting";
 import { RingStat } from "../components/dashboard/RingStat";
 import { SessionCard } from "../components/dashboard/SessionCard";
@@ -254,7 +253,7 @@ export default function Home() {
           title={detail ? details[detail]?.title ?? "" : ""}
         >
           {detail && details[detail] && (
-            <MetricDetailBody id={detail} detail={details[detail]} onClose={() => setDetail(null)} />
+            <MetricDetailBody detail={details[detail]} onClose={() => setDetail(null)} />
           )}
         </DetailDrawer>
       </div>

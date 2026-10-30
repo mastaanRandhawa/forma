@@ -179,12 +179,6 @@ export const useDashboard = () =>
 export const useGoals = () =>
   useResource<T.GoalWithProgress[] | null>("goals", pick(api.goals.list, demo.demoGoals, []));
 
-export const useWallet = () =>
-  useResource<T.WalletSummary | null>("wallet", pick(api.store.wallet, demo.demoWallet));
-
-export const useStoreItems = () =>
-  useResource<T.StoreItem[] | null>("store-items", pick(() => api.store.items(), demo.demoStoreItems, []));
-
 export const useTrainer = () =>
   useResource<T.Trainer | null>("trainer", pick(api.trainer.get, demo.demoTrainer));
 
@@ -203,27 +197,12 @@ export const useMuscleMap = (range: T.MuscleMap["range"] = "week") =>
     pick(() => api.body.muscleMap(range), () => demo.demoMuscleMap(range), { range, muscles: [] }),
   );
 
-export const useMuscleBalance = () =>
-  useResource<T.MuscleBalance | null>("muscle-balance", pick(api.body.balance, demo.demoBalance));
-
 export const useAchievements = () =>
   useResource<T.AchievementProgress[] | null>("achievements", pick(api.achievements.list, demo.demoAchievements, []));
-
-export const useProgressOverview = () =>
-  useResource<T.ProgressOverview | null>("progress-overview", pick(api.progress.overview, demo.demoProgressOverview));
-
-export const useReadiness = () =>
-  useResource<T.ReadinessBreakdown | null>("readiness", pick(api.progress.readiness, demo.demoReadiness));
-
-export const useNotifications = () =>
-  useResource<T.NotificationList | null>("notifications", pick(() => api.notifications.list(), demo.demoNotifications));
 
 // ── workout lifecycle (§6) ──────────────────────────────────────────────────
 export const usePlannedWorkouts = () =>
   useResource<T.Workout[] | null>("planned-workouts", pick(() => api.workouts.list({ template: "false" }), () => [], []));
-
-export const useWorkoutTemplates = () =>
-  useResource<T.Workout[] | null>("workout-templates", pick(() => api.workouts.list({ template: "true" }), () => [], []));
 
 export const useSessionHistory = () =>
   useResource<T.WorkoutSession[] | null>(
@@ -241,9 +220,3 @@ export const useTemplates = () => {
 
 /** Call after any template create/update/delete so the next `useTemplates` refetches. */
 export const invalidateTemplates = () => invalidateResource("templates");
-
-export const useConsistency = (weeks = 13) =>
-  useResource<T.ConsistencyReport | null>(
-    `consistency:${weeks}`,
-    pick(() => api.progress.consistency(weeks), () => null),
-  );

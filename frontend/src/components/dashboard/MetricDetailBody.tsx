@@ -2,23 +2,17 @@ import { Link } from "react-router-dom";
 import { ArrowRight } from "lucide-react";
 import { MiniBars } from "../health/MiniBars";
 import { MiniTrend } from "../health/MiniTrend";
-import { metricDetails } from "../../lib/data";
 import type { MetricDetail } from "../../lib/progressMetrics";
 
 /** Body content for the DetailDrawer — headline, full chart, contributing
- *  factors, and one recommendation. Pass a real-data `detail` object, or fall
- *  back to the static copy keyed by metric id. */
+ *  factors, and one recommendation, from a real-data `detail` object. */
 export function MetricDetailBody({
-  id,
-  detail,
+  detail: d,
   onClose,
 }: {
-  id: string;
-  detail?: MetricDetail;
+  detail: MetricDetail;
   onClose: () => void;
 }) {
-  const d = detail ?? metricDetails[id];
-  if (!d) return null;
 
   return (
     <div>

@@ -13,13 +13,11 @@ import {
   goals as mockGoals,
   insights as mockInsights,
   rankedMuscles,
-  storeItems,
   streakData,
   suggestedPrompts,
   trainerMessage,
   todayWorkout,
   upcomingWorkouts,
-  wallet,
   weeklyRing,
 } from "../lib/data";
 
@@ -97,35 +95,6 @@ export function demoInsights(): T.CoachingInsight[] {
   }));
 }
 
-export function demoWallet(): T.WalletSummary {
-  return {
-    balance: wallet.balance,
-    earnedThisWeek: wallet.earnedThisWeek,
-    recent: wallet.recent.map((r, i) => ({
-      id: `wtx-${i}`,
-      type: "earn",
-      amount: r.amount,
-      label: r.label,
-      createdAt: daysAgo(i + 1),
-    })),
-  };
-}
-
-export function demoStoreItems(): T.StoreItem[] {
-  return storeItems.map((s) => ({
-    id: s.id,
-    category: s.category,
-    name: s.name,
-    detail: s.detail,
-    price: s.price,
-    swatch: s.swatch ?? null,
-    isDefault: s.price === 0,
-    style: s.style ?? null,
-    owned: s.owned ?? s.price === 0,
-    equipped: s.equipped ?? false,
-  }));
-}
-
 export function demoTrainer(): T.Trainer {
   return {
     id: "trainer-demo",
@@ -172,17 +141,6 @@ export function demoMuscleMap(range: T.MuscleMap["range"] = "week"): T.MuscleMap
   };
 }
 
-export function demoBalance(): T.MuscleBalance {
-  return {
-    mostTrained: rankedMuscles.slice(0, 3).map((m) => ({
-      key: m.name.toLowerCase(), name: m.name, region: "upper", load: m.pct,
-    })),
-    undertrained: rankedMuscles.slice(-3).map((m) => ({
-      key: m.name.toLowerCase(), name: m.name, region: "lower", load: m.pct,
-    })),
-  };
-}
-
 export function demoAchievements(): T.AchievementProgress[] {
   return achievements.map((a) => ({
     key: a.id,
@@ -193,47 +151,4 @@ export function demoAchievements(): T.AchievementProgress[] {
     progress: a.unlocked ? 1 : 0.55,
     unlockedAt: a.unlocked ? daysAgo(3) : null,
   }));
-}
-
-export function demoProgressOverview(): T.ProgressOverview {
-  return {
-    summary:
-      "Over the last 8 weeks you've added 12% to your bench press, trained 4 days a week without a missed session, and your squat form score climbed from 64 to 81.",
-    sessions: 31,
-    totalVolumeKg: 402_000,
-    personalRecords: 7,
-  };
-}
-
-export function demoReadiness(): T.ReadinessBreakdown {
-  return {
-    score: 78,
-    recommendation: "Cleared to train hard. Keep an eye on the top-set RPE.",
-    factors: [
-      { label: "sleep", value: "7h 18m · good", fraction: 0.82 },
-      { label: "hrv", value: "68 ms · +6 vs avg", fraction: 0.74 },
-      { label: "resting hr", value: "52 bpm · steady", fraction: 0.66 },
-      { label: "prior-day strain", value: "moderate", fraction: 0.48 },
-    ],
-  };
-}
-
-export function demoNotifications(): T.NotificationList {
-  return {
-    unreadCount: 2,
-    items: [
-      {
-        id: "n1", type: "pr", title: "New bench PR", body: "195 lb × 3 — up 2.5 kg.",
-        deepLink: "/progress", readAt: null, createdAt: daysAgo(0),
-      },
-      {
-        id: "n2", type: "check_in", title: "Kai checked in", body: "How's the left shoulder feeling today?",
-        deepLink: "/trainer", readAt: null, createdAt: daysAgo(1),
-      },
-      {
-        id: "n3", type: "milestone", title: "14-day streak", body: "Longest streak yet. Keep it going.",
-        deepLink: null, readAt: daysAgo(1), createdAt: daysAgo(2),
-      },
-    ],
-  };
 }
