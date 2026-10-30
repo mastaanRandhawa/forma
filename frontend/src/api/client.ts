@@ -40,8 +40,10 @@ function safeGet(k: string) {
 }
 function persist() {
   try {
-    accessToken ? localStorage.setItem(ACCESS_KEY, accessToken) : localStorage.removeItem(ACCESS_KEY);
-    refreshToken ? localStorage.setItem(REFRESH_KEY, refreshToken) : localStorage.removeItem(REFRESH_KEY);
+    if (accessToken) localStorage.setItem(ACCESS_KEY, accessToken);
+    else localStorage.removeItem(ACCESS_KEY);
+    if (refreshToken) localStorage.setItem(REFRESH_KEY, refreshToken);
+    else localStorage.removeItem(REFRESH_KEY);
   } catch {
     /* private mode — tokens stay in memory only */
   }
@@ -95,6 +97,8 @@ interface Opts {
   body?: unknown;
   query?: Query;
   auth?: boolean; // default true
+  /** resolve with the raw body as a Blob (file downloads) instead of parsed JSON */
+  blob?: boolean;
   _retry?: boolean;
 }
 
@@ -151,6 +155,7 @@ async function request<R>(path: string, opts: Opts = {}): Promise<R> {
   }
 
   if (res.status === 204) return undefined as R;
+  if (opts.blob && res.ok) return (await res.blob()) as R;
 
   const payload = await res.json().catch(() => undefined);
   if (!res.ok) throw new ApiRequestError(res.status, payload as T.ApiError);
@@ -242,6 +247,7 @@ export const api = {
       setGating: (gatingEnabled: boolean) => put<T.ProgressionResult>("/me/progression", { gatingEnabled }),
     },
     export: () => get<unknown>("/me/export"),
+    exportCsv: () => request<Blob>("/me/export.csv", { blob: true }),
     deleteAccount: (password?: string) => del<void>("/me", { confirm: true, password }),
 
     // ── account & security ──

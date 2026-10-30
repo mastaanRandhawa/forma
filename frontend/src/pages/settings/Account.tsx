@@ -1,19 +1,18 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Download, LogOut, ShieldCheck } from "lucide-react";
-import { API_ENABLED } from "../../api/hooks";
+import { api } from "../../api/client";
+import { API_ENABLED, errorMessage } from "../../api/hooks";
 import { useAuth } from "../../api/auth";
 import { Section } from "../../components/settings/ui";
-
-const API_BASE =
-  (import.meta.env as Record<string, string | undefined>).VITE_API_URL ??
-  "http://localhost:4000/api/v1";
+import { downloadBlob } from "../../lib/download";
 
 export default function Account() {
   const { user, signOut } = useAuth();
   const nav = useNavigate();
   const [busy, setBusy] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
 
   return (
     <div className="space-y-5">
@@ -61,21 +60,12 @@ export default function Account() {
           <button
             onClick={async () => {
               setExporting(true);
+              setExportError(null);
               try {
-                const token = localStorage.getItem("forma_access_token");
-                const res = await fetch(`${API_BASE}/me/export`, {
-                  headers: token ? { Authorization: `Bearer ${token}` } : {},
-                });
-                if (!res.ok) throw new Error("export failed");
-                const blob = await res.blob();
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement("a");
-                a.href = url;
-                a.download = `forma-export-${new Date().toISOString().slice(0, 10)}.csv`;
-                a.click();
-                URL.revokeObjectURL(url);
-              } catch {
-                // silent — user will see nothing downloaded
+                const csv = await api.me.exportCsv();
+                downloadBlob(`forma-export-${new Date().toISOString().slice(0, 10)}.csv`, csv);
+              } catch (err) {
+                setExportError(errorMessage(err as Error));
               } finally {
                 setExporting(false);
               }
@@ -86,6 +76,11 @@ export default function Account() {
             <Download size={13} strokeWidth={2.25} />
             {exporting ? "preparing…" : "export data (csv)"}
           </button>
+          {exportError && (
+            <p role="alert" className="mt-2 text-[0.8rem] text-[var(--accent-pink)]">
+              export failed: {exportError}
+            </p>
+          )}
         </Section>
       )}
 

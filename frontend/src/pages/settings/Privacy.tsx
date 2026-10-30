@@ -4,6 +4,7 @@ import { api } from "../../api/client";
 import { API_ENABLED } from "../../api/hooks";
 import { usePrefs, useSettings } from "../../api/settings";
 import { loadData } from "../../lib/localStore";
+import { downloadJSON } from "../../lib/download";
 import { Section, Row } from "../../components/settings/ui";
 import { Toggle } from "../../components/settings/Toggle";
 
@@ -12,16 +13,6 @@ const ASSURANCES = [
   "raw video never uploaded",
   "raw video never stored",
 ];
-
-function downloadJSON(name: string, data: unknown) {
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = name;
-  a.click();
-  URL.revokeObjectURL(url);
-}
 
 export default function Privacy() {
   const { bundle, update } = useSettings();
