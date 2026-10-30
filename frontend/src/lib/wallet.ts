@@ -1,5 +1,4 @@
 import { useSyncExternalStore } from "react";
-import { wallet as seed } from "./data";
 import { API_ENABLED } from "../api/hooks";
 import { api } from "../api/client";
 
@@ -66,22 +65,9 @@ export function levelFor(lifetimeEarned: number) {
 }
 
 // ── persistence ─────────────────────────────────────────────────────────────
+/** A new wallet starts empty — every coin in it is one the user earned. */
 function seedState(): WalletState {
-  const now = new Date();
-  const ledger: LedgerEntry[] = seed.recent.map((r, i) => ({
-    id: `seed-${i}`,
-    type: "earn" as const,
-    amount: r.amount,
-    label: r.label,
-    kind: "milestone",
-    at: new Date(now.getTime() - (i + 1) * 86_400_000).toISOString(),
-  }));
-  return {
-    balance: seed.balance,
-    lifetimeEarned: seed.balance + 1240,
-    ledger,
-    grants: {},
-  };
+  return { balance: 0, lifetimeEarned: 0, ledger: [], grants: {} };
 }
 
 function load(): WalletState {
@@ -90,8 +76,8 @@ function load(): WalletState {
     if (!raw) return seedState();
     const p = JSON.parse(raw) as Partial<WalletState>;
     return {
-      balance: typeof p.balance === "number" ? p.balance : seed.balance,
-      lifetimeEarned: typeof p.lifetimeEarned === "number" ? p.lifetimeEarned : seed.balance,
+      balance: typeof p.balance === "number" ? p.balance : 0,
+      lifetimeEarned: typeof p.lifetimeEarned === "number" ? p.lifetimeEarned : 0,
       ledger: Array.isArray(p.ledger) ? p.ledger.slice(0, LEDGER_CAP) : [],
       grants: p.grants && typeof p.grants === "object" ? p.grants : {},
     };
@@ -203,7 +189,7 @@ export const walletStore = {
       .catch(() => {});
   },
 
-  /** test / settings helper — wipe the economy back to seed */
+  /** test / settings helper — wipe the economy back to an empty wallet */
   reset() {
     state = seedState();
     emit();

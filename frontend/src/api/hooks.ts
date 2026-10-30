@@ -2,18 +2,22 @@
  * React data hooks over the API client.
  *
  * Each hook returns `{ data, error, loading, refetch }`. When `VITE_API_URL`
- * is set they call the real backend (`./client`); otherwise they resolve the
- * demo dataset (`./demo`) so the app is fully usable with no server — the
- * GitHub Pages build runs this way.
+ * is set they call the real backend (`./client`). Without it (the GitHub Pages
+ * build) they resolve empty — screens show their empty states and real user
+ * data comes from `lib/localStore`. The bundled showcase dataset (`./demo`) is
+ * served only when `VITE_DEMO_DATA=true`.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, ApiRequestError } from "./client";
 import type * as T from "./types";
 import * as demo from "./demo";
 
-export const API_ENABLED = Boolean(
-  (import.meta.env as Record<string, string | undefined>).VITE_API_URL,
-);
+const ENV = import.meta.env as Record<string, string | undefined>;
+
+export const API_ENABLED = Boolean(ENV.VITE_API_URL);
+
+/** Opt-in showcase data for a backend-less build. Off by default so a real user never sees invented numbers. */
+export const DEMO_DATA = !API_ENABLED && ENV.VITE_DEMO_DATA === "true";
 
 export interface Resource<D> {
   data: D | null;
@@ -163,64 +167,68 @@ export function errorMessage(e: Error | null): string {
   return e.message || "Something went wrong.";
 }
 
-const pick = <D>(live: () => Promise<D>, fallback: () => D) =>
-  API_ENABLED ? live : () => Promise.resolve(fallback());
+/** Live API call, or — with no backend — the demo value when opted in, else `empty`. */
+const pick = <D>(live: () => Promise<D>, demoData: () => D, empty: D | null = null): (() => Promise<D | null>) =>
+  API_ENABLED ? live : () => Promise.resolve(DEMO_DATA ? demoData() : empty);
 
 // ── resource hooks ──────────────────────────────────────────────────────────
 
 export const useDashboard = () =>
-  useResource<T.Dashboard>("dashboard", pick(api.dashboard, demo.demoDashboard));
+  useResource<T.Dashboard | null>("dashboard", pick(api.dashboard, demo.demoDashboard));
 
 export const useGoals = () =>
-  useResource<T.GoalWithProgress[]>("goals", pick(api.goals.list, demo.demoGoals));
+  useResource<T.GoalWithProgress[] | null>("goals", pick(api.goals.list, demo.demoGoals, []));
 
 export const useWallet = () =>
-  useResource<T.WalletSummary>("wallet", pick(api.store.wallet, demo.demoWallet));
+  useResource<T.WalletSummary | null>("wallet", pick(api.store.wallet, demo.demoWallet));
 
 export const useStoreItems = () =>
-  useResource<T.StoreItem[]>("store-items", pick(() => api.store.items(), demo.demoStoreItems));
+  useResource<T.StoreItem[] | null>("store-items", pick(() => api.store.items(), demo.demoStoreItems, []));
 
 export const useTrainer = () =>
-  useResource<T.Trainer>("trainer", pick(api.trainer.get, demo.demoTrainer));
+  useResource<T.Trainer | null>("trainer", pick(api.trainer.get, demo.demoTrainer));
 
 export const useChatHistory = () =>
-  useResource<T.ChatMessage[]>("chat", pick(() => api.chat.history(), demo.demoChat));
+  useResource<T.ChatMessage[] | null>("chat", pick(() => api.chat.history(), demo.demoChat, []));
 
 export const useSuggestedPrompts = () =>
-  useResource<string[]>(
+  useResource<string[] | null>(
     "chat-prompts",
     pick(api.chat.suggestedPrompts, demo.demoSuggestedPrompts),
   );
 
 export const useMuscleMap = (range: T.MuscleMap["range"] = "week") =>
-  useResource<T.MuscleMap>(`muscle-map:${range}`, pick(() => api.body.muscleMap(range), () => demo.demoMuscleMap(range)));
+  useResource<T.MuscleMap | null>(
+    `muscle-map:${range}`,
+    pick(() => api.body.muscleMap(range), () => demo.demoMuscleMap(range), { range, muscles: [] }),
+  );
 
 export const useMuscleBalance = () =>
-  useResource<T.MuscleBalance>("muscle-balance", pick(api.body.balance, demo.demoBalance));
+  useResource<T.MuscleBalance | null>("muscle-balance", pick(api.body.balance, demo.demoBalance));
 
 export const useAchievements = () =>
-  useResource<T.AchievementProgress[]>("achievements", pick(api.achievements.list, demo.demoAchievements));
+  useResource<T.AchievementProgress[] | null>("achievements", pick(api.achievements.list, demo.demoAchievements, []));
 
 export const useProgressOverview = () =>
-  useResource<T.ProgressOverview>("progress-overview", pick(api.progress.overview, demo.demoProgressOverview));
+  useResource<T.ProgressOverview | null>("progress-overview", pick(api.progress.overview, demo.demoProgressOverview));
 
 export const useReadiness = () =>
-  useResource<T.ReadinessBreakdown>("readiness", pick(api.progress.readiness, demo.demoReadiness));
+  useResource<T.ReadinessBreakdown | null>("readiness", pick(api.progress.readiness, demo.demoReadiness));
 
 export const useNotifications = () =>
-  useResource<T.NotificationList>("notifications", pick(() => api.notifications.list(), demo.demoNotifications));
+  useResource<T.NotificationList | null>("notifications", pick(() => api.notifications.list(), demo.demoNotifications));
 
 // ── workout lifecycle (§6) ──────────────────────────────────────────────────
 export const usePlannedWorkouts = () =>
-  useResource<T.Workout[]>("planned-workouts", pick(() => api.workouts.list({ template: "false" }), () => []));
+  useResource<T.Workout[] | null>("planned-workouts", pick(() => api.workouts.list({ template: "false" }), () => [], []));
 
 export const useWorkoutTemplates = () =>
-  useResource<T.Workout[]>("workout-templates", pick(() => api.workouts.list({ template: "true" }), () => []));
+  useResource<T.Workout[] | null>("workout-templates", pick(() => api.workouts.list({ template: "true" }), () => [], []));
 
 export const useSessionHistory = () =>
-  useResource<T.WorkoutSession[]>(
+  useResource<T.WorkoutSession[] | null>(
     "session-history",
-    pick(() => api.sessions.list({ status: "completed", take: 40 }), () => []),
+    pick(() => api.sessions.list({ status: "completed", take: 40 }), () => [], []),
   );
 
 export const useTemplates = () => {

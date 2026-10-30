@@ -40,7 +40,7 @@ import {
   type LoggedSet,
 } from "../lib/localStore";
 import { saveSessionAsTemplate } from "../lib/templates";
-import { detectPRs, epley1RM, lastPerformance, lastTopSet, sessionVolume } from "../lib/fitness";
+import { currentStreak, detectPRs, epley1RM, lastPerformance, lastTopSet, sessionVolume } from "../lib/fitness";
 import {
   activeSetIndex,
   addWarmupSet,
@@ -65,7 +65,6 @@ import {
 } from "../lib/session";
 import { grantWorkoutRewards } from "../lib/rewards";
 import { walletStore } from "../lib/wallet";
-import { streakData } from "../lib/data";
 import { ALL_TEMPLATES } from "../lib/program";
 import type { RepDbCatalogEntry } from "../lib/repdb";
 import { repdbThumb, repdbImage } from "../lib/repdb";
@@ -506,7 +505,8 @@ export default function ActiveWorkout() {
       sessionId: session.apiId ?? session.startedAt,
       volume,
       prs: prs.length,
-      streakDays: streakData.days,
+      // includes the session just saved by finishSession()
+      streakDays: currentStreak(loadData().sessions),
     });
     const coins = walletStore.snapshot().lifetimeEarned - before;
 

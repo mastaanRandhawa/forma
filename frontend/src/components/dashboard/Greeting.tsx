@@ -1,31 +1,23 @@
-import { user } from "../../lib/data";
 import { useDashboardData } from "../../api/dashboard-context";
+import { useFormaData } from "../../lib/localStore";
 
-/** Time-of-day greeting + one contextual nudge. Makes the dashboard feel personal. */
+/** Time-of-day greeting + the trainer's nudge, when there is a real one. */
 export function Greeting() {
   const dash = useDashboardData();
+  const profileName = useFormaData().profile.name;
   const h = new Date().getHours();
   const part =
     dash?.greeting ??
     (h < 5 ? "Still up" : h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : h < 22 ? "Good evening" : "Winding down");
-  const name = dash?.user?.name ?? user.name;
-
-  const nudge =
-    dash?.trainerMessage ??
-    (h < 12
-      ? "Recovery looks good. You're cleared to train hard today."
-      : h < 17
-        ? "3,200 steps left to your daily goal, and today's session is still open."
-        : h < 22
-          ? "You're 18g short of your protein target. One more meal should cover it."
-          : "Your average bedtime is in 40 minutes.");
+  const name = dash?.user?.name ?? profileName;
+  const nudge = dash?.trainerMessage;
 
   return (
     <header className="mb-6">
       <h1 className="text-[1.5rem] font-light leading-tight text-content-primary sm:text-[1.75rem]">
-        {part}, {name}
+        {name ? `${part}, ${name}` : part}
       </h1>
-      <p className="mt-1 line-clamp-2 text-[0.9rem] text-content-secondary">{nudge}</p>
+      {nudge && <p className="mt-1 line-clamp-2 text-[0.9rem] text-content-secondary">{nudge}</p>}
     </header>
   );
 }

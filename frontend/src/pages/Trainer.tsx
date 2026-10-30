@@ -370,7 +370,7 @@ function TrainerSettings({
 }: {
   open: boolean;
   onClose: () => void;
-  trainer: Resource<TrainerT>;
+  trainer: Resource<TrainerT | null>;
   lookId?: string;
   sessionCount: number;
 }) {
