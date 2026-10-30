@@ -97,6 +97,8 @@ function persist() {
   }
 }
 function emit() {
+  // new object each change so useSyncExternalStore(snapshot) sees it
+  state = { ...state };
   persist();
   listeners.forEach((l) => l());
 }

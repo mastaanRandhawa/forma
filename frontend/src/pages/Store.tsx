@@ -13,7 +13,8 @@ import { PillSelector } from "../components/primitives";
 import { customizationItems, type CustomizationItem, type CustomizationRarity } from "../lib/data";
 import { useWallet } from "../lib/wallet";
 import { useCustomization } from "../lib/customization";
-import { EARN_WAYS, useChallenges, challengeStore, type EarnWay } from "../lib/rewards";
+import { LIVE_EARN_WAYS, useChallenges, type EarnWay } from "../lib/rewards";
+import { useMuscleLookup } from "../lib/muscleLookup";
 
 // Themes, accent colours and light/dark are all free and managed in
 // Settings › Customization — the store only sells the paid cosmetics.
@@ -55,7 +56,7 @@ export default function Store() {
   const [ownedOnly, setOwnedOnly] = useState(false);
   const wallet = useWallet();
   const cz = useCustomization();
-  const challenges = useChallenges();
+  const challenges = useChallenges(useMuscleLookup());
   const [toast, setToast] = useState<string | null>(null);
   const [purchased, setPurchased] = useState<CustomizationItem | null>(null);
   const purchaseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -146,7 +147,7 @@ export default function Store() {
       {/* ── ways to earn ────────────────────────────────────────────────── */}
       <SectionLabel>ways to earn</SectionLabel>
       <div className="grid gap-2.5 sm:grid-cols-2">
-        {EARN_WAYS.map((w) => {
+        {LIVE_EARN_WAYS.map((w) => {
           const Icon = EARN_ICONS[w.icon];
           return (
             <div
@@ -205,8 +206,7 @@ export default function Store() {
                   {c.done && !c.claimed ? (
                     <button
                       onClick={() => {
-                        challengeStore.claim(c.id);
-                        flash(`Challenge complete · +${c.reward}`);
+                        if (c.claim()) flash(`Challenge complete · +${c.reward}`);
                       }}
                       className="focus-ring rounded-full bg-[var(--accent-lime)]/15 px-2.5 py-1 text-[0.72rem] font-medium text-[var(--accent-lime)]"
                     >

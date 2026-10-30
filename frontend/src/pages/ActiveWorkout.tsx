@@ -7,7 +7,6 @@ import {
   Circle,
   Clock,
   Coins,
-  Minus,
   Pause,
   Play,
   Plus,
@@ -18,7 +17,6 @@ import {
   X,
   Zap,
 } from "lucide-react";
-import { Reveal } from "../components/Reveal";
 import { EmptyState } from "../components/EmptyState";
 import { Button } from "../components/primitives";
 import { KaiOrb } from "../components/KaiOrb";
@@ -40,7 +38,7 @@ import {
   type LoggedSet,
 } from "../lib/localStore";
 import { saveSessionAsTemplate } from "../lib/templates";
-import { currentStreak, detectPRs, epley1RM, lastPerformance, lastTopSet, sessionVolume } from "../lib/fitness";
+import { detectPRs, epley1RM, lastPerformance, lastTopSet, sessionVolume } from "../lib/fitness";
 import {
   activeSetIndex,
   addWarmupSet,
@@ -65,9 +63,9 @@ import {
 } from "../lib/session";
 import { grantWorkoutRewards } from "../lib/rewards";
 import { walletStore } from "../lib/wallet";
-import { ALL_TEMPLATES } from "../lib/program";
 import type { RepDbCatalogEntry } from "../lib/repdb";
 import { repdbThumb, repdbImage } from "../lib/repdb";
+import { loadMuscleLookup, useMuscleLookup } from "../lib/muscleLookup";
 import { plateCombo, plateLabel } from "../lib/plates";
 import { API_ENABLED } from "../api/hooks";
 import { api } from "../api/client";
@@ -81,7 +79,6 @@ import {
 } from "../lib/lifecycle";
 
 const EASE = [0.22, 1, 0.36, 1] as const;
-const REST_PRESETS = [60, 90, 120, 180];
 const DEFAULT_REST = 90;
 const COMPOUND_REST = 120;
 const ISOLATION_REST = 75;
@@ -91,10 +88,6 @@ function adaptiveRest(mechanic: string | null | undefined, lastRpe: number | nul
   return (lastRpe ?? 0) >= 9 ? base + 30 : base;
 }
 
-const EXERCISE_POOL = [
-  ...new Set(ALL_TEMPLATES.flatMap((t) => t.exercises.map((e) => e.name))),
-].sort();
-
 const vibrate = (p: number | number[]) => {
   try {
     navigator.vibrate?.(p);
@@ -103,25 +96,9 @@ const vibrate = (p: number | number[]) => {
   }
 };
 
-const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
-
 function useCatalogEntry(name: string): RepDbCatalogEntry | null {
-  const [entry, setEntry] = useState<RepDbCatalogEntry | null>(null);
-  useEffect(() => {
-    let alive = true;
-    void import("../lib/repdb.catalog").then((m) => {
-      if (!alive) return;
-      const key = norm(name);
-      const hit =
-        m.REPDB_CATALOG.find((e) => norm(e.name) === key) ??
-        m.REPDB_CATALOG.find((e) => norm(e.name).includes(key) || key.includes(norm(e.name)));
-      setEntry(hit ?? null);
-    });
-    return () => {
-      alive = false;
-    };
-  }, [name]);
-  return entry;
+  const lookup = useMuscleLookup();
+  return lookup ? lookup(name) : null;
 }
 
 function useElapsed(session: ReturnType<typeof useFormaData>["active"]) {
@@ -501,31 +478,24 @@ export default function ActiveWorkout() {
     const vsLast = lastSame
       ? { volume: volume - lastSame.volume, duration: durationSec - lastSame.durationSec }
       : null;
+    // null when the catalog chunk can't load (offline): muscle-based extras are skipped
+    const muscleOf = await loadMuscleLookup().catch(() => null);
     grantWorkoutRewards({
       sessionId: session.apiId ?? session.startedAt,
       volume,
       prs: prs.length,
       // includes the session just saved by finishSession()
-      streakDays: currentStreak(loadData().sessions),
+      sessions: loadData().sessions,
+      muscleOf,
     });
     const coins = walletStore.snapshot().lifetimeEarned - before;
 
-    let muscles: string[] = [];
-    try {
-      const cat = await import("../lib/repdb.catalog");
-      const set = new Set<string>();
-      for (const e of working) {
-        if (!e.sets.some((s) => s.done)) continue;
-        const key = norm(e.name);
-        const hit =
-          cat.REPDB_CATALOG.find((c) => norm(c.name) === key) ??
-          cat.REPDB_CATALOG.find((c) => norm(c.name).includes(key));
-        hit?.primary.forEach((m) => set.add(m));
-      }
-      muscles = [...set].slice(0, 6);
-    } catch {
-      /* offline / no catalog */
+    const muscleSet = new Set<string>();
+    for (const e of working) {
+      if (!e.sets.some((s) => s.done)) continue;
+      muscleOf?.(e.name)?.primary.forEach((m) => muscleSet.add(m));
     }
+    const muscles = [...muscleSet].slice(0, 6);
 
     let proteinNudge: { eaten: number; target: number } | null = null;
     if (API_ENABLED && data.nutritionTargets?.protein) {

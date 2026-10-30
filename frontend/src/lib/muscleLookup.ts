@@ -1,55 +1,67 @@
 /**
- * Exercise name → RepDB primary / secondary muscles, for screens that derive
- * muscle load from logged sessions (Progress, Body). The catalog is ~640 kB, so
- * it's imported lazily once and shared by every caller.
+ * Exercise name → RepDB catalog entry (primary / secondary muscles and the
+ * rest), for screens that derive muscle load from logged sessions (Progress,
+ * Body, the workout summary, weekly challenges). The catalog is ~640 kB, so it's
+ * imported lazily once and every caller shares one matcher.
  */
-import { useEffect, useMemo, useState } from "react";
-import type { RepDbCatalogEntry } from "./repdb";
+import { useEffect, useState } from "react";
+import { aliasExerciseId, normExerciseName as norm, type RepDbCatalogEntry } from "./repdb";
 
-export interface MuscleHit {
-  primary: string[];
-  secondary: string[];
-}
-export type MuscleLookup = (exerciseName: string) => MuscleHit | null;
+export type MuscleLookup = (exerciseName: string) => RepDbCatalogEntry | null;
 
-let catalogPromise: Promise<RepDbCatalogEntry[]> | null = null;
-const loadCatalog = () => (catalogPromise ??= import("./repdb.catalog").then((m) => m.REPDB_CATALOG));
+let lookupPromise: Promise<MuscleLookup> | null = null;
+/** Loads the catalog on first call; later calls get the same matcher. */
+export const loadMuscleLookup = () =>
+  (lookupPromise ??= import("./repdb.catalog").then(
+    (m) => buildMuscleLookup(m.REPDB_CATALOG),
+    (err) => {
+      lookupPromise = null; // let the next caller retry a failed chunk load
+      throw err;
+    },
+  ));
 
-const norm = (s: string) =>
-  s.toLowerCase().replace(/[^a-z0-9]+/g, " ").replace(/\s+/g, " ").trim();
-
-/** Exact name match first, then the closest substring match either way. */
+/**
+ * Alias, then exact name, then the closest whole-word containment either way
+ * ("Paused Front Squat" → "Front Squat", "Leg Curl" → "Lying Leg Curl"):
+ * the candidate whose name length is nearest the query's wins.
+ */
 export function buildMuscleLookup(catalog: RepDbCatalogEntry[]): MuscleLookup {
-  const byName = new Map(catalog.map((e) => [norm(e.name), e]));
-  const memo = new Map<string, MuscleHit | null>();
+  const byId = new Map(catalog.map((e) => [e.id, e]));
+  const names = catalog.map((e) => ({ entry: e, padded: ` ${norm(e.name)} ` }));
+  const byName = new Map(names.map((n) => [n.padded.trim(), n.entry]));
+  const memo = new Map<string, RepDbCatalogEntry | null>();
   return (exerciseName) => {
     const key = norm(exerciseName);
     if (!key) return null;
     const cached = memo.get(key);
     if (cached !== undefined) return cached;
-    const entry =
-      byName.get(key) ??
-      catalog.find((e) => {
-        const n = norm(e.name);
-        return n.includes(key) || key.includes(n);
-      });
-    const hit = entry ? { primary: entry.primary, secondary: entry.secondary } : null;
-    memo.set(key, hit);
-    return hit;
+    const alias = aliasExerciseId(exerciseName);
+    let entry = (alias && byId.get(alias)) || byName.get(key);
+    if (!entry) {
+      const padded = ` ${key} `;
+      let best = Infinity;
+      for (const n of names) {
+        if (!n.padded.includes(padded) && !padded.includes(n.padded)) continue;
+        const gap = Math.abs(n.padded.length - padded.length);
+        if (gap < best) [best, entry] = [gap, n.entry];
+      }
+    }
+    memo.set(key, entry ?? null);
+    return entry ?? null;
   };
 }
 
 /** `null` until the catalog has loaded. */
 export function useMuscleLookup(): MuscleLookup | null {
-  const [catalog, setCatalog] = useState<RepDbCatalogEntry[] | null>(null);
+  const [lookup, setLookup] = useState<MuscleLookup | null>(null);
   useEffect(() => {
     let live = true;
-    void loadCatalog().then((c) => {
-      if (live) setCatalog(c);
+    void loadMuscleLookup().then((fn) => {
+      if (live) setLookup(() => fn);
     });
     return () => {
       live = false;
     };
   }, []);
-  return useMemo(() => (catalog ? buildMuscleLookup(catalog) : null), [catalog]);
+  return lookup;
 }
