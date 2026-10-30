@@ -1,0 +1,85 @@
+# Forma — Audit Report
+
+Audit date: 2026-10-30. Repos audited: root `traker-web` (frontend, mobile, docs; branch `feat/workout-system`) and the nested `backend/` repo (`forma-backend`, branch `feat/workout-supersets`).
+
+**Evidence levels used in every doc in this folder**
+
+- **Static** — read in code, not executed.
+- **Unit** — covered by a test that ran and passed.
+- **Runtime** — exercised in a running app (browser or HTTP).
+- **Unverified** — inferred; treat as a hypothesis.
+
+## 1. What this product actually is
+
+Forma is a **single-user AI personal-trainer app** (workout logging, programs, progress analytics, nutrition logging, an AI coach "Kai", cosmetics store), not a gym-management system. There are **no** models, routes or screens for membership plans, gym facilities, class schedules, bookings, check-in/attendance, staff, or an admin console. `Role` has `admin` and `coach` values, but no admin routes exist and coach routes are API-only.
+
+The generic gym-management flows in the audit brief (memberships, classes, bookings, admin) are therefore **new product scope**, listed under "Requires decision" in `IMPLEMENTATION_PLAN.md`, not defects.
+
+## 2. Project health summary
+
+| Area | Health | Evidence |
+|---|---|---|
+| Frontend type safety | Good — `tsc` clean | Unit (ran) |
+| Backend type safety | Good — `tsc` clean | Unit (ran) |
+| Backend unit tests | 102/105 pass; 3 fail only because no database is reachable | Unit (ran) + probe |
+| E2E (Playwright, 130 tests) | **Not runnable** here — needs backend + seeded DB | — |
+| Deployment | Frontend on GitHub Pages in no-backend mode; **API not deployed**; the Render test DB in `backend/.env` is unreachable (free Render Postgres expires after 30 days) | Probe |
+| Security | 1 critical, 1 high issue (below); auth/session model otherwise solid | Static |
+| Data integrity | Two persistence modes; no-backend mode mixes real data with fabricated demo data | Static |
+| CI | None — only a deploy workflow | Static |
+| Lint | No lint script in either package | Static |
+
+## 3. Architecture in one paragraph
+
+A Vite/React SPA talks to an Express/Prisma API (`/api/v1`). The SPA runs in one of two modes, decided at build time by `VITE_API_URL` (`frontend/src/api/hooks.ts:14`, `API_ENABLED`):
+
+- **API mode** — resource hooks call the backend; the active workout is mirrored into localStorage as an optimistic cache and written through set by set (`frontend/src/lib/lifecycle.ts`).
+- **No-backend mode** (the live GitHub Pages build) — user data lives in localStorage (`frontend/src/lib/localStore.ts`), but several hooks still return a **bundled demo dataset** (`frontend/src/api/demo.ts`).
+
+Coins, challenges and cosmetics are a client-side economy (`lib/wallet.ts`, `lib/rewards.ts`, `lib/customization.ts`) that mirrors to the server in API mode. See `ARCHITECTURE_MAP.md`.
+
+## 4. Critical and high findings
+
+| ID | Severity | Finding | Location |
+|---|---|---|---|
+| F-01 | **Critical** | `POST /subscription/validate-receipt` grants a Pro subscription for any non-empty string; the receipt is never verified. No frontend caller exists, so the endpoint is pure attack surface. | `backend/src/modules/subscription.ts:36-58` |
+| F-02 | **High** | `POST /store/wallet/earn` lets any authenticated user mint up to 1000 coins per call, unlimited calls. The client calls it to mirror locally computed rewards; idempotency keys exist only in the browser. Coins are cosmetic-only (no cash value), so impact is limited to free cosmetics. | `backend/src/modules/store.ts:37-45`, `frontend/src/lib/wallet.ts:143-149` |
+| F-03 | High | No-backend build shows **fabricated data next to real data**: Goals, Achievements strip, Trainer chat history, Body map, and Notifications come from `demo.ts` ("New bench PR 195 lb × 3", "14-day streak"), while Home/Progress/Records compute from the user's real localStorage. | `frontend/src/api/hooks.ts:166-211`, `frontend/src/api/demo.ts` |
+| F-04 | High | Every new user's wallet is seeded with **720 coins, lifetime 1,960 and a fake ledger** ("14-day streak +80", "5-workout week +60"). | `frontend/src/lib/wallet.ts:69-85`, `frontend/src/lib/data.ts:243-251` |
+| F-05 | High | The workout summary passes a hard-coded **streak of 14 days** to reward logic, so streak milestone coins never match reality. | `frontend/src/pages/ActiveWorkout.tsx:509` |
+| F-06 | High | Body map **Fatigue mode is inverted**: it plots `1 - score`, so the most-trained muscle renders as "recovered" and lightly trained ones as "fatigued". | `frontend/src/pages/Body.tsx:66` |
+| F-07 | High | Body map **drops API muscle groups** `lats`, `traps`, `rear_delts` and `obliques`: the backend returns them, but `BodyMuscles` only draws `chest/shoulders/triceps/biceps/abs/back/quads/glutes/hamstrings/calves`. Back and core work renders blank. | `frontend/src/components/BodyMuscles.tsx:46-82`, `backend/src/data/library.ts:15-27` |
+| F-08 | High | Body map falls back to **fake activation** (`muscleActivation`, `rankedMuscles`) when the user has no data, in both modes. | `frontend/src/pages/Body.tsx:63,75` |
+| F-09 | Medium | Dashboard greeting falls back to the name **"Alex"** and invented nudges ("3,200 steps left", "18g short of your protein", "bedtime in 40 minutes"). | `frontend/src/components/dashboard/Greeting.tsx:11-23` |
+| F-10 | Medium | Goals in no-backend mode are kept only in component state; a new goal disappears on reload. | `frontend/src/pages/Goals.tsx:24-51` |
+| F-11 | High | Body page **balance and "undertrained" sections are literals** (62/51/58, "push ~60% ahead of pull", "Hamstrings, Calves, Rear Delts 2× / month"), shown to every user in both modes. Found during implementation. | `frontend/src/pages/Body.tsx` (pre-fix lines 145-190) |
+| F-12 | Medium | `apiSessionToCompleted` dropped `isWarmup`, so in API mode warm-up sets counted as working volume in Progress, Records and the strength series. Found during implementation. | `frontend/src/lib/lifecycle.ts:146-169` |
+
+## 5. Other findings
+
+### Security / auth (static)
+
+- **Good:** `requireAuth` re-checks the session row, revocation, expiry and soft-deletion on every request; the role comes from the DB, never the client (`backend/src/middleware/auth.ts`). Every user-scoped query I sampled filters by `userId`, including sessions via `ownSession()`, workouts, goals, programs, food and set-level writes (`sessions.ts:223-245`). 500 details are hidden in production (`middleware/error.ts`). CORS allows localhost only outside production.
+- **Medium — store purchase TOCTOU:** the balance check and decrement are separate statements (`store.ts:76-87`, `customization.ts:62-73`). Two concurrent buys can drive the balance negative. Fix: conditional `updateMany({ where: { balance: { gte: price } } })`.
+- **Low — subscription plan prices hard-coded** in the API (`subscription.ts:12-16`). The real prices will be the store prices; this needs a product decision.
+- `AI_MODEL` defaults to `claude-sonnet-5` (`backend/src/env.ts:26`). This ID was not verified against Anthropic's current model list.
+
+### Functional
+
+- **Dead hooks:** `useNotifications`, `useMuscleBalance`, `useProgressOverview`, `useReadiness`, `useWallet` (the API one) and `useStoreItems` in `api/hooks.ts` have no consumers. Dead component: `components/dashboard/WeeklySummary.tsx` renders static `weeklySummary`, but nothing renders it.
+- **Duplicate API base URL:** `pages/settings/Account.tsx:8-10` re-derives the base URL and calls `fetch` directly for export, bypassing the client's token refresh. `pages/settings/Privacy.tsx` already uses `api.me.export`.
+- **Duplicated catalogue:** cosmetic prices exist in both `frontend/src/lib/data.ts` and `backend/src/data/customization.ts`. I diffed them by script: they are in sync (71 vs 73 ids; `cloud` and `dusk` are backend-only). This is drift-prone, but the server enforces prices on buy.
+- **No-backend Trainer chat** answers with canned replies. That's expected without an AI backend, but it isn't labelled as offline.
+- **Feature gating:** onboarding enables gating only for users who choose "calm mode" (`backend/src/modules/me.ts:402`). The schema default is `true` for rows created outside onboarding (`schema.prisma`, `UserProgression.gatingEnabled`). Old `PLAN.md` asked for gating default OFF; the onboarding path already does that.
+
+### Testing / tooling
+
+- Backend tests call `process.exit(1)` at import time unless `DATABASE_URL` and the JWT secrets are set (`backend/src/env.ts:60-63`), so a bare `npm test` fails 14 of 21 files.
+- The 3 failing auth tests do DB lookups (unknown refresh token, verify token, forgot-password) and fail with `PrismaClientInitializationError` when no DB is reachable.
+- The E2E suite assumes a running API on `:4000` and a seeded `alex@forma.app` user (`frontend/tests/e2e/helpers.ts`).
+
+## 6. Blockers to full verification
+
+1. **No reachable database.** The Render test DB is unreachable. A local PostgreSQL 16 service is running on this machine, but its credentials aren't in the repo; probing it with guessed credentials was correctly blocked. Provide a `DATABASE_URL` for a disposable local DB to unlock: backend integration tests, migrations, seed, API-mode browser checks and the Playwright suite.
+2. **Docker daemon not running**, so `backend/docker-compose.yml` can't start its Postgres.
+3. **External accounts** (Apple/Google developer, WHOOP/Oura approval, hosting) for IAP, mobile and wearables. See `IMPLEMENTATION_PLAN.md` § Blocked.
