@@ -13,6 +13,7 @@ import { api } from "../api/client";
 import { API_ENABLED } from "../api/hooks";
 import { startSession, type ActiveSession, type CompletedSession, type StartExercise, type Units } from "./localStore";
 import type { Workout, WorkoutSession } from "../api/types";
+import { decodeExerciseNotes, startSets } from "./workoutTemplates";
 
 const LB_PER_KG = 2.2046226218;
 export const toKg = (v: number, units: Units) => (units === "kg" ? v : Math.round((v / LB_PER_KG) * 100) / 100);
@@ -35,21 +36,19 @@ export async function startApiSessionFromWorkout(workout: Workout, units: Units)
     const rxWeight = rxWeightKg != null ? fromKg(rxWeightKg, units) : null;
     const rxReps = perf?.prescribedReps ?? we.targetRepsMax ?? null;
     const note = (perf?.prescriptionAudit?.output as { note?: string } | undefined)?.note ?? "";
+    // templates saved by the builder carry rpe / warm-up / timed / per-side in `notes`
+    const flags = decodeExerciseNotes(we.notes);
+    const unit = `${flags.timed ? " s" : ""}${flags.perSide ? " / side" : ""}`;
     return {
       name: we.exercise.name,
-      target: `${we.targetSets} × ${repRange(we.targetRepsMin, we.targetRepsMax)}`,
+      target: `${we.targetSets} × ${repRange(we.targetRepsMin, we.targetRepsMax)}${unit}`,
       exerciseId: we.exerciseId,
       apiPerfId: perf?.id,
       supersetGroup: we.supersetGroup ?? null,
       prescription: perf
-        ? { weightKg: perf.prescribedWeightKg ?? null, reps: perf.prescribedReps ?? null, rpe: perf.prescribedRpe ?? null, note }
+        ? { weightKg: perf.prescribedWeightKg ?? null, reps: perf.prescribedReps ?? null, rpe: perf.prescribedRpe ?? flags.rpe ?? null, note: note || flags.note || "" }
         : null,
-      sets: Array.from({ length: Math.max(1, we.targetSets) }, () => ({
-        weight: rxWeight,
-        reps: rxReps,
-        rpe: null,
-        done: false,
-      })),
+      sets: startSets(we.targetSets, rxReps, flags.warmup).map((s) => ({ ...s, weight: s.warmup ? null : rxWeight })),
     };
   });
 

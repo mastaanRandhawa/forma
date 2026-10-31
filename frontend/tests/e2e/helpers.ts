@@ -1,7 +1,8 @@
 import { type Page, expect } from "@playwright/test";
 
-export const BASE = "http://localhost:5178";
-export const API = "http://localhost:4000/api/v1";
+// match playwright.config.ts: E2E_WEB_PORT / E2E_API_PORT override the defaults
+export const BASE = `http://localhost:${process.env.E2E_WEB_PORT ?? 5178}`;
+export const API = `http://localhost:${process.env.E2E_API_PORT ?? 4000}/api/v1`;
 
 export const TEST_USER = {
   email: "alex@forma.app",
@@ -41,7 +42,8 @@ export async function loginViaAPI(page: Page) {
     { at: accessToken, rt: refreshToken },
   );
   await page.goto("/dashboard");
-  await page.waitForSelector("nav", { timeout: 10_000 });
+  // main, not nav: the phone layout keeps the nav behind a menu button
+  await page.waitForSelector("main", { timeout: 10_000 });
 }
 
 /** Clear auth tokens and navigate to login page. */

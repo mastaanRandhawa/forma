@@ -9,7 +9,7 @@ const EASE = [0.22, 1, 0.36, 1] as const;
 
 type Action = { id: string; label: string; icon: typeof Dumbbell; unit: string; placeholder: string };
 
-/** Floating quick-action menu. Hidden on the active-workout and onboarding views. */
+/** Floating quick-action menu. Hidden on views with their own fixed footer: active workout, builder, onboarding. */
 export function QuickActions() {
   const reduce = useReducedMotion();
   const { pathname } = useLocation();
@@ -26,7 +26,12 @@ export function QuickActions() {
     { id: "water", label: "add water", icon: Droplets, unit: "oz", placeholder: "16" },
   ];
 
-  if (pathname.startsWith("/workouts/active") || pathname.startsWith("/onboarding")) return null;
+  if (
+    pathname.startsWith("/workouts/active") ||
+    pathname.startsWith("/workouts/builder") ||
+    pathname.startsWith("/onboarding")
+  )
+    return null;
 
   const save = () => {
     if (!sheet) return;

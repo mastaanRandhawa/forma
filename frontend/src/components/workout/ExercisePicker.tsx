@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import { Plus, Search } from "lucide-react";
 import { DetailDrawer } from "../dashboard/DetailDrawer";
 import { ExerciseThumb } from "../ExerciseThumb";
-import { repdbThumb } from "../../lib/repdb";
 import type { RepDbCatalogEntry } from "../../lib/repdb";
 
 /**
@@ -18,12 +17,18 @@ export function ExercisePicker({
   onPick,
   title = "add exercise",
   eyebrow,
+  suggestions = [],
+  verb = "add",
 }: {
   open: boolean;
   onClose: () => void;
   onPick: (name: string) => void;
   title?: string;
   eyebrow?: string;
+  /** shown first, e.g. swaps for the exercise being replaced */
+  suggestions?: string[];
+  /** what picking does, for screen-reader labels: "add" or "swap to" */
+  verb?: string;
 }) {
   const [q, setQ] = useState("");
   const [muscle, setMuscle] = useState<string | null>(null);
@@ -46,7 +51,7 @@ export function ExercisePicker({
   const muscles = useMemo(() => {
     const s = new Set<string>();
     for (const e of cat) e.primary.forEach((m) => s.add(m));
-    return [...s].sort().slice(0, 14);
+    return [...s].sort();
   }, [cat]);
 
   const equipmentOpts = useMemo(() => {
@@ -55,17 +60,17 @@ export function ExercisePicker({
     return [...s].sort();
   }, [cat]);
 
-  const shown = useMemo(() => {
-    const n = q.trim().toLowerCase();
-    return cat
-      .filter((e) => {
-        if (n && !e.name.toLowerCase().includes(n)) return false;
-        if (muscle && !e.primary.includes(muscle)) return false;
-        if (equipment && e.equipment !== equipment) return false;
-        return true;
-      })
-      .slice(0, 60);
+  const matches = useMemo(() => {
+    const words = q.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    return cat.filter((e) => {
+      const name = e.name.toLowerCase();
+      if (words.length && !words.every((w) => name.includes(w))) return false;
+      if (muscle && !e.primary.includes(muscle)) return false;
+      if (equipment && e.equipment !== equipment) return false;
+      return true;
+    });
   }, [q, muscle, equipment, cat]);
+  const shown = matches.slice(0, 60);
 
   const custom = q.trim();
   const hasExact = shown.some((e) => e.name.toLowerCase() === custom.toLowerCase());
@@ -80,41 +85,73 @@ export function ExercisePicker({
       <div className="relative mb-3">
         <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-content-tertiary" />
         <input
+          type="search"
           value={q}
           onChange={(e) => setQ(e.target.value)}
           placeholder="search exercises…"
+          aria-label="search exercises"
           autoFocus
           className="focus-ring surface-recessed w-full rounded-pill py-2.5 pl-10 pr-4 text-[0.9rem] text-content-primary outline-none placeholder:text-content-tertiary"
         />
       </div>
 
       {muscles.length > 0 && (
-        <div className="mb-2 flex gap-1.5 overflow-x-auto pb-1">
-          <button className={chip(!muscle)} onClick={() => setMuscle(null)}>
+        <div role="group" aria-label="muscle" className="mb-2 flex gap-1.5 overflow-x-auto pb-1">
+          <button className={chip(!muscle)} aria-pressed={!muscle} onClick={() => setMuscle(null)}>
             all muscles
           </button>
           {muscles.map((m) => (
-            <button key={m} className={chip(muscle === m)} onClick={() => setMuscle(muscle === m ? null : m)}>
+            <button key={m} className={chip(muscle === m)} aria-pressed={muscle === m} onClick={() => setMuscle(muscle === m ? null : m)}>
               {m.toLowerCase()}
             </button>
           ))}
         </div>
       )}
       {equipmentOpts.length > 0 && (
-        <div className="mb-3 flex gap-1.5 overflow-x-auto pb-1">
-          <button className={chip(!equipment)} onClick={() => setEquipment(null)}>
+        <div role="group" aria-label="equipment" className="mb-3 flex gap-1.5 overflow-x-auto pb-1">
+          <button className={chip(!equipment)} aria-pressed={!equipment} onClick={() => setEquipment(null)}>
             any equipment
           </button>
           {equipmentOpts.map((eq) => (
             <button
               key={eq}
               className={chip(equipment === eq)}
+              aria-pressed={equipment === eq}
               onClick={() => setEquipment(equipment === eq ? null : eq)}
             >
               {eq.toLowerCase()}
             </button>
           ))}
         </div>
+      )}
+
+      {suggestions.length > 0 && !q && !muscle && !equipment && (
+        <div className="mb-3">
+          <div className="label-instrument mb-1.5">suggested swaps</div>
+          <div className="flex flex-wrap gap-1.5">
+            {suggestions.map((name) => (
+              <button
+                key={name}
+                aria-label={`${verb} ${name}`}
+                onClick={() => {
+                  onPick(name);
+                  onClose();
+                }}
+                className="focus-ring min-h-9 rounded-pill border border-[var(--line-soft)] px-3 text-[0.8rem] lowercase text-content-primary hover:bg-white/[0.06]"
+              >
+                {name}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {cat.length > 0 && (
+        <p className="label-instrument mb-1" aria-live="polite">
+          {matches.length > shown.length
+            ? `showing ${shown.length} of ${matches.length} — search or filter to narrow it down`
+            : `${matches.length} exercise${matches.length === 1 ? "" : "s"}`}
+        </p>
       )}
 
       {custom && !hasExact && (
@@ -133,13 +170,14 @@ export function ExercisePicker({
         {shown.map((e) => (
           <button
             key={e.id}
+            aria-label={`${verb} ${e.name}`}
             onClick={() => {
               onPick(e.name);
               onClose();
             }}
             className="focus-ring flex w-full items-center gap-3 py-2.5 text-left"
           >
-            <ExerciseThumb src={repdbThumb(e.name)} alt="" size={40} />
+            <ExerciseThumb name={e.name} alt="" size={52} />
             <span className="min-w-0 flex-1">
               <span className="block truncate text-[0.92rem] lowercase text-content-primary">{e.name}</span>
               <span className="label-instrument">

@@ -15,6 +15,9 @@
  * for a disposable hosted test database:
  *
  *   E2E_ALLOW_DB_HOST=dpg-xxxx.oregon-postgres.render.com DATABASE_URL=… npm run test:e2e:stack
+ *
+ * E2E_WEB_PORT / E2E_API_PORT (defaults 5178 / 4000) move the servers off the
+ * ports a dev session is using.
  */
 import { spawnSync } from "node:child_process";
 import path from "node:path";

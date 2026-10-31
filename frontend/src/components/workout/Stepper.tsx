@@ -28,7 +28,7 @@ export function Stepper({
   const btn =
     "focus-ring tactile grid shrink-0 place-items-center rounded-full bg-white/[0.06] text-content-secondary hover:bg-white/[0.12] active:scale-95";
   return (
-    <div className="surface-recessed flex flex-1 flex-col items-center rounded-hero px-3 py-3">
+    <div className={`surface-recessed flex flex-1 flex-col items-center rounded-hero py-3 ${compact ? "px-2" : "px-3"}`}>
       <span className="label-instrument">{label}</span>
       <div className="mt-1.5 flex w-full items-center justify-between gap-2">
         <button
@@ -40,6 +40,7 @@ export function Stepper({
         </button>
         <input
           inputMode="decimal"
+          aria-label={suffix ? `${label} (${suffix})` : label}
           value={value ?? ""}
           placeholder="—"
           onChange={(e) => {
@@ -47,7 +48,7 @@ export function Stepper({
             onChange(raw === "" ? null : Number.isNaN(Number(raw)) ? value : Number(raw));
           }}
           className={`focus-ring w-full min-w-0 rounded-[var(--radius-small)] bg-transparent text-center font-medium tabular-nums text-content-primary outline-none ${
-            compact ? "text-[1.3rem]" : "text-[1.8rem]"
+            compact ? "text-[1.15rem]" : "text-[1.8rem]"
           }`}
         />
         <button

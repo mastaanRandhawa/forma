@@ -3,7 +3,6 @@ import { useNavigate } from "react-router-dom";
 import { Trophy } from "lucide-react";
 import { DetailDrawer } from "../dashboard/DetailDrawer";
 import { ExerciseThumb } from "../ExerciseThumb";
-import { repdbThumb } from "../../lib/repdb";
 import { bestByExercise, epley1RM, exerciseVolume } from "../../lib/fitness";
 import type { CompletedSession } from "../../lib/localStore";
 
@@ -86,7 +85,7 @@ export function SessionDetailDrawer({
           return (
             <div key={i} className="surface-recessed rounded-hero p-3">
               <div className="flex items-center gap-2.5">
-                <ExerciseThumb src={repdbThumb(e.name)} alt="" size={32} />
+                <ExerciseThumb name={e.name} alt="" size={40} />
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-[0.9rem] lowercase text-content-primary">{e.name}</div>
                   <div className="label-instrument">

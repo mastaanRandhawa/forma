@@ -1,5 +1,12 @@
 import { defineConfig, devices } from "@playwright/test";
 
+// Ports are configurable so a run doesn't collide with a dev server you're using:
+//   E2E_WEB_PORT (default 5178) — Vite;  E2E_API_PORT (default 4000) — the API.
+const WEB_PORT = Number(process.env.E2E_WEB_PORT ?? 5178);
+const API_PORT = Number(process.env.E2E_API_PORT ?? 4000);
+const WEB_URL = `http://localhost:${WEB_PORT}`;
+const API_URL = `http://localhost:${API_PORT}/api/v1`;
+
 export default defineConfig({
   testDir: "./tests/e2e",
   fullyParallel: false, // serial by default — avoids race on shared test user
@@ -8,7 +15,7 @@ export default defineConfig({
   workers: 1,
   reporter: [["list"], ["html", { open: "never" }]],
   use: {
-    baseURL: "http://localhost:5178",
+    baseURL: WEB_URL,
     trace: "on-first-retry",
     screenshot: "only-on-failure",
     video: "off",
@@ -26,6 +33,14 @@ export default defineConfig({
       dependencies: ["setup"],
       testIgnore: /global-setup\.spec\.ts/,
     },
+    {
+      // phone-sized layout checks: only tests tagged @mobile
+      name: "mobile",
+      use: { ...devices["Pixel 7"] },
+      dependencies: ["setup"],
+      grep: /@mobile/,
+      testIgnore: /global-setup\.spec\.ts/,
+    },
   ],
   // With E2E_START_STACK=1 (set by `npm run test:e2e:stack`) Playwright starts
   // the API and Vite itself; otherwise it connects to servers you already run.
@@ -35,14 +50,15 @@ export default defineConfig({
         {
           command: "npx tsx src/index.ts",
           cwd: "../backend",
-          url: "http://localhost:4000/api/v1/health",
+          url: `${API_URL}/health`,
+          env: { PORT: String(API_PORT) },
           reuseExistingServer: true,
           timeout: 60_000,
         },
         {
-          command: "npx vite --port 5178 --strictPort",
-          url: "http://localhost:5178",
-          env: { VITE_API_URL: "http://localhost:4000/api/v1" },
+          command: `npx vite --port ${WEB_PORT} --strictPort`,
+          url: WEB_URL,
+          env: { VITE_API_URL: API_URL },
           reuseExistingServer: true,
           timeout: 60_000,
         },

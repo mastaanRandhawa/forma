@@ -46,6 +46,22 @@ export function currentStreak(sessions: CompletedSession[]): number {
   return streak;
 }
 
+/** This week, Monday first: which days had a session, and how many sessions in total. */
+export function weekProgress(sessions: CompletedSession[], now = new Date()): { days: boolean[]; count: number; todayIndex: number } {
+  const monday = new Date(now);
+  monday.setHours(0, 0, 0, 0);
+  const todayIndex = (monday.getDay() + 6) % 7;
+  monday.setDate(monday.getDate() - todayIndex);
+  const keys = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(monday);
+    d.setDate(monday.getDate() + i);
+    return d.toISOString().slice(0, 10);
+  });
+  const thisWeek = sessions.filter((s) => keys.includes(dayKey(s.finishedAt)));
+  const trained = new Set(thisWeek.map((s) => dayKey(s.finishedAt)));
+  return { days: keys.map((k) => trained.has(k)), count: thisWeek.length, todayIndex };
+}
+
 export function longestStreak(sessions: CompletedSession[]): number {
   if (!sessions.length) return 0;
   const days = [...new Set(sessions.map((s) => dayKey(s.finishedAt)))].sort();

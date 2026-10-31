@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Link, useNavigate } from "react-router-dom";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import {
@@ -11,6 +12,7 @@ import {
   Play,
   Plus,
   Repeat2,
+  Share2,
   SkipForward,
   Timer,
   Trophy,
@@ -24,6 +26,9 @@ import { ExerciseThumb } from "../components/ExerciseThumb";
 import { ExerciseDetailDrawer } from "../components/ExerciseDetailDrawer";
 import { DetailDrawer } from "../components/dashboard/DetailDrawer";
 import { Stepper } from "../components/workout/Stepper";
+import { WeekStrip } from "../components/workout/WeekStrip";
+import { Celebration } from "../components/workout/Celebration";
+import { BodyMuscles } from "../components/BodyMuscles";
 import { ExercisePicker } from "../components/workout/ExercisePicker";
 import {
   abandonSession,
@@ -38,7 +43,7 @@ import {
   type LoggedSet,
 } from "../lib/localStore";
 import { saveSessionAsTemplate } from "../lib/templates";
-import { detectPRs, epley1RM, lastPerformance, lastTopSet, sessionVolume } from "../lib/fitness";
+import { bodyGroupOf, currentStreak, detectPRs, epley1RM, lastPerformance, lastTopSet, sessionVolume, weekProgress } from "../lib/fitness";
 import {
   activeSetIndex,
   addWarmupSet,
@@ -71,6 +76,7 @@ import { API_ENABLED } from "../api/hooks";
 import { api } from "../api/client";
 import {
   abandonApiSession,
+  apiSessionToCompleted,
   finishApiSession,
   fromKg,
   syncDeleteSet,
@@ -182,9 +188,15 @@ export default function ActiveWorkout() {
     sets: number;
     coins: number;
     muscles: string[];
+    /** body group → 1 (primary) / 0.5 (secondary), for the muscles-worked map */
+    activation: Record<string, number>;
     vsLast: { volume: number; duration: number } | null;
     proteinNudge: { eaten: number; target: number } | null;
+    weekSessions: CompletedSession[];
+    /** what this session earned a celebration for, if anything */
+    headline: string | null;
   }>(null);
+  const [shared, setShared] = useState<string | null>(null);
 
   const elapsed = useElapsed(session);
 
@@ -491,11 +503,40 @@ export default function ActiveWorkout() {
     const coins = walletStore.snapshot().lifetimeEarned - before;
 
     const muscleSet = new Set<string>();
+    const activation: Record<string, number> = {};
     for (const e of working) {
       if (!e.sets.some((s) => s.done)) continue;
-      muscleOf?.(e.name)?.primary.forEach((m) => muscleSet.add(m));
+      const hit = muscleOf?.(e.name);
+      hit?.primary.forEach((m) => {
+        muscleSet.add(m);
+        const g = bodyGroupOf(m);
+        if (g) activation[g] = 1;
+      });
+      hit?.secondary.forEach((m) => {
+        const g = bodyGroupOf(m);
+        if (g) activation[g] = Math.max(activation[g] ?? 0, 0.5);
+      });
     }
     const muscles = [...muscleSet].slice(0, 6);
+
+    // this week, including the session just saved; the server's history in API mode
+    const weekSessions = API_ENABLED
+      ? await api.sessions
+          .list({ status: "completed", take: 60 })
+          .then((rows) => rows.map((s) => apiSessionToCompleted(s, units)))
+          .catch(() => loadData().sessions)
+      : loadData().sessions;
+    const goal = data.profile.daysPerWeek ?? null;
+    const weekCount = weekProgress(weekSessions).count;
+    const streak = currentStreak(weekSessions);
+    const headline =
+      prs.length > 0
+        ? `new personal record${prs.length > 1 ? "s" : ""}`
+        : goal != null && weekCount === goal
+          ? "weekly goal hit"
+          : [3, 7, 14, 30, 60, 100].includes(streak)
+            ? `${streak}-day streak`
+            : null;
 
     let proteinNudge: { eaten: number; target: number } | null = null;
     if (API_ENABLED && data.nutritionTargets?.protein) {
@@ -516,8 +557,11 @@ export default function ActiveWorkout() {
       sets: session.exercises.reduce((n, e) => n + e.sets.filter((s) => s.done && !s.warmup).length, 0),
       coins,
       muscles,
+      activation,
       vsLast,
       proteinNudge,
+      weekSessions,
+      headline,
     });
     setFinishing(false);
   };
@@ -846,6 +890,9 @@ export default function ActiveWorkout() {
       </AnimatePresence>
 
       {/* ── completion ────────────────────────────────────────────── */}
+      {/* portalled: a transformed ancestor (route transition) would otherwise
+          become the containing block and clip this fixed overlay */}
+      {createPortal(
       <AnimatePresence>
         {summary && (
           <motion.div
@@ -855,11 +902,12 @@ export default function ActiveWorkout() {
             exit={{ opacity: 0 }}
           >
             <motion.div
-              className="my-auto w-full max-w-md surface-glass rounded-shell p-5 sm:p-8"
+              className="relative my-auto w-full max-w-md surface-glass rounded-shell p-5 sm:p-8"
               initial={reduce ? { opacity: 0 } : { opacity: 0, y: 16, scale: 0.97 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               transition={{ duration: 0.3, ease: EASE }}
             >
+              {summary.headline && <Celebration />}
               <div className="flex items-center gap-3">
                 <KaiOrb size={40} state="done" />
                 <div className="min-w-0 flex-1">
@@ -869,6 +917,16 @@ export default function ActiveWorkout() {
                   </h2>
                 </div>
               </div>
+              {summary.headline && (
+                <motion.div
+                  initial={reduce ? false : { scale: 0.6, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  transition={{ type: "spring", stiffness: 380, damping: 18, delay: 0.15 }}
+                  className="mt-3 inline-flex items-center gap-1.5 rounded-pill bg-[var(--accent-lime)] px-3.5 py-1.5 text-[0.84rem] font-medium lowercase text-[#0c0c0c]"
+                >
+                  <Trophy size={14} aria-hidden /> {summary.headline}
+                </motion.div>
+              )}
 
               <div className="mt-5 grid grid-cols-3 gap-2.5 text-center">
                 {[
@@ -882,6 +940,8 @@ export default function ActiveWorkout() {
                   </div>
                 ))}
               </div>
+
+              <WeekStrip sessions={summary.weekSessions} goal={data.profile.daysPerWeek ?? null} className="mt-3 !p-3.5" />
 
               {summary.coins > 0 && (
                 <div className="mt-3 flex items-center justify-center gap-2 rounded-hero border border-[var(--accent-amber)]/25 bg-[var(--accent-amber)]/[0.08] py-2.5">
@@ -900,19 +960,36 @@ export default function ActiveWorkout() {
                   </div>
                   <ul className="mt-1.5 space-y-1 text-[0.86rem] text-content-primary">
                     {summary.prs.map((p) => (
-                      <li key={p}>{p}</li>
+                      <li key={p} className="flex items-start gap-2">
+                        <Trophy size={14} aria-hidden className="mt-0.5 shrink-0 text-[var(--accent-lime)]" /> {p}
+                      </li>
                     ))}
                   </ul>
                 </div>
               )}
 
               {summary.muscles.length > 0 && (
-                <div className="mt-3 flex flex-wrap gap-1.5">
-                  {summary.muscles.map((m) => (
-                    <span key={m} className="label-instrument rounded-pill surface-recessed px-3 py-1">
-                      {m.toLowerCase()}
-                    </span>
-                  ))}
+                <div className="mt-3 surface-recessed rounded-hero p-3">
+                  <div className="label-instrument">muscles worked</div>
+                  {Object.keys(summary.activation).length > 0 && (
+                    <div
+                      // decorative copy: the chart library makes every muscle a focusable button,
+                      // so make the whole map inert (no tab stops, hidden from assistive tech)
+                      ref={(el) => el?.setAttribute("inert", "")}
+                      aria-hidden
+                      className="mx-auto mt-2 grid max-w-[15rem] grid-cols-2 gap-2"
+                    >
+                      <BodyMuscles activation={summary.activation} view="front" normalize={false} />
+                      <BodyMuscles activation={summary.activation} view="back" normalize={false} />
+                    </div>
+                  )}
+                  <div className="mt-2 flex flex-wrap justify-center gap-1.5">
+                    {summary.muscles.map((m) => (
+                      <span key={m} className="label-instrument rounded-pill bg-white/[0.06] px-3 py-1">
+                        {m.toLowerCase()}
+                      </span>
+                    ))}
+                  </div>
                 </div>
               )}
 
@@ -996,11 +1073,41 @@ export default function ActiveWorkout() {
                     ) : "save as template"}
                   </button>
                 </div>
+                <button
+                  onClick={async () => {
+                    const name = session?.name ?? finishedRef.current?.name ?? "workout";
+                    const prCount = summary.prs.length;
+                    const text =
+                      `${name}: ${Math.floor(summary.durationSec / 60)} min · ` +
+                      `${Math.round(summary.volume).toLocaleString()} ${units} · ${summary.sets} sets` +
+                      (prCount ? ` · ${prCount} PR${prCount > 1 ? "s" : ""}` : "") +
+                      ". Logged with Forma.";
+                    try {
+                      if (navigator.share) {
+                        await navigator.share({ title: name, text });
+                        setShared("shared");
+                      } else {
+                        await navigator.clipboard.writeText(text);
+                        setShared("summary copied — paste it anywhere");
+                      }
+                    } catch {
+                      /* share sheet dismissed */
+                    }
+                  }}
+                  className="focus-ring inline-flex min-h-10 items-center justify-center gap-1.5 rounded-pill text-[0.82rem] lowercase text-content-secondary hover:text-content-primary"
+                >
+                  <Share2 size={13} aria-hidden /> share this workout
+                </button>
+                <p role="status" aria-live="polite" className="label-instrument text-center">
+                  {shared ?? ""}
+                </p>
               </div>
             </motion.div>
           </motion.div>
         )}
-      </AnimatePresence>
+      </AnimatePresence>,
+      document.body,
+      )}
     </div>
   );
 }
@@ -1008,7 +1115,8 @@ export default function ActiveWorkout() {
 // ═══════════════════════════════════════════════════════════════════════════
 function Scrim({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
   const reduce = useReducedMotion();
-  return (
+  // portalled for the same reason as the completion overlay
+  return createPortal(
     <motion.div
       className="fixed inset-0 z-[85] flex items-start justify-center overflow-y-auto bg-[rgba(16,10,17,0.72)] p-4 backdrop-blur-sm"
       onClick={onClose}
@@ -1026,7 +1134,8 @@ function Scrim({ children, onClose }: { children: React.ReactNode; onClose: () =
       >
         {children}
       </motion.div>
-    </motion.div>
+    </motion.div>,
+    document.body,
   );
 }
 
@@ -1156,7 +1265,7 @@ function RestOrFocus(props: {
         <div className="surface-recessed mx-5 mb-5 rounded-hero p-4 text-left">
           <div className="label-instrument mb-2">next up</div>
           <div className="flex items-center gap-3">
-            <ExerciseThumb src={thumb} alt="" size={44} />
+            <ExerciseThumb name={currentEx.name} src={thumb} alt="" size={72} motion="loop" />
             <div className="min-w-0">
               <div className="truncate text-[0.95rem] lowercase text-content-primary">{currentEx.name}</div>
               <div className="label-instrument mt-0.5 tabular-nums">
@@ -1560,7 +1669,7 @@ function SubstituteSheet({
                 onClick={() => exIndex != null && onPick(exIndex, s.name)}
                 className="focus-ring pill-row w-full text-left"
               >
-                <ExerciseThumb src={repdbThumb(s.name)} alt="" size={34} />
+                <ExerciseThumb name={s.name} alt="" size={40} />
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-[0.92rem] lowercase text-content-primary">{s.name}</span>
                   <span className="label-instrument">{s.equipment.toLowerCase()} · {s.reason}</span>

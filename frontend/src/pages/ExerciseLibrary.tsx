@@ -55,7 +55,7 @@ export default function ExerciseLibrary() {
               onClick={() => setSelected(e)}
               className="focus-ring flex w-full items-center gap-3.5 py-3 text-left"
             >
-              <ExerciseThumb src={repdbImage(e.imgStart ?? e.imgEnd)} alt={e.name} size={46} />
+              <ExerciseThumb name={e.name} src={repdbImage(e.imgStart ?? e.imgEnd)} alt={e.name} size={52} />
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-[0.95rem] text-content-primary">{e.name}</span>
                 <span className="label-instrument mt-0.5 block truncate">

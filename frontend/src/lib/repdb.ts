@@ -68,13 +68,15 @@ const ALIASES: Record<string, string> = {
   "barbell bench press": "bench-press",
   "decline barbell press": "decline-bench-press-barbell",
   "incline dumbbell press": "incline-db-press",
-  "overhead press": "ohp",
+  // the backend's native "Overhead Press" row is RepDB's dumbbell shoulder press
+  "overhead press": "dumbbell-shoulder-press",
   ohp: "ohp",
   "military press": "ohp",
   "lateral raise": "lateral-raise",
   "triceps rope pushdown": "tricep-pushdown",
   "tricep rope pushdown": "tricep-pushdown",
   "triceps pushdown": "tricep-pushdown",
+  "tricep pushdown": "tricep-pushdown",
   deadlift: "deadlift",
   "conventional deadlift": "deadlift",
   rdl: "romanian-deadlift",
@@ -103,9 +105,26 @@ export const aliasExerciseId = (name: string): string | undefined => ALIASES[nor
 const byId = new Map(INDEX.map((e) => [e.id, e]));
 const byName = new Map(INDEX.map((e) => [normExerciseName(e.name), e]));
 
+const resolveIndex = (name: string): IndexEntry | undefined => {
+  const alias = aliasExerciseId(name);
+  return (alias && byId.get(alias)) || byName.get(normExerciseName(name));
+};
+
 /** Thumbnail URL for a free-text exercise name, or null if no confident match. */
 export function repdbThumb(name: string): string | null {
-  const alias = aliasExerciseId(name);
-  const hit = (alias && byId.get(alias)) || byName.get(normExerciseName(name));
+  const hit = resolveIndex(name);
   return hit ? repdbImage(hit.imgStart ?? hit.imgEnd) : null;
+}
+
+/**
+ * Start and peak frames for a name — showing both, one after the other, reads
+ * as the movement. `peak` is null when RepDB has a single frame (≈ 1 in 5).
+ */
+export function repdbFrames(name: string): { start: string | null; peak: string | null } {
+  const hit = resolveIndex(name);
+  if (!hit) return { start: null, peak: null };
+  return {
+    start: repdbImage(hit.imgStart ?? hit.imgEnd),
+    peak: hit.imgStart && hit.imgEnd ? repdbImage(hit.imgEnd) : null,
+  };
 }

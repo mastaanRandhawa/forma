@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { Dumbbell, History as HistoryIcon, Plus, Zap, CalendarDays } from "lucide-react";
 import { PageHeader } from "../components/PageHeader";
@@ -10,14 +10,19 @@ import { Button, Panel, PillSelector } from "../components/primitives";
 import { ExerciseThumb } from "../components/ExerciseThumb";
 import { DetailDrawer } from "../components/dashboard/DetailDrawer";
 import { TemplateCard } from "../components/workout/TemplateCard";
+import { TemplateLibrary } from "../components/workout/TemplateLibrary";
+import { TemplatePreview } from "../components/workout/TemplatePreview";
+import { PlanPreview } from "../components/workout/PlanViews";
 import { SessionDetailDrawer } from "../components/workout/SessionDetailDrawer";
-import { repdbThumb } from "../lib/repdb";
-import { useFormaData, startSession, type CompletedSession } from "../lib/localStore";
+import { WeekStrip } from "../components/workout/WeekStrip";
+import { useFormaData, startSession, loadData, abandonSession, type CompletedSession } from "../lib/localStore";
 import { sessionVolume } from "../lib/fitness";
-import { sessionElapsedLabel, sessionProgress, supersetLetter } from "../lib/session";
+import { sessionElapsedLabel, sessionProgress } from "../lib/session";
+import { WORKOUT_PLANS, planTemplates, type WorkoutPlan } from "../lib/workoutPlans";
 import {
   startApiSessionFromWorkout,
   apiSessionToCompleted,
+  abandonApiSession,
   fromKg,
 } from "../lib/lifecycle";
 import {
@@ -30,16 +35,11 @@ import {
   invalidateTemplates,
 } from "../api/hooks";
 import { api } from "../api/client";
-import { ALL_TEMPLATES, todayPlan, upcomingPlans, type DayPlan } from "../lib/program";
-import {
-  WORKOUT_TEMPLATES,
-  CATEGORY_LABEL,
-  recommendTemplates,
-  templateExerciseTarget,
-  type TemplateCategory,
-} from "../lib/workoutTemplates";
+import { todayPlan, upcomingPlans, type DayPlan } from "../lib/program";
+import { WORKOUT_TEMPLATES, recommendTemplates, type WorkoutTemplate } from "../lib/workoutTemplates";
 import {
   presetToRow,
+  createTemplate,
   startFromPreset,
   startFromTemplateRow,
   startQuick,
@@ -104,28 +104,52 @@ export default function Workouts() {
   // ── start actions ───────────────────────────────────────────────────────
   const go = () => nav("/workouts/active");
 
-  const startLocalPlan = (p: DayPlan) => {
+  // Starting anything while a workout is open would silently replace it, so
+  // every start asks first. Reads the live store (actions keep stale closures).
+  const [replacing, setReplacing] = useState<{ name: string; retry: () => void } | null>(null);
+  const askIfActive = (retry: () => void): boolean => {
+    const open = loadData().active;
+    if (!open) return false;
+    setReplacing({ name: open.name, retry });
+    return true;
+  };
+  const discardOpenAndRetry = () => {
+    const open = loadData().active;
+    if (open) void abandonApiSession(open);
+    abandonSession();
+    const retry = replacing?.retry;
+    setReplacing(null);
+    retry?.();
+  };
+
+  const startLocalPlan = (p: DayPlan, force = false) => {
+    if (!force && askIfActive(() => startLocalPlan(p, true))) return;
     startSession(p.name, p.exercises.map((e) => ({ name: e.name, target: e.target })));
     go();
   };
-  const startApi = useAction(async (w: Workout) => {
+  const startApi = useAction(async (w: Workout, force = false) => {
+    if (!force && askIfActive(() => void startApi.run(w, true))) return;
     await startApiSessionFromWorkout(w, units);
     go();
   });
-  const startPreset = useAction(async (id: string) => {
+  const startPreset = useAction(async (id: string, force = false) => {
+    if (!force && askIfActive(() => void startPreset.run(id, true))) return;
     const t = WORKOUT_TEMPLATES.find((x) => x.id === id)!;
     await startFromPreset(t, units);
     go();
   });
-  const startTemplate = useAction(async (row: TemplateRow) => {
+  const startTemplate = useAction(async (row: TemplateRow, force = false) => {
+    if (!force && askIfActive(() => void startTemplate.run(row, true))) return;
     await startFromTemplateRow(row, units);
     go();
   });
-  const quickStart = useAction(async () => {
+  const quickStart = useAction(async (force = false) => {
+    if (!force && askIfActive(() => void quickStart.run(true))) return;
     await startQuick();
     go();
   });
-  const repeat = useAction(async (s: CompletedSession) => {
+  const repeat = useAction(async (s: CompletedSession, force = false) => {
+    if (!force && askIfActive(() => void repeat.run(s, true))) return;
     await startRepeat(s, units);
     go();
   });
@@ -137,31 +161,63 @@ export default function Workouts() {
 
   // ── drawers + template mutations ────────────────────────────────────────
   const [preview, setPreview] = useState<TemplateRow | null>(null);
+  const [plan, setPlan] = useState<WorkoutPlan | null>(null);
   const [detail, setDetail] = useState<CompletedSession | null>(null);
   const [renaming, setRenaming] = useState<TemplateRow | null>(null);
   const [deleting, setDeleting] = useState<TemplateRow | null>(null);
+  const [notice, setNotice] = useState<string | null>((loc.state as { notice?: string } | null)?.notice ?? null);
+
+  useEffect(() => {
+    if (!notice) return;
+    const t = setTimeout(() => setNotice(null), 3500);
+    return () => clearTimeout(t);
+  }, [notice]);
 
   const afterTemplateChange = () => {
     invalidateTemplates();
     templates.refetch();
   };
   const saveCopy = useAction(async (row: TemplateRow) => {
-    await duplicateTemplate(row);
+    const copy = await duplicateTemplate(row);
     afterTemplateChange();
     setTab("Templates");
+    setNotice(`saved “${copy.name}” to my workouts`);
+  });
+  const savePlan = useAction(async (p: WorkoutPlan) => {
+    const short = p.name.split(" — ")[0];
+    for (const { label, template } of planTemplates(p)) {
+      await createTemplate({
+        name: `${short} · ${label}`,
+        description: template.description,
+        targetMuscles: template.targetMuscles,
+        exercises: template.exercises,
+        sourceId: template.id,
+      });
+    }
+    afterTemplateChange();
+    setPlan(null);
+    setTab("Templates");
+    setNotice(`saved ${p.days.length} workouts from “${short}” to my workouts`);
   });
   const dup = useAction(async (row: TemplateRow) => {
-    await duplicateTemplate(row);
+    const copy = await duplicateTemplate(row);
     afterTemplateChange();
+    setNotice(`duplicated as “${copy.name}”`);
   });
   const del = useAction(async (row: TemplateRow) => {
     await deleteTemplate(row.id);
     afterTemplateChange();
+    setNotice(`deleted “${row.name}”`);
   });
   const renameTpl = useAction(async (row: TemplateRow, name: string) => {
     await renameTemplate(row, name);
     afterTemplateChange();
+    setNotice(`renamed to “${name}”`);
   });
+  const startPresetTemplate = (t: WorkoutTemplate) => {
+    setPlan(null);
+    startPreset.run(t.id);
+  };
 
   const generate = useAction(async () => {
     const focus = (localPlan.focus.length ? localPlan.focus : ["chest", "back", "quads"]).map((f) =>
@@ -228,6 +284,8 @@ export default function Workouts() {
 
       {tab === "Today" && (
         <Reveal key="today" className="space-y-6">
+          <WeekStrip sessions={recentSessions} goal={data.profile.daysPerWeek ?? null} />
+
           {/* ── program week banner ─────────────────────────────────── */}
           {programWeekInfo && (
             <div
@@ -328,7 +386,7 @@ export default function Workouts() {
                       : ex.target;
                   return (
                     <li key={i} className="pill-row">
-                      <ExerciseThumb src={repdbThumb(name)} alt="" size={30} />
+                      <ExerciseThumb name={name} alt="" size={40} />
                       <span className="flex-1 text-[0.92rem] text-content-primary">{name}</span>
                       <span className="label-instrument shrink-0">{target}</span>
                     </li>
@@ -360,7 +418,12 @@ export default function Workouts() {
           <div className="grid gap-3 sm:grid-cols-3">
             <HubAction icon={Zap} label="quick start" hint="empty session — add as you go" onClick={() => quickStart.run()} />
             <HubAction icon={Plus} label="create workout" hint="build a custom template" onClick={() => nav("/workouts/builder")} />
-            <HubAction icon={Dumbbell} label="browse templates" hint={`${WORKOUT_TEMPLATES.length} prebuilt + yours`} onClick={() => setTab("Templates")} />
+            <HubAction
+              icon={Dumbbell}
+              label="browse templates"
+              hint={`${WORKOUT_PLANS.length} plans · ${WORKOUT_TEMPLATES.length} workouts`}
+              onClick={() => setTab("Templates")}
+            />
           </div>
 
           {/* ── recommended ─────────────────────────────────────────── */}
@@ -518,7 +581,7 @@ export default function Workouts() {
 
       {tab === "Templates" && (
         <Reveal key="templates">
-          <TemplatesTab
+          <TemplateLibrary
             templates={templates}
             starting={startTemplate.pending}
             onStart={(row) => startTemplate.run(row)}
@@ -532,11 +595,31 @@ export default function Workouts() {
             onRename={(row) => setRenaming(row)}
             onDelete={(row) => setDeleting(row)}
             onPreview={(row) => setPreview(row)}
+            onOpenPlan={(p) => setPlan(p)}
           />
         </Reveal>
       )}
 
-      {/* ── preview drawer ─────────────────────────────────────────── */}
+      {/* ── plan drawer ────────────────────────────────────────────── */}
+      <DetailDrawer
+        open={!!plan && !preview}
+        onClose={() => setPlan(null)}
+        title={plan?.name ?? ""}
+        eyebrow={plan ? `${plan.days.length} workouts · ${plan.daysPerWeek} days / week` : ""}
+      >
+        {plan && (
+          <PlanPreview
+            plan={plan}
+            busy={savePlan.pending || startPreset.pending}
+            onPreviewDay={(t) => setPreview(presetToRow(t))}
+            onStartDay={startPresetTemplate}
+            onSaveAll={() => savePlan.run(plan)}
+          />
+        )}
+        {savePlan.error && <p className="mt-3 label-instrument text-[var(--accent-pink)]">{savePlan.error.message}</p>}
+      </DetailDrawer>
+
+      {/* ── template preview drawer ────────────────────────────────── */}
       <DetailDrawer
         open={!!preview}
         onClose={() => setPreview(null)}
@@ -544,75 +627,82 @@ export default function Workouts() {
         eyebrow={preview ? `~${preview.durationMin} min · ${preview.exerciseCount} exercises` : ""}
       >
         {preview && (
-          <div>
-            {preview.description && (
-              <p className="mb-4 text-[0.88rem] leading-relaxed text-content-secondary lowercase">
-                {preview.description}
-              </p>
-            )}
-            <ul className="space-y-1.5">
-              {preview.exercises.map((e, i) => {
-                const g = e.supersetGroup ?? null;
-                const prevG = i > 0 ? preview.exercises[i - 1].supersetGroup ?? null : null;
-                return (
-                  <li key={i}>
-                    {g != null && g !== prevG && (
-                      <div className="label-instrument mb-1 mt-1.5 uppercase tracking-[0.1em] text-[var(--accent-mauve)]">
-                        superset {supersetLetter(g)}
-                      </div>
-                    )}
-                    <div className={`pill-row ${g != null ? "border-l-2 border-[color-mix(in_srgb,var(--accent-mauve)_45%,transparent)]" : ""}`}>
-                      <ExerciseThumb src={repdbThumb(e.name)} alt="" size={30} />
-                      <span className="flex-1 text-[0.9rem] text-content-primary lowercase">{e.name}</span>
-                      <span className="label-instrument shrink-0">
-                        {templateExerciseTarget(e)} · {e.restSec}s
-                      </span>
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
-            <div className="mt-5 flex flex-col gap-2">
-              <button
-                onClick={() => {
-                  const p = preview;
-                  setPreview(null);
-                  if (p.origin === "preset") startPreset.run(p.id);
-                  else startTemplate.run(p);
-                }}
-                className="focus-ring tactile w-full rounded-pill bg-[var(--accent-lime)] py-3 text-[0.88rem] lowercase text-[#0c0c0c]"
-              >
-                start workout
-              </button>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => {
+          <TemplatePreview
+            row={preview}
+            busy={startPreset.pending || startTemplate.pending}
+            onStart={() => {
+              const p = preview;
+              setPreview(null);
+              setPlan(null);
+              if (p.origin === "preset") startPreset.run(p.id);
+              else startTemplate.run(p);
+            }}
+            onCustomize={() => {
+              const p = preview;
+              setPreview(null);
+              if (p.origin === "preset") nav(`/workouts/builder?from=${p.id}`);
+              else nav(`/workouts/builder/${p.id}`);
+            }}
+            onSaveCopy={
+              preview.origin === "preset"
+                ? () => {
                     const p = preview;
                     setPreview(null);
-                    if (p.origin === "preset") nav(`/workouts/builder?from=${p.id}`);
-                    else nav(`/workouts/builder/${p.id}`);
-                  }}
-                  className="focus-ring surface-recessed flex-1 rounded-pill py-2.5 text-[0.82rem] lowercase text-content-secondary hover:text-content-primary"
-                >
-                  {preview.editable ? "edit" : "customize"}
-                </button>
-                {preview.origin === "preset" && (
-                  <button
-                    onClick={() => {
-                      const p = preview;
-                      setPreview(null);
-                      saveCopy.run(p);
-                    }}
-                    className="focus-ring surface-recessed flex-1 rounded-pill py-2.5 text-[0.82rem] lowercase text-content-secondary hover:text-content-primary"
-                  >
-                    save a copy
-                  </button>
-                )}
-              </div>
+                    setPlan(null);
+                    saveCopy.run(p);
+                  }
+                : undefined
+            }
+          />
+        )}
+      </DetailDrawer>
+
+      {/* ── starting while a workout is open ───────────────────────── */}
+      <DetailDrawer open={!!replacing} onClose={() => setReplacing(null)} title="a workout is already in progress">
+        {replacing && (
+          <div>
+            <p className="text-[0.9rem] text-content-secondary">
+              “{replacing.name}” is still open. starting another workout replaces it and its logged sets are not saved.
+            </p>
+            <div className="mt-5 flex flex-col gap-2">
+              <Button
+                onClick={() => {
+                  setReplacing(null);
+                  go();
+                }}
+              >
+                resume “{replacing.name}”
+              </Button>
+              <button
+                onClick={discardOpenAndRetry}
+                className="focus-ring min-h-11 rounded-pill border border-[var(--line-soft)] text-[0.85rem] lowercase text-[var(--accent-pink)]"
+              >
+                discard it and start the new one
+              </button>
+              <button
+                onClick={() => setReplacing(null)}
+                className="focus-ring min-h-11 rounded-pill text-[0.85rem] lowercase text-content-secondary hover:text-content-primary"
+              >
+                cancel
+              </button>
             </div>
           </div>
         )}
       </DetailDrawer>
+
+      {/* ── status message after saves, copies, deletes ─────────────── */}
+      <div role="status" aria-live="polite" className="pointer-events-none fixed inset-x-0 bottom-24 z-50 flex justify-center px-4">
+        {notice && (
+          <div className="surface-float rounded-pill px-4 py-2.5 text-[0.85rem] lowercase text-content-primary shadow-lg">
+            {notice}
+          </div>
+        )}
+      </div>
+      {(saveCopy.error || dup.error || del.error || renameTpl.error) && (
+        <p role="alert" className="mt-4 label-instrument text-[var(--accent-pink)]">
+          {(saveCopy.error ?? dup.error ?? del.error ?? renameTpl.error)?.message}
+        </p>
+      )}
 
       {/* ── session detail ────────────────────────────────────────── */}
       <SessionDetailDrawer
@@ -701,162 +791,37 @@ function HubAction({
 
 function RenameBody({ row, onDone }: { row: TemplateRow; onDone: (name: string) => void }) {
   const [name, setName] = useState(row.name);
+  const empty = name.trim() === "";
   return (
-    <div>
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (!empty) onDone(name.trim());
+      }}
+    >
+      <label className="label-instrument" htmlFor="rename-input">
+        workout name
+      </label>
       <input
+        id="rename-input"
         autoFocus
         value={name}
+        maxLength={120}
+        aria-invalid={empty}
+        aria-describedby={empty ? "rename-error" : undefined}
         onChange={(e) => setName(e.target.value)}
-        className="focus-ring surface-recessed w-full rounded-pill px-4 py-2.5 text-[0.95rem] text-content-primary outline-none"
+        className="focus-ring surface-recessed mt-1 min-h-11 w-full rounded-pill px-4 py-2.5 text-[0.95rem] text-content-primary outline-none"
       />
+      {empty && (
+        <p id="rename-error" className="mt-1.5 text-[0.8rem] text-[var(--accent-pink)]">
+          give it a name
+        </p>
+      )}
       <div className="mt-4">
-        <Button onClick={() => name.trim() && onDone(name.trim())}>save</Button>
+        <Button type="submit" disabled={empty}>
+          save
+        </Button>
       </div>
-    </div>
-  );
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-function TemplatesTab({
-  templates,
-  starting,
-  startingPreset,
-  onStart,
-  onStartPreset,
-  onCreate,
-  onEdit,
-  onCustomize,
-  onSaveCopy,
-  onDuplicate,
-  onRename,
-  onDelete,
-  onPreview,
-}: {
-  templates: ReturnType<typeof useTemplates>;
-  starting: boolean;
-  startingPreset: boolean;
-  onStart: (row: TemplateRow) => void;
-  onStartPreset: (id: string) => void;
-  onCreate: () => void;
-  onEdit: (row: TemplateRow) => void;
-  onCustomize: (id: string) => void;
-  onSaveCopy: (row: TemplateRow) => void;
-  onDuplicate: (row: TemplateRow) => void;
-  onRename: (row: TemplateRow) => void;
-  onDelete: (row: TemplateRow) => void;
-  onPreview: (row: TemplateRow) => void;
-}) {
-  const CATS = ["all", ...Object.keys(CATEGORY_LABEL)] as const;
-  const [cat, setCat] = useState<(typeof CATS)[number]>("all");
-  const [diff, setDiff] = useState<"all" | "beginner" | "intermediate" | "advanced">("all");
-
-  const mine = templates.data ?? [];
-  const presets = useMemo(
-    () =>
-      WORKOUT_TEMPLATES.filter(
-        (t) =>
-          (cat === "all" || t.category === (cat as TemplateCategory)) &&
-          (diff === "all" || t.difficulty === diff),
-      ),
-    [cat, diff],
-  );
-
-  return (
-    <div className="space-y-10">
-      <section>
-        <div className="mb-4 flex items-center justify-between">
-          <div className="label-soft lowercase">my templates</div>
-          <Button variant="ghost" onClick={onCreate}>
-            <Plus size={14} /> create
-          </Button>
-        </div>
-        {templates.initialLoading ? (
-          <p className="label-instrument">loading…</p>
-        ) : mine.length === 0 ? (
-          <EmptyState
-            title="no templates yet"
-            body="build one from scratch or save a copy of a prebuilt workout below."
-          />
-        ) : (
-          <div className="grid gap-4 sm:grid-cols-2">
-            {mine.map((row) => (
-              <TemplateCard
-                key={row.id}
-                row={row}
-                starting={starting}
-                onStart={() => onStart(row)}
-                onOpen={() => onPreview(row)}
-                actions={[
-                  { label: "edit", onClick: () => onEdit(row) },
-                  { label: "duplicate", onClick: () => onDuplicate(row) },
-                  { label: "rename", onClick: () => onRename(row) },
-                  { label: "delete", onClick: () => onDelete(row), tone: "danger" },
-                ]}
-              />
-            ))}
-          </div>
-        )}
-      </section>
-
-      <section>
-        <div className="label-soft mb-3 lowercase">prebuilt workouts</div>
-        <div className="mb-3 flex flex-wrap gap-1.5">
-          {CATS.map((c) => (
-            <button
-              key={c}
-              onClick={() => setCat(c)}
-              className={`focus-ring rounded-pill px-3 py-1 text-[0.75rem] lowercase transition-colors ${
-                cat === c
-                  ? "surface-float text-content-primary"
-                  : "surface-recessed text-content-tertiary hover:text-content-secondary"
-              }`}
-            >
-              {c === "all" ? "all" : CATEGORY_LABEL[c as TemplateCategory]}
-            </button>
-          ))}
-        </div>
-        <div className="mb-5 flex flex-wrap gap-1.5">
-          {(["all", "beginner", "intermediate", "advanced"] as const).map((d) => (
-            <button
-              key={d}
-              onClick={() => setDiff(d)}
-              className={`focus-ring rounded-pill px-3 py-1 text-[0.75rem] lowercase transition-colors ${
-                diff === d
-                  ? "surface-float text-content-primary"
-                  : "surface-recessed text-content-tertiary hover:text-content-secondary"
-              }`}
-            >
-              {d}
-            </button>
-          ))}
-        </div>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {presets.map((t) => {
-            const row = presetToRow(t);
-            return (
-              <TemplateCard
-                key={t.id}
-                row={row}
-                difficulty={t.difficulty}
-                starting={startingPreset}
-                onStart={() => onStartPreset(t.id)}
-                onOpen={() => onPreview(row)}
-                actions={[
-                  { label: "customize", onClick: () => onCustomize(t.id) },
-                  { label: "save a copy", onClick: () => onSaveCopy(row) },
-                ]}
-              />
-            );
-          })}
-        </div>
-        {presets.length === 0 && (
-          <p className="label-instrument">no prebuilt workouts match those filters.</p>
-        )}
-      </section>
-
-      <p className="label-instrument">
-        {ALL_TEMPLATES.length ? "" : ""}prebuilt workouts are starting points — save a copy to make one your own.
-      </p>
-    </div>
+    </form>
   );
 }

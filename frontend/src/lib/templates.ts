@@ -29,12 +29,16 @@ import {
 } from "./localStore";
 import { startApiSessionFromWorkout, syncNewPerformance } from "./lifecycle";
 import {
+  decodeExerciseNotes,
+  encodeExerciseNotes,
   templateToStartExercises,
   templateDurationMin,
   type TemplateExercise,
   type WorkoutTemplate,
 } from "./workoutTemplates";
 import type { Workout } from "../api/types";
+import { loadMuscleLookup } from "./muscleLookup";
+import { aliasExerciseId, normExerciseName } from "./repdb";
 
 // ── normalized row the UI renders ──────────────────────────────────────────
 export interface TemplateRow {
@@ -88,7 +92,7 @@ function workoutToExercises(w: Workout): TemplateExercise[] {
     repsMin: we.targetRepsMin ?? 8,
     repsMax: we.targetRepsMax ?? we.targetRepsMin ?? 12,
     restSec: we.targetRestSec ?? 90,
-    note: we.notes ?? undefined,
+    ...decodeExerciseNotes(we.notes),
     supersetGroup: we.supersetGroup ?? undefined,
   }));
 }
@@ -130,21 +134,43 @@ export function presetToRow(t: WorkoutTemplate): TemplateRow {
 // ── name → exerciseId resolution (API build) ──────────────────────────────
 const normName = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 
+/**
+ * Exact name, then the closest whole-name containment. Never the search's
+ * first fuzzy hit: a wrong exercise saved silently is worse than none.
+ */
 async function resolveExerciseId(name: string): Promise<string | null> {
+  // a catalog name resolves through its RepDB id — the server keeps its own
+  // curated name for some rows ("Lateral Raise" for "Dumbbell Lateral Raise")
+  const entry = await loadMuscleLookup()
+    .then((lookup) => lookup(name))
+    .catch(() => null);
+  if (entry && (normExerciseName(entry.name) === normExerciseName(name) || aliasExerciseId(name) === entry.id)) {
+    try {
+      return (await api.library.exercise(entry.id)).id;
+    } catch {
+      /* not in this server's library — fall back to name search */
+    }
+  }
   try {
-    const found = await api.library.exercises({ q: name, take: 12 });
-    if (found.items.length === 0) return null;
+    const found = await api.library.exercises({ q: name, take: 25 });
     const key = normName(name);
-    // prefer an exact name match over the search engine's fuzzy first hit
     const exact = found.items.find((e) => normName(e.name) === key);
     if (exact) return exact.id;
-    const contains = found.items.find(
-      (e) => normName(e.name).includes(key) || key.includes(normName(e.name)),
-    );
-    return (contains ?? found.items[0]).id;
+    const contains = found.items
+      .filter((e) => ` ${normName(e.name)} `.includes(` ${key} `) || ` ${key} `.includes(` ${normName(e.name)} `))
+      .sort((a, b) => Math.abs(a.name.length - name.length) - Math.abs(b.name.length - name.length));
+    return contains[0]?.id ?? null;
   } catch {
     return null;
   }
+}
+
+/** API build: names the exercise library can't match (they can't be stored). Local build: none. */
+export async function unmatchedExercises(exercises: TemplateExercise[]): Promise<string[]> {
+  if (!API_ENABLED) return [];
+  const names = [...new Set(exercises.map((e) => e.name))];
+  const ids = await Promise.all(names.map(resolveExerciseId));
+  return names.filter((_, i) => ids[i] == null);
 }
 
 async function toWorkoutInputExercises(exercises: TemplateExercise[]) {
@@ -152,7 +178,7 @@ async function toWorkoutInputExercises(exercises: TemplateExercise[]) {
   let order = 0;
   for (const e of exercises) {
     const id = await resolveExerciseId(e.name);
-    if (!id) continue; // best-effort: unresolved exercises are dropped server-side
+    if (!id) continue; // the builder warns about these before saving (unmatchedExercises)
     out.push({
       exerciseId: id,
       order: order++,
@@ -160,7 +186,7 @@ async function toWorkoutInputExercises(exercises: TemplateExercise[]) {
       targetRepsMin: e.repsMin,
       targetRepsMax: e.repsMax,
       targetRestSec: e.restSec,
-      notes: e.note,
+      notes: encodeExerciseNotes(e),
       supersetGroup: e.supersetGroup ?? null,
       supersetType: e.supersetGroup != null ? "superset" : "straight",
     });
