@@ -66,6 +66,20 @@ Coins, challenges and cosmetics are a client-side economy (`lib/wallet.ts`, `lib
 | F-18 | Low | Signed out, the login page polls `/store/wallet`, `/customization` and `/me/settings` and gets 401s (about 20 before sign-in in one session). Noise only; data loads correctly after sign-in. Found running the app in API mode. | wallet / customization / settings providers | Open |
 | F-17 | High | Dependency advisories. Backend: 18 (3 critical). The ones on the request path are `proxy-addr` (critical) and `body-parser`/`qs` via Express, plus `nodemailer` and `zod`; the `vitest`/`tinypool` criticals are dev-only. Frontend: 6 (`vite` high, dev server; `react-router-dom` moderate, runtime). | `npm audit` in each package | Open (T-39) |
 
+### Found during the workout templates / builder pass (2026-10-30)
+
+Full register with steps, evidence and fixes: `docs/Workout_App_QA_Audit_and_Bug_Report.pdf`.
+
+| ID | Severity | Finding | Location | Status |
+|---|---|---|---|---|
+| F-19 | High | The builder's save action always submitted the blank draft from its first render (`useAction` memoises its first callback), so API saves failed with "name required" and local saves created empty templates. | `frontend/src/pages/WorkoutBuilder.tsx`, `api/hooks.ts` `useAction` | Fixed (draft passed as an argument); the `useAction` pattern itself is open (QA-06) |
+| F-20 | High | "Add a warm-up set" flagged every set as a warm-up, so the exercise vanished from volume and PRs. | `frontend/src/lib/lifecycle.ts`, `lib/workoutTemplates.ts` | Fixed |
+| F-21 | High | In API mode six common exercises (e.g. Barbell Deadlift) were saved as a different variant: name search plus a "first fuzzy hit" fallback. RPE / warm-up flags were dropped. | `frontend/src/lib/templates.ts`, `backend/src/modules/library.ts` | Fixed (resolve via RepDB id; flags in a notes suffix) |
+| F-22 | High | Starting a workout while another was open silently replaced it and orphaned the API session. | `frontend/src/pages/Workouts.tsx` | Fixed (asks: resume / discard / cancel) |
+| F-23 | Medium | Light-theme tertiary text is 3.45:1 on the page background (AA needs 4.5:1); axe flags it on 7 of 10 routes. | `frontend/src/lib/themes.ts` `--text-tertiary` | Open — suggested `#776E7C` (4.62:1) |
+| F-25 | High | `POST /chat` returns 500 on any database built with `prisma migrate deploy`: `KaiMemory` is in `schema.prisma` but none of the 13 migrations create it (P2021). `trainer.spec.ts` accepts 500 (and checks the body only on 200, while success is 201), so the suite never caught it. Pre-existing; outside the workout scope. | `backend/prisma/schema.prisma`, `backend/src/services/memory.ts` `recallMemories`, `frontend/tests/e2e/trainer.spec.ts` | Open — needs an additive migration (approval) |
+| F-24 | Medium | `/body`: the body-muscles library renders each muscle as `role=button tabindex=0`: nested-interactive, aria-hidden-focus and ~70 tab stops. | `frontend/src/components/BodyMuscles.tsx` | Open |
+
 ## 5. Other findings
 
 ### Security / auth (static)

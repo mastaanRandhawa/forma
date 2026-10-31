@@ -3,7 +3,7 @@
 States: Not started · In progress · Implemented — not verified · **Verified** · Blocked · Requires approval.
 "Verified" names the check that ran. Resume from the first row that isn't Verified, Blocked or Requires approval.
 
-Last updated: 2026-10-30 (after Milestone 3).
+Last updated: 2026-10-30 (after the workout templates / builder QA pass).
 
 ## Milestone 1
 
@@ -43,6 +43,20 @@ The database was empty; `prisma migrate deploy` applied all 13 migrations and th
 | — | Playwright E2E suite | **Verified** | — | `E2E_ALLOW_DB_HOST=… DATABASE_URL=… npm run test:e2e:stack` | **130/130 pass** (6.1 min) against the real API + DB, chat on canned replies | — |
 | T-32 | Signed-in CSV export | **Verified** (runtime, API mode) | — | signed in as the demo user in the browser; `GET /me/export.csv` with the stored token → 200 `text/csv`, both sections | pass | Row-level check is in `frontend/tests/e2e/export.spec.ts` (new, not yet run: port 5178 was held by another Vite server) |
 | T-36 | E2E script accepts a named disposable host | **Verified** (guard) | `frontend/scripts/e2e-stack.mjs` | refuses remote hosts unless `E2E_ALLOW_DB_HOST` names that exact host; clears `ANTHROPIC_API_KEY` for the run | pass | — |
+
+## Workout templates, builder and workout UX (2026-10-30)
+
+Scope: the "Workout App Enhancement" QA brief plus "make the workout part more fun and intuitive, better exercise images". Full register: `docs/Workout_App_QA_Audit_and_Bug_Report.pdf` (findings QA-01…09, fixes FX-01…16).
+
+| Area | State | Changed files | Checks run | Result | Outstanding risk |
+|---|---|---|---|---|---|
+| Template library + training plans | **Verified** (E2E) | `lib/workoutTemplates.ts`, `lib/workoutPlans.ts` (new), `components/workout/TemplateLibrary.tsx`, `TemplatePreview.tsx`, `PlanViews.tsx` (new), `TemplateCard.tsx`, `pages/Workouts.tsx` | `workout-library.spec.ts` (10) | pass | Level / length filters and the my-workout menu have no automated test |
+| Custom builder rewrite | **Verified** (E2E, desktop + Pixel 7) | `pages/WorkoutBuilder.tsx`, `components/workout/ExercisePicker.tsx`, `Stepper.tsx`, `layout/QuickActions.tsx`, `lib/templates.ts`, `lib/lifecycle.ts` | `workout-builder.spec.ts` (7) | pass | Custom exercises can't be stored in API mode (QA-03); builder warns |
+| Exercise resolution by RepDB id | **Verified** (script + E2E) | `lib/templates.ts`, `lib/repdb.ts`, `backend/src/modules/library.ts` | all 95 template exercises resolve via the id path | pass | Templates saved before this keep their old match |
+| Start-while-active guard, finish-screen payoff, week strip | **Verified** (E2E + screenshots) | `pages/Workouts.tsx`, `pages/ActiveWorkout.tsx`, `components/workout/WeekStrip.tsx`, `Celebration.tsx` (new), `lib/fitness.ts` | `workout-session.spec.ts` (2, incl. axe on the summary); evidence screenshots | pass | Share action itself not exercised |
+| Exercise images | **Verified** (E2E) | `components/ExerciseThumb.tsx`, `lib/repdb.ts`, Library / Session drawer | thumbnail motion spec (allowed + reduced motion) | pass | Animated media needs the paid RepDB tier (decision) |
+| App-wide smoke + a11y | **Verified** (E2E) | `tests/e2e/smoke.spec.ts`, `export.spec.ts`, `evidence.spec.ts` (new), `playwright.config.ts`, `helpers.ts` | 21 routes, reload, CSV / JSON export, 7 phone layouts, axe | pass; app-wide axe reports QA-01 (contrast) and QA-09 (/body) | Both open, pre-existing |
+| Full suite | **Verified** | — | `E2E_ALLOW_DB_HOST=… DATABASE_URL=… E2E_WEB_PORT=5180 E2E_API_PORT=4100 npm run test:e2e:stack` | **192 passed, 0 failed**, 5 skipped (opt-in screenshot specs), 8.7 min, desktop + Pixel 7. Also: frontend lint 0 errors / 57 warnings, build pass; backend typecheck, lint pass, Vitest 119/119 | Server log showed `POST /chat` failing (F-25); the test accepts 500 |
 
 ## Whole-project checks after Milestone 3
 
@@ -87,3 +101,4 @@ The database was empty; `prisma migrate deploy` applied all 13 migrations and th
 Milestones 1 and 3 are done apart from the blocked items above. Everything left needs either a database or a decision:
 1. With a local `DATABASE_URL`: run `npm run test:e2e:stack`, then verify T-32 (authenticated CSV download), T-24, T-25, T-28, then start T-39.
 2. Decisions: T-23 (unblocks T-31), T-20 (+T-41), T-40, T-21, T-22, T-26/T-27.
+3. From the workout QA pass: add the missing `KaiMemory` migration — coach chat 500s on a migrated DB (F-25 / QA-10, needs approval); fix the tertiary text token (QA-01, `#776E7C`), the `/body` chart accessibility (QA-09), `useAction` stale callbacks (QA-06); decide on custom exercises in API mode (QA-03, needs a migration) and the paid RepDB tier for animated media (QA-04).

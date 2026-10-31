@@ -1,0 +1,73 @@
+{
+  "/dashboard": [
+    {
+      "id": "color-contrast",
+      "impact": "serious",
+      "nodes": 2,
+      "help": "Elements must meet minimum color contrast ratio thresholds"
+    }
+  ],
+  "/workouts": [
+    {
+      "id": "color-contrast",
+      "impact": "serious",
+      "nodes": 22,
+      "help": "Elements must meet minimum color contrast ratio thresholds"
+    }
+  ],
+  "/trainer": [],
+  "/progress": [
+    {
+      "id": "color-contrast",
+      "impact": "serious",
+      "nodes": 3,
+      "help": "Elements must meet minimum color contrast ratio thresholds"
+    }
+  ],
+  "/nutrition": [
+    {
+      "id": "color-contrast",
+      "impact": "serious",
+      "nodes": 2,
+      "help": "Elements must meet minimum color contrast ratio thresholds"
+    }
+  ],
+  "/exercise-library": [
+    {
+      "id": "color-contrast",
+      "impact": "serious",
+      "nodes": 230,
+      "help": "Elements must meet minimum color contrast ratio thresholds"
+    }
+  ],
+  "/settings": [
+    {
+      "id": "color-contrast",
+      "impact": "serious",
+      "nodes": 4,
+      "help": "Elements must meet minimum color contrast ratio thresholds"
+    }
+  ],
+  "/store": [],
+  "/goals": [],
+  "/body": [
+    {
+      "id": "aria-hidden-focus",
+      "impact": "serious",
+      "nodes": 1,
+      "help": "ARIA hidden element must not be focusable or contain focusable elements"
+    },
+    {
+      "id": "color-contrast",
+      "impact": "serious",
+      "nodes": 11,
+      "help": "Elements must meet minimum color contrast ratio thresholds"
+    },
+    {
+      "id": "nested-interactive",
+      "impact": "serious",
+      "nodes": 1,
+      "help": "Interactive controls must not be nested"
+    }
+  ]
+}

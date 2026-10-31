@@ -41,7 +41,7 @@ flowchart LR
 | `/dashboard` | Home | sessions, checkins, profile | `dashboard`, `sessions.list` | `buildLocalDashboard` (real local data) |
 | `/workouts` | Workouts | sessions, templates, active | `programs.list`, `workouts.generate`, `workouts.list`, `sessions.list` | local templates/presets |
 | `/workouts/active` | ActiveWorkout | active session (cache) | `sessions.start/logSet/deleteSet/addPerformance/finish/abandon`, `food.day` | local-only session |
-| `/workouts/builder[/:id]` | WorkoutBuilder | local templates | `workouts.create/update` via `lib/templates.ts` | local templates |
+| `/workouts/builder[/:id]` | WorkoutBuilder | local templates, unsaved draft (sessionStorage `forma.builder.<id>`) | `workouts.get/create/update/delete`, `library.exercise` via `lib/templates.ts` | local templates |
 | `/trainer` | Trainer | profile | `trainer.get/update`, `chat.history/send/suggestedPrompts`, `programs.generate` | canned replies, empty history |
 | `/body` (gated `body_map`) | Body | sessions | `body.muscleMap(range)` | sessions × RepDB muscles (T-10) |
 | `/progress` (gated) | Progress | sessions | `sessions.list`, `progress.trainingLoad/patterns/nutritionCorrelation` | local sessions |
@@ -65,6 +65,9 @@ flowchart LR
 | `MuscleMap` (SVG) | legacy | |
 | `ExerciseDetailDrawer`, `ExerciseThumb`, `workout/ExercisePicker` | Library, Builder, ActiveWorkout | RepDB catalog |
 | `workout/SessionDetailDrawer`, `TemplateCard`, `WorkoutInProgressBar` | Workouts, Home | |
+| `workout/TemplateLibrary`, `TemplatePreview`, `PlanViews` | Workouts (Templates tab) | data from `lib/workoutTemplates.ts` (templates, filters) and `lib/workoutPlans.ts` (plans) |
+| `workout/WeekStrip`, `workout/Celebration` | Workouts (Today), ActiveWorkout summary | `weekProgress` in `lib/fitness.ts`; Celebration renders nothing under reduced motion |
+| `ExerciseThumb` (`name`, `motion`) | Library, Builder, Workouts, ActiveWorkout, SessionDetailDrawer | `repdbFrames(name)` → start / peak frames; crossfade on hover or loop |
 | `dashboard/*` (RingStat, DetailDrawer, MetricDetailBody, GoalsCard, AchievementStrip, Greeting…) | Home | `MetricDetailBody` takes real-data `detail` only; `WeeklySummary` deleted (T-30) |
 | `health/*` (DailyCheckin, MetricCard, CircularDial…) | Home | DailyCheckin writes local + `progress.checkin` |
 | `nutrition/*` | Nutrition | FoodLog = API, OfflineNutrition = local |
@@ -100,4 +103,6 @@ flowchart LR
 | Challenges measured from sessions (T-37) | `lib/rewards.ts`, Store, ActiveWorkout | Store challenge cards, workout summary coins | old `forma.challenges.v1` progress is ignored; payouts keep the same wallet keys, so nothing pays twice |
 | Shared muscle lookup (T-38) | `lib/muscleLookup.ts`, `lib/repdb.ts` | Body, Progress, Store, ActiveWorkout, thumbnails | better matches change which muscles some sessions count toward |
 | CSV export path (T-32) | `backend/src/modules/me.ts` → `/me/export.csv` | Account settings | any other client calling `GET /me/export` for CSV now gets JSON, as it always actually did |
+| Exercise resolution by RepDB id | `lib/templates.ts`, backend `library.ts` (`:slug` also matches `externalId`) | Builder save, library save a copy / save plan | templates saved before this change keep whatever exercise they resolved to |
+| Flags in notes suffix | `lib/workoutTemplates.ts` encode / decode, `lib/lifecycle.ts` | Builder, session start | a user note ending in `[...]` that looks like a flag list would be parsed as flags |
 | Server-authoritative rewards (future) | `store.ts`, `sessions.ts`, `goals.ts`, schema, `wallet.ts`, `rewards.ts` | Store, ActiveWorkout summary, AppShell | economy rules — needs approval |
