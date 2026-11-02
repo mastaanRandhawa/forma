@@ -53,6 +53,7 @@ test("evidence: workout finish screen", async ({ page }) => {
   await page.getByRole("button", { name: "start Gym Fundamentals A", exact: true }).click();
   await expect(page).toHaveURL(/\/workouts\/active/, { timeout: 30_000 });
   await shot(page, "desktop-08-active-workout");
+  await page.getByLabel(/^weight \(/).fill("40");
   await page.getByRole("button", { name: /^complete set 1$/ }).click();
   await shot(page, "desktop-09-rest-next-up");
   await page.getByRole("button", { name: "end workout" }).click();

@@ -22,6 +22,8 @@ import { Navigate, useLocation } from "react-router-dom";
 import { auth as authClient, session as tokenStore } from "./client";
 import { API_ENABLED, invalidateResource } from "./hooks";
 import type { User } from "./types";
+import { resetLocalData } from "../lib/localStore";
+import { hydrateProfile } from "../lib/profileSync";
 
 type Status = "loading" | "authed" | "unverified" | "anon";
 
@@ -68,6 +70,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUserState] = useState<User | null>(null);
 
   const setUser = useCallback((u: User | null) => {
+    // before the status flips, so the app never renders on the default profile
+    if (u?.emailVerified) hydrateProfile(u);
     setUserState(u);
     setStatus(statusFor(u));
   }, []);
@@ -119,8 +123,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [setUser]);
 
   const clearLocal = () => {
+    // also drops the in-memory copy, which removing the storage key alone left behind
+    resetLocalData();
     try {
-      localStorage.removeItem("forma.data.v1");
       sessionStorage.removeItem("forma.sessionExpired"); // explicit sign-out, not an expiry
     } catch {
       /* private mode */

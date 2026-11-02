@@ -60,12 +60,12 @@ test("API: POST /chat sends a message and gets a response", async ({ page }) => 
     headers: { Authorization: `Bearer ${at}` },
     data: { content: "Hello, can you give me a quick tip?" },
   });
-  // 200: AI responded; 500/503: AI key missing or unavailable — all acceptable
-  expect([200, 500, 503]).toContain(res.status());
-  if (res.status() === 200) {
-    const body = await res.json();
-    expect(body.assistant?.content ?? body.content ?? body.response).toBeTruthy();
-  }
+  // the E2E stack clears ANTHROPIC_API_KEY, so the reply is canned but still a 201
+  expect(res.status()).toBe(201);
+  const body = await res.json();
+  expect(body.userMessage?.content).toBe("Hello, can you give me a quick tip?");
+  expect(body.trainerMessage?.role).toBe("trainer");
+  expect(body.trainerMessage?.content).toBeTruthy();
 });
 
 test("API: POST /chat with empty content returns 400", async ({ page }) => {

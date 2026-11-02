@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { saveProfile, useFormaData, type Profile } from "../../lib/localStore";
+import { loadData, saveProfile, useFormaData, type Profile } from "../../lib/localStore";
 import { api } from "../../api/client";
 import { API_ENABLED } from "../../api/hooks";
 import {
@@ -8,10 +8,12 @@ import {
   DURATIONS,
   ENVIRONMENTS,
   EQUIPMENT,
+  equipmentToApiKeys,
   EXPERIENCE,
   GOALS,
   GOAL_LABELS,
   GOAL_TO_API,
+  LB_TO_KG,
   UNITS,
   WEEKDAYS,
 } from "../../lib/profileOptions";
@@ -21,7 +23,8 @@ import type { ProfilePatch, TrainingLocation, UnitPreference } from "../../api/t
 
 /** Persist a profile change locally, and mirror the fields the API knows about. */
 function persist(patch: Partial<Profile>) {
-  saveProfile(patch);
+  const before = loadData().profile;
+  saveProfile(patch); // a unit switch also converts stored weights and bodyweight
   if (!API_ENABLED) return;
   const p: ProfilePatch = {};
   if (patch.goal != null) p.fitnessGoal = GOAL_TO_API[patch.goal];
@@ -30,7 +33,24 @@ function persist(patch: Partial<Profile>) {
   if (patch.sessionMin != null) p.sessionLengthTargetMin = patch.sessionMin;
   if (patch.environment != null) p.trainingLocation = patch.environment as TrainingLocation;
   if (patch.units != null) p.unitPreference = (patch.units === "kg" ? "metric" : "imperial") as UnitPreference;
+  if (patch.bodyweight != null && patch.units == null) {
+    const kg = before.units === "kg" ? patch.bodyweight : patch.bodyweight * LB_TO_KG;
+    p.weightKg = Math.round(kg * 10) / 10;
+  }
   if (Object.keys(p).length) void api.me.update(p).catch(() => {});
+  if (patch.equipment) void api.me.setEquipment(equipmentToApiKeys(patch.equipment)).catch(() => {});
+  if (patch.injuries != null) void replaceInjuries(patch.injuries);
+}
+
+/** The profile keeps one free-text note; on the server that's the active injury list. */
+async function replaceInjuries(text: string) {
+  try {
+    const current = await api.me.injuries();
+    await Promise.all(current.filter((i) => i.active).map((i) => api.me.deleteInjury(i.id)));
+    if (text) await api.me.addInjury(text);
+  } catch {
+    /* offline — the local note still applies on this device */
+  }
 }
 
 const toggle = <T,>(list: T[], v: T) =>

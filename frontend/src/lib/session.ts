@@ -324,6 +324,49 @@ export function addWarmupSet(ex: LoggedExercise): LoggedExercise {
   };
 }
 
+/** The bottom of a "3 × 8–12" target (or the hold time of "3 × 30 s"); null without a number. */
+export function targetRepsLow(target: string): number | null {
+  const m = target.match(/×\s*(\d+)/);
+  return m ? Number(m[1]) : null;
+}
+
+export interface SetSuggestion {
+  weight: number | null;
+  reps: number | null;
+}
+
+/**
+ * What set `si` should start from, so nobody re-types 135 × 8 every set: the
+ * last finished set of the same kind in this exercise, else today's
+ * prescription, else the same set last time, else the bottom of the target.
+ * AMRAP reps are never suggested — they're what you got.
+ */
+export function suggestSetValues(
+  ex: LoggedExercise,
+  si: number,
+  hints: {
+    last?: { sets: { weight: number; reps: number }[] } | null;
+    rxWeight?: number | null;
+    rxReps?: number | null;
+  } = {},
+): SetSuggestion {
+  const set = ex.sets[si];
+  if (!set) return { weight: null, reps: null };
+  const warm = Boolean(set.warmup);
+  const prior = ex.sets
+    .slice(0, si)
+    .reverse()
+    .find((s) => s.done && Boolean(s.warmup) === warm && (s.weight != null || s.reps != null));
+  const lastSets = warm ? [] : hints.last?.sets ?? [];
+  const workingIdx = ex.sets.slice(0, si + 1).filter((s) => !s.warmup).length - 1;
+  const lastSame = lastSets.length ? lastSets[Math.min(workingIdx, lastSets.length - 1)] : null;
+  const weight = prior?.weight ?? (warm ? null : hints.rxWeight ?? lastSame?.weight ?? null);
+  const reps = set.isAmrap
+    ? null
+    : prior?.reps ?? (warm ? null : hints.rxReps ?? lastSame?.reps ?? null) ?? targetRepsLow(ex.target);
+  return { weight, reps };
+}
+
 // ── trainer cues ────────────────────────────────────────────────────────────
 export type CueEvent =
   | "start"
@@ -347,6 +390,8 @@ export interface CueContext {
   totalExercises?: number;
   heavierThanLast?: boolean;
   lighterThanLast?: boolean;
+  /** no logged history on record for this exercise */
+  noHistory?: boolean;
   restSeconds?: number;
   prDetail?: string;
 }
@@ -366,6 +411,8 @@ export function trainerCue(event: CueEvent, ctx: CueContext = {}): string {
     case "before-set":
       if (ctx.heavierThanLast) return "Heavier than last time — brace hard and own it.";
       if (ctx.lighterThanLast) return "Lighter today. Move it fast and clean.";
+      // "you know this one" next to "previous: first time" read as a contradiction
+      if (ctx.noHistory) return "Pick a weight you can move cleanly for every rep.";
       return pick(["Match last time. Controlled reps.", "You know this one. Tight and steady."]);
     case "set-done":
       if ((ctx.setsLeftInExercise ?? 0) <= 0) return "That's the exercise done. Nice work.";

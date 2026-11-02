@@ -46,6 +46,7 @@ import { saveSessionAsTemplate } from "../lib/templates";
 import { bodyGroupOf, currentStreak, detectPRs, epley1RM, lastPerformance, lastTopSet, sessionVolume, weekProgress } from "../lib/fitness";
 import {
   activeSetIndex,
+  suggestSetValues,
   addWarmupSet,
   addWorkingSet,
   advance,
@@ -64,9 +65,11 @@ import {
   trainerCue,
   type CueContext,
   type CueEvent,
+  type SetSuggestion,
   type SubstituteSuggestion,
 } from "../lib/session";
 import { grantWorkoutRewards } from "../lib/rewards";
+import { playRestChime, primeRestAlert, useWakeLock } from "../lib/restAlert";
 import { walletStore } from "../lib/wallet";
 import type { RepDbCatalogEntry } from "../lib/repdb";
 import { repdbThumb, repdbImage } from "../lib/repdb";
@@ -197,8 +200,12 @@ export default function ActiveWorkout() {
     headline: string | null;
   }>(null);
   const [shared, setShared] = useState<string | null>(null);
+  /** the set (`cursor:setIndex`) that couldn't be completed, and which field it needs */
+  const [missing, setMissing] = useState<{ at: string; field: "reps" | "weight" } | null>(null);
 
   const elapsed = useElapsed(session);
+  // keep a phone awake while a workout runs; the OS takes the lock back when paused or hidden
+  useWakeLock(Boolean(session) && !session?.paused && !summary);
 
   // debounced write-through of a single cell to the API
   const syncTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
@@ -248,6 +255,7 @@ export default function ActiveWorkout() {
       ctx: {
         heavierThanLast: !!(w && top && w > top.weight),
         lighterThanLast: !!(w && top && w < top.weight),
+        noHistory: !top,
       },
     });
   }, [session, units, priorSessions]);
@@ -293,7 +301,35 @@ export default function ActiveWorkout() {
 
   const patchActiveSet = (fn: (set: LoggedSet) => LoggedSet) => {
     if (!currentEx) return;
+    setMissing(null);
     setSet(cursor, activeSetIndex(currentEx), fn);
+  };
+
+  const hintsFor = (ex: LoggedExercise) => ({
+    last: lastPerformance(priorSessions, ex.name),
+    rxWeight: ex.prescription?.weightKg != null ? fromKg(ex.prescription.weightKg, units) : null,
+    rxReps: ex.prescription?.reps ?? null,
+  });
+
+  // Fill blanks from the suggestion, then mark the set done. A set with no reps
+  // (or no weight on a loaded movement) isn't a set yet, so say what's missing.
+  const commitSet = (si: number): boolean => {
+    const ex = loadData().active?.exercises[cursor];
+    const set = ex?.sets[si];
+    if (!ex || !set) return false;
+    const sug = suggestSetValues(ex, si, hintsFor(ex));
+    const weight = set.weight ?? sug.weight;
+    const reps = set.reps ?? sug.reps;
+    const needsWeight = catEntry != null && !catEntry.bodyweight;
+    const field = reps == null ? "reps" : needsWeight && weight == null ? "weight" : null;
+    if (field) {
+      setMissing({ at: `${cursor}:${si}`, field });
+      document.getElementById(`set-${field}`)?.focus();
+      return false;
+    }
+    setMissing(null);
+    setSet(cursor, si, (s) => ({ ...s, weight, reps, done: true }), { immediate: true });
+    return true;
   };
 
   const addSet = (exi: number, warmup = false) => {
@@ -390,8 +426,9 @@ export default function ActiveWorkout() {
   const completeActiveSet = () => {
     if (!currentEx || session?.paused) return;
     const si = activeSetIndex(currentEx);
-    setSet(cursor, si, (set) => ({ ...set, done: true }), { immediate: true });
+    if (!commitSet(si)) return;
     vibrate(28);
+    primeRestAlert();
 
     const fresh = loadData().active;
     if (!fresh) return;
@@ -575,11 +612,13 @@ export default function ActiveWorkout() {
   const rxWeight =
     currentEx?.prescription?.weightKg != null ? fromKg(currentEx.prescription.weightKg, units) : null;
   const rxReps = currentEx?.prescription?.reps ?? null;
+  const suggestion = currentEx ? suggestSetValues(currentEx, activeIdx, { last, rxWeight, rxReps }) : null;
+  const missingField = missing?.at === `${cursor}:${activeIdx}` ? missing.field : null;
   const trainablePos = queue.find((r) => r.index === cursor)?.position ?? 1;
   const trainableTotal = queue.filter((r) => r.phase !== "skipped").length;
 
   return (
-    <div className="mx-auto max-w-[720px] pb-28">
+    <div className="mx-auto max-w-[720px] pb-28 lg:max-w-[980px]">
       {/* ── HUD top bar ─────────────────────────────────────────────── */}
       <header className="mb-5">
         <div className="flex items-center justify-between gap-3">
@@ -730,6 +769,8 @@ export default function ActiveWorkout() {
           last={last}
           rxWeight={rxWeight}
           rxReps={rxReps}
+          suggestion={suggestion}
+          missingField={missingField}
           cueText={trainerCue(cue.event, cue.ctx)}
           onStopRest={stopRest}
           onStartRest={startRest}
@@ -778,7 +819,9 @@ export default function ActiveWorkout() {
                 </span>
                 <button
                   aria-label={s.done ? "mark set not done" : "mark set done"}
-                  onClick={() => setSet(cursor, si, (set) => ({ ...set, done: !set.done }), { immediate: true })}
+                  onClick={() =>
+                    s.done ? setSet(cursor, si, (set) => ({ ...set, done: false }), { immediate: true }) : commitSet(si)
+                  }
                   className={`focus-ring grid h-7 w-7 shrink-0 place-items-center rounded-full border transition-colors ${
                     s.done
                       ? "border-transparent bg-[var(--accent-lime)] text-[#0c0c0c]"
@@ -1156,6 +1199,9 @@ function RestOrFocus(props: {
   last: ReturnType<typeof lastPerformance>;
   rxWeight: number | null;
   rxReps: number | null;
+  /** what the active set starts from while its fields are empty */
+  suggestion: SetSuggestion | null;
+  missingField: "reps" | "weight" | null;
   cueText: string;
   onStopRest: () => void;
   onStartRest: (s: number) => void;
@@ -1192,7 +1238,9 @@ function RestOrFocus(props: {
   const remaining = restEndsAt ? Math.ceil((restEndsAt - now) / 1000) : 0;
   useEffect(() => {
     if (restEndsAt && remaining <= 0) {
-      vibrate([40, 30, 40]);
+      vibrate([40, 30, 40]); // Android only — iOS Safari and desktops have no vibration
+      // not for a rest that ran out while the page was closed
+      if (Date.now() - restEndsAt < 5000) playRestChime();
       props.onStopRest();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1202,6 +1250,8 @@ function RestOrFocus(props: {
 
   const thumb = repdbThumb(currentEx.name);
   const animSrc = hasAnim ? (imgFrame === 0 ? imgStart! : imgEnd!) : thumb;
+  const nextWeight = activeSet?.weight ?? props.suggestion?.weight ?? null;
+  const nextReps = activeSet?.reps ?? props.suggestion?.reps ?? null;
 
   // ── REST STATE ──────────────────────────────────────────────────────────
   if (restEndsAt && remaining > 0) {
@@ -1270,7 +1320,11 @@ function RestOrFocus(props: {
               <div className="truncate text-[0.95rem] lowercase text-content-primary">{currentEx.name}</div>
               <div className="label-instrument mt-0.5 tabular-nums">
                 set {props.workingDone + 1} / {props.workingCount}
-                {activeSet?.weight != null ? ` · ${activeSet.weight} ${units} × ${activeSet.reps ?? "—"}` : ""}
+                {nextWeight != null
+                  ? ` · ${nextWeight} ${units} × ${nextReps ?? "—"}`
+                  : nextReps != null
+                    ? ` · ${nextReps} reps`
+                    : ""}
               </div>
             </div>
           </div>
@@ -1286,10 +1340,12 @@ function RestOrFocus(props: {
 
   // ── FOCUS STATE ─────────────────────────────────────────────────────────
   const isBodyweight = catEntry?.bodyweight ?? false;
+  const missingHint = props.missingField ? "set-missing-hint" : undefined;
   return (
-    <div className="surface-soft overflow-hidden">
+    // wide screens put the picture beside the controls, so "complete set" fits on a laptop without scrolling
+    <div className={`surface-soft overflow-hidden ${animSrc ? "lg:grid lg:grid-cols-[minmax(0,4fr)_minmax(0,8fr)]" : ""}`}>
       {animSrc && (
-        <div className="relative aspect-[16/10] w-full bg-[#150c12]">
+        <div className="relative aspect-[16/10] w-full bg-[#150c12] lg:aspect-auto lg:h-full lg:min-h-[320px]">
           <img
             key={animSrc}
             src={animSrc}
@@ -1400,17 +1456,26 @@ function RestOrFocus(props: {
         <div className="mt-3 flex gap-2.5">
           {!isBodyweight && (
             <Stepper
+              id="set-weight"
               label="weight"
               suffix={units}
               value={activeSet?.weight ?? null}
+              suggested={props.suggestion?.weight ?? null}
               step={props.weightStep}
+              invalid={props.missingField === "weight"}
+              describedBy={props.missingField === "weight" ? missingHint : undefined}
               onChange={(v) => props.onPatchActiveSet((s) => ({ ...s, weight: v }))}
             />
           )}
           <Stepper
+            id="set-reps"
             label="reps"
             value={activeSet?.reps ?? null}
+            suggested={props.suggestion?.reps ?? null}
             step={1}
+            integer
+            invalid={props.missingField === "reps"}
+            describedBy={props.missingField === "reps" ? missingHint : undefined}
             onChange={(v) => props.onPatchActiveSet((s) => ({ ...s, reps: v }))}
           />
           <Stepper
@@ -1420,17 +1485,24 @@ function RestOrFocus(props: {
             onChange={(v) => props.onPatchActiveSet((s) => ({ ...s, rpe: v }))}
           />
         </div>
+        {props.missingField && (
+          <p id="set-missing-hint" role="alert" className="mt-2 text-center text-[0.82rem] lowercase text-content-secondary">
+            {props.missingField === "reps"
+              ? "enter your reps to log this set"
+              : "add the weight to log this set — type 0 if it was bodyweight"}
+          </p>
+        )}
 
         {/* plate calculator — shown when a weight is set and exercise uses a barbell */}
-        {activeSet?.weight != null && !isBodyweight && (() => {
+        {nextWeight != null && !isBodyweight && (() => {
           const barKg = units === "kg" ? 20 : 45;
-          const result = plateCombo(activeSet.weight, barKg, units as "kg" | "lb");
+          const result = plateCombo(nextWeight, barKg, units as "kg" | "lb");
           if (!result.perSide.length) return null;
           return (
             <div className="mt-2 flex items-center gap-2 rounded-hero px-3 py-2" style={{ background: "rgba(255,255,255,0.04)" }}>
               <span className="label-instrument shrink-0">plates/side</span>
               <span className="flex-1 tabular-nums text-[0.82rem] text-content-secondary">{plateLabel(result.perSide)}</span>
-              {result.loaded !== activeSet.weight && (
+              {result.loaded !== nextWeight && (
                 <span className="label-instrument shrink-0 tabular-nums" style={{ color: "var(--accent-amber)" }}>
                   {result.loaded} {units}
                 </span>

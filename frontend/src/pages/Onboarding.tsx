@@ -13,6 +13,7 @@ import {
   DURATIONS,
   ENVIRONMENTS,
   EQUIPMENT,
+  equipmentToApiKeys,
   WEEKDAYS,
   LB_TO_KG,
   IN_TO_CM,
@@ -112,6 +113,8 @@ export default function Onboarding() {
     if (API_ENABLED) {
       setSubmitting(true);
       setSubmitError(null);
+      // the server keys equipment as "barbell", not the "Barbell" label
+      const apiEquipment = equipmentToApiKeys(equipment);
       try {
         await api.me.onboarding({
           fitnessGoal: goal ? GOAL_TO_API[goal] : undefined,
@@ -120,7 +123,7 @@ export default function Onboarding() {
           unitPreference: units === "kg" ? "metric" : "imperial",
           trainingFrequencyTarget: daysPerWeek ?? undefined,
           sessionLengthTargetMin: sessionMin ?? undefined,
-          equipmentKeys: equipment.length ? equipment : undefined,
+          equipmentKeys: apiEquipment.length ? apiEquipment : undefined,
           injuries: injuries.trim() ? [{ tag: injuries.trim() }] : undefined,
           weightKg: weightKg == null ? undefined : Math.round(weightKg * 10) / 10,
           heightCm: heightCm == null ? undefined : Math.round(heightCm),

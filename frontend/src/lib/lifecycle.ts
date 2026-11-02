@@ -108,8 +108,12 @@ export async function syncNewPerformance(
         i === exIndex ? { ...e, apiPerfId: perf.id, exerciseId } : e,
       ),
     }));
+    // only sets already done: the rest are written as they're edited, and all of
+    // them at finish — writing blank ones here made a template start wait on
+    // a request per set before the logger could open
     const fresh = (await import("./localStore")).loadData().active;
-    if (fresh) for (let i = 0; i < (fresh.exercises[exIndex]?.sets.length ?? 0); i++) await syncSet(fresh, exIndex, i, units);
+    const sets = fresh?.exercises[exIndex]?.sets ?? [];
+    for (let i = 0; i < sets.length; i++) if (fresh && sets[i].done) await syncSet(fresh, exIndex, i, units);
   } catch {
     /* stays local-only */
   }

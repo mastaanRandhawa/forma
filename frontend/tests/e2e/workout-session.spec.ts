@@ -11,13 +11,19 @@ test.beforeEach(async ({ page }) => {
 });
 
 test("start a template, log a set, finish, and review it in history", async ({ page }) => {
+  // finishing runs PRs, insights, achievements and progression server-side before
+  // it answers — well over 10s when the test database is hosted far from the API
+  test.setTimeout(90_000);
   await page.goto("/workouts");
   await page.getByRole("tab", { name: "Templates" }).click();
   await page.getByRole("button", { name: "start Gym Fundamentals A", exact: true }).click();
   await expect(page).toHaveURL(/\/workouts\/active/, { timeout: 30_000 });
   await expect(page.getByRole("heading", { name: /gym fundamentals a/i }).first()).toBeVisible();
 
+  // a loaded movement needs a weight before the set counts; reps come from the target
+  await page.getByLabel(/^weight \(/).fill("40");
   await page.getByRole("button", { name: /^complete set 1$/ }).click();
+  await expect(page.getByRole("button", { name: "ready" })).toBeVisible();
 
   await page.getByRole("button", { name: "end workout" }).click();
   await page.getByRole("button", { name: "finish & save workout" }).click();
@@ -45,6 +51,9 @@ test("start a template, log a set, finish, and review it in history", async ({ p
 });
 
 test("starting a workout while one is open asks before replacing it", async ({ page }) => {
+  // two template starts, each creating its exercises on the server one by one
+  // before the logger opens — slow when the test database is hosted far away
+  test.setTimeout(90_000);
   await page.goto("/workouts");
   await page.getByRole("tab", { name: "Templates" }).click();
   await page.getByRole("button", { name: "start Express 20 — No Equipment", exact: true }).click();
@@ -61,6 +70,42 @@ test("starting a workout while one is open asks before replacing it", async ({ p
   await expect(page).toHaveURL(/\/workouts\/active/, { timeout: 30_000 });
   const active = await page.evaluate(() => JSON.parse(localStorage.getItem("forma.data.v1") ?? "{}").active?.name);
   expect(active).toBe("Gym Fundamentals B");
+
+  await page.getByRole("button", { name: "end workout" }).click();
+  await page.getByRole("button", { name: "discard without saving" }).click();
+});
+
+test("a set needs reps and a weight to count, and the next set starts from it", async ({ page }) => {
+  await page.goto("/workouts");
+  await page.getByRole("button", { name: /quick start/ }).first().click();
+  await expect(page).toHaveURL(/\/workouts\/active/, { timeout: 30_000 });
+  await page.getByRole("button", { name: "+ add your first exercise" }).click();
+  const picker = page.getByRole("dialog", { name: "add exercise" });
+  await picker.getByRole("searchbox", { name: "search exercises" }).fill("bench press");
+  await picker.getByRole("button", { name: "add Barbell Bench Press", exact: true }).click();
+
+  // nothing in this browser's history, so only the target's reps are suggested
+  const weight = page.getByLabel(/^weight \(/);
+  const reps = page.getByLabel("reps", { exact: true });
+  await expect(reps).toHaveAttribute("placeholder", "8");
+  await page.getByRole("button", { name: /^complete set 1$/ }).click();
+  await expect(page.getByRole("alert").filter({ hasText: "add the weight" })).toBeVisible();
+  await expect(weight).toBeFocused();
+  await expect(page.getByRole("button", { name: "ready" })).toHaveCount(0);
+
+  await weight.fill("50");
+  await page.getByRole("button", { name: /^complete set 1$/ }).click();
+  await page.getByRole("button", { name: "ready" }).click();
+
+  // set 2 starts where set 1 ended, and "+" steps from there
+  await expect(weight).toHaveValue("");
+  await expect(weight).toHaveAttribute("placeholder", "50");
+  await expect(reps).toHaveAttribute("placeholder", "8");
+  await page.getByRole("button", { name: "increase weight" }).click();
+  await expect(weight).toHaveValue(/^5[2-5](\.5)?$/);
+
+  const sets = await page.evaluate(() => JSON.parse(localStorage.getItem("forma.data.v1") ?? "{}").active?.exercises?.[0]?.sets ?? []);
+  expect(sets[0]).toMatchObject({ weight: 50, reps: 8, done: true });
 
   await page.getByRole("button", { name: "end workout" }).click();
   await page.getByRole("button", { name: "discard without saving" }).click();

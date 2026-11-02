@@ -175,6 +175,8 @@ export interface FormaData {
   meals: MealEntry[];
   /** null → targets are derived from the training profile */
   nutritionTargets: NutritionTargets | null;
+  /** API build: the account this copy belongs to, so another account never inherits it */
+  owner?: string | null;
 }
 
 export const DEFAULT_PROFILE: Profile = {
@@ -283,6 +285,17 @@ export function mutate(fn: (draft: FormaData) => FormaData): void {
   write(fn(read()));
 }
 
+/** Forget this browser's copy entirely (sign-out, or another account signing in). */
+export function resetLocalData(): void {
+  try {
+    localStorage.removeItem(KEY);
+  } catch {
+    /* private mode */
+  }
+  cache = EMPTY;
+  listeners.forEach((l) => l());
+}
+
 export function useFormaData(): FormaData {
   return useSyncExternalStore(
     (cb) => {
@@ -318,15 +331,63 @@ export function latestCheckin(d: FormaData = read()): Checkin | null {
 const uid = () => Math.random().toString(36).slice(2, 10);
 const today = () => new Date().toISOString().slice(0, 10);
 
-export function saveProfile(patch: Partial<Profile>): void {
-  mutate((d) => ({
+const KG_PER_LB = 0.45359237;
+
+/**
+ * Re-express stored weights in `to`. Everything that reads history (last time,
+ * PRs, progress) assumes the profile's unit, so without this a switch turned
+ * 135 lb into "135 kg".
+ */
+function convertWeights(d: FormaData, to: Units): FormaData {
+  const factor = (from: Units) => (from === to ? 1 : to === "kg" ? KG_PER_LB : 1 / KG_PER_LB);
+  const exs = (list: LoggedExercise[], f: number) =>
+    list.map((e) => ({
+      ...e,
+      sets: e.sets.map((s) => ({ ...s, weight: s.weight == null ? null : Math.round(s.weight * f * 10) / 10 })),
+    }));
+  const f = factor(d.profile.units);
+  return {
     ...d,
     profile: {
       ...d.profile,
-      ...patch,
-      onboardedAt: d.profile.onboardedAt ?? new Date().toISOString(),
+      units: to,
+      bodyweight: d.profile.bodyweight == null ? null : Math.round(d.profile.bodyweight * f * 10) / 10,
     },
-  }));
+    sessions: d.sessions.map((s) =>
+      s.units === to
+        ? s
+        : { ...s, units: to, volume: Math.round(s.volume * factor(s.units)), exercises: exs(s.exercises, factor(s.units)) },
+    ),
+    active: d.active ? { ...d.active, exercises: exs(d.active.exercises, f) } : null,
+  };
+}
+
+const withUnits = (d: FormaData, patch: Partial<Profile>): FormaData =>
+  patch.units && patch.units !== d.profile.units ? convertWeights(d, patch.units) : d;
+
+export function saveProfile(patch: Partial<Profile>): void {
+  mutate((raw) => {
+    const d = withUnits(raw, patch);
+    return {
+      ...d,
+      profile: {
+        ...d.profile,
+        ...patch,
+        onboardedAt: d.profile.onboardedAt ?? new Date().toISOString(),
+      },
+    };
+  });
+}
+
+/**
+ * Take profile fields from the server. Unlike `saveProfile` this doesn't mark
+ * onboarding done — the server says whether it is.
+ */
+export function mergeProfile(patch: Partial<Profile>, owner: string): void {
+  mutate((raw) => {
+    const d = withUnits(raw, patch);
+    return { ...d, owner, profile: { ...d.profile, ...patch } };
+  });
 }
 
 export interface StartExercise {

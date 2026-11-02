@@ -57,7 +57,21 @@ export const EQUIPMENT = [
   "Bodyweight only",
 ];
 
-export const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+/** Server `Equipment.key` for each option. "Pull-up bar" has no server row, so it stays local. */
+export const EQUIPMENT_API_KEY: Record<string, string> = {
+  Barbell: "barbell",
+  Dumbbells: "dumbbell",
+  Machines: "machine",
+  Cables: "cable",
+  Kettlebell: "kettlebell",
+  Bands: "bands",
+  "Bodyweight only": "bodyweight",
+};
+
+export const equipmentToApiKeys = (labels: string[]): string[] =>
+  labels.map((l) => EQUIPMENT_API_KEY[l]).filter((k): k is string => Boolean(k));
+
+export const WEEKDAYS =["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 export const UNITS: Units[] = ["lb", "kg"];
 

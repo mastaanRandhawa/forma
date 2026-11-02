@@ -3,13 +3,51 @@ import { Plus, Search } from "lucide-react";
 import { DetailDrawer } from "../dashboard/DetailDrawer";
 import { ExerciseThumb } from "../ExerciseThumb";
 import type { RepDbCatalogEntry } from "../../lib/repdb";
+import { useFormaData } from "../../lib/localStore";
+import { useSessionHistory } from "../../api/hooks";
+
+const RECENT_MAX = 8;
+
+/** Distinct exercise names, most recently trained first: this session, then history. */
+function useRecentExercises(): string[] {
+  const data = useFormaData();
+  const hist = useSessionHistory();
+  return useMemo(() => {
+    const out: string[] = [];
+    const seen = new Set<string>();
+    const add = (name: string) => {
+      const k = name.toLowerCase();
+      if (!seen.has(k) && out.length < RECENT_MAX) {
+        seen.add(k);
+        out.push(name);
+      }
+    };
+    [...(data.active?.exercises ?? [])].reverse().forEach((e) => add(e.name));
+    const past = [
+      ...data.sessions.map((s) => ({ at: s.finishedAt, names: s.exercises.map((e) => e.name) })),
+      ...(hist.data ?? []).map((s) => ({
+        at: s.endedAt ?? s.startedAt,
+        names: (s.performances ?? []).flatMap((p) => (p.exercise?.name ? [p.exercise.name] : [])),
+      })),
+    ].sort((a, b) => b.at.localeCompare(a.at));
+    past.forEach((s) => s.names.forEach(add));
+    return out;
+  }, [data.active, data.sessions, hist.data]);
+}
+
+/** Exact name first, then names with the query as a phrase, then names that only contain its words. */
+function rank(name: string, phrase: string): number {
+  if (!phrase || name === phrase) return 0;
+  return name.includes(phrase) ? 1 : 2;
+}
 
 /**
  * ExercisePicker — the shared "add / replace an exercise" bottom sheet.
  *
  * Searches the RepDB catalog (works in every build; the Library API is a
- * superset of the same data). Supports a muscle / equipment quick-filter and a
- * "use this name anyway" escape hatch so a custom movement can still be logged.
+ * superset of the same data). Leads with what you've trained recently, has a
+ * muscle / equipment quick-filter, and a "use this name anyway" escape hatch
+ * below the matches so a custom movement can still be logged.
  */
 export function ExercisePicker({
   open,
@@ -61,19 +99,34 @@ export function ExercisePicker({
   }, [cat]);
 
   const matches = useMemo(() => {
-    const words = q.trim().toLowerCase().split(/\s+/).filter(Boolean);
-    return cat.filter((e) => {
+    const phrase = q.trim().toLowerCase().replace(/\s+/g, " ");
+    const words = phrase.split(" ").filter(Boolean);
+    const hits = cat.filter((e) => {
       const name = e.name.toLowerCase();
       if (words.length && !words.every((w) => name.includes(w))) return false;
       if (muscle && !e.primary.includes(muscle)) return false;
       if (equipment && e.equipment !== equipment) return false;
       return true;
     });
+    // stable sort: keeps the catalog's alphabetical order within each rank
+    return hits.sort((a, b) => rank(a.name.toLowerCase(), phrase) - rank(b.name.toLowerCase(), phrase));
   }, [q, muscle, equipment, cat]);
   const shown = matches.slice(0, 60);
 
   const custom = q.trim();
   const hasExact = shown.some((e) => e.name.toLowerCase() === custom.toLowerCase());
+
+  const recentNames = useRecentExercises();
+  const recent = useMemo(() => {
+    const byName = new Map(cat.map((e) => [e.name.toLowerCase(), e]));
+    return recentNames.map((name) => ({ name: byName.get(name.toLowerCase())?.name ?? name, entry: byName.get(name.toLowerCase()) ?? null }));
+  }, [recentNames, cat]);
+  const showRecent = recent.length > 0 && !q && !muscle && !equipment;
+
+  const pick = (name: string) => {
+    onPick(name);
+    onClose();
+  };
 
   const chip = (active: boolean) =>
     `focus-ring shrink-0 rounded-pill px-3 py-1 text-[0.74rem] lowercase transition-colors ${
@@ -133,10 +186,7 @@ export function ExercisePicker({
               <button
                 key={name}
                 aria-label={`${verb} ${name}`}
-                onClick={() => {
-                  onPick(name);
-                  onClose();
-                }}
+                onClick={() => pick(name)}
                 className="focus-ring min-h-9 rounded-pill border border-[var(--line-soft)] px-3 text-[0.8rem] lowercase text-content-primary hover:bg-white/[0.06]"
               >
                 {name}
@@ -146,50 +196,72 @@ export function ExercisePicker({
         </div>
       )}
 
+      {showRecent && (
+        <section aria-label="recent exercises" className="mb-4">
+          <div className="label-instrument mb-1">recent</div>
+          <div className="divide-y divide-[var(--line-soft)]">
+            {recent.map((r) => (
+              <ExerciseRow key={r.name} name={r.name} entry={r.entry} verb={verb} onPick={pick} />
+            ))}
+          </div>
+        </section>
+      )}
+
       {cat.length > 0 && (
         <p className="label-instrument mb-1" aria-live="polite">
+          {showRecent ? "all exercises · " : ""}
           {matches.length > shown.length
             ? `showing ${shown.length} of ${matches.length} — search or filter to narrow it down`
             : `${matches.length} exercise${matches.length === 1 ? "" : "s"}`}
         </p>
       )}
 
-      {custom && !hasExact && (
-        <button
-          onClick={() => {
-            onPick(custom);
-            onClose();
-          }}
-          className="focus-ring mb-2 flex w-full items-center gap-2 rounded-[var(--radius-large)] border border-dashed border-[var(--line-soft)] px-3 py-2.5 text-left text-[0.85rem] lowercase text-content-secondary hover:text-content-primary"
-        >
-          <Plus size={14} /> use "{custom}" as a custom exercise
-        </button>
-      )}
-
       <div className="divide-y divide-[var(--line-soft)]">
         {shown.map((e) => (
-          <button
-            key={e.id}
-            aria-label={`${verb} ${e.name}`}
-            onClick={() => {
-              onPick(e.name);
-              onClose();
-            }}
-            className="focus-ring flex w-full items-center gap-3 py-2.5 text-left"
-          >
-            <ExerciseThumb name={e.name} alt="" size={52} />
-            <span className="min-w-0 flex-1">
-              <span className="block truncate text-[0.92rem] lowercase text-content-primary">{e.name}</span>
-              <span className="label-instrument">
-                {(e.primary[0] ?? e.bodyPart) + " · " + e.equipment}
-              </span>
-            </span>
-          </button>
+          <ExerciseRow key={e.id} name={e.name} entry={e} verb={verb} onPick={pick} />
         ))}
         {cat.length > 0 && shown.length === 0 && (
           <p className="label-instrument py-4">no exercises match — try a different filter.</p>
         )}
       </div>
+
+      {/* after the real matches, so a near-miss search doesn't log an untracked custom name */}
+      {custom && !hasExact && (
+        <button
+          onClick={() => pick(custom)}
+          className="focus-ring mt-2 flex w-full items-center gap-2 rounded-[var(--radius-large)] border border-dashed border-[var(--line-soft)] px-3 py-2.5 text-left text-[0.85rem] lowercase text-content-secondary hover:text-content-primary"
+        >
+          <Plus size={14} /> use "{custom}" as a custom exercise
+        </button>
+      )}
     </DetailDrawer>
+  );
+}
+
+function ExerciseRow({
+  name,
+  entry,
+  verb,
+  onPick,
+}: {
+  name: string;
+  entry: RepDbCatalogEntry | null;
+  verb: string;
+  onPick: (name: string) => void;
+}) {
+  return (
+    <button
+      aria-label={`${verb} ${name}`}
+      onClick={() => onPick(name)}
+      className="focus-ring flex w-full items-center gap-3 py-2.5 text-left"
+    >
+      <ExerciseThumb name={name} alt="" size={52} />
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-[0.92rem] lowercase text-content-primary">{name}</span>
+        <span className="label-instrument">
+          {entry ? (entry.primary[0] ?? entry.bodyPart) + " · " + entry.equipment : "custom"}
+        </span>
+      </span>
+    </button>
   );
 }
