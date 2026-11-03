@@ -23,6 +23,7 @@ import { auth as authClient, session as tokenStore } from "./client";
 import { API_ENABLED, invalidateResource } from "./hooks";
 import type { User } from "./types";
 import { resetLocalData } from "../lib/localStore";
+import { clearEconomyCaches } from "../lib/economy";
 import { hydrateProfile } from "../lib/profileSync";
 
 type Status = "loading" | "authed" | "unverified" | "anon";
@@ -125,6 +126,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const clearLocal = () => {
     // also drops the in-memory copy, which removing the storage key alone left behind
     resetLocalData();
+    clearEconomyCaches();
     try {
       sessionStorage.removeItem("forma.sessionExpired"); // explicit sign-out, not an expiry
     } catch {

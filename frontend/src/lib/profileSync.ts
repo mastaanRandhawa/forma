@@ -13,6 +13,7 @@
 import { api } from "../api/client";
 import type { FitnessGoal, User, UserFull } from "../api/types";
 import { loadData, mergeProfile, resetLocalData, type Profile, type Units } from "./localStore";
+import { clearEconomyCaches } from "./economy";
 import { EQUIPMENT_API_KEY, GOAL_TO_API, LB_TO_KG } from "./profileOptions";
 
 const API_TO_GOAL: Partial<Record<FitnessGoal, string>> = {
@@ -66,7 +67,10 @@ function equipmentAndInjuries(u: UserFull, current: Profile): Partial<Profile> {
  */
 export function hydrateProfile(u: User): void {
   const owner = loadData().owner;
-  if (owner && owner !== u.id) resetLocalData();
+  if (owner && owner !== u.id) {
+    resetLocalData();
+    clearEconomyCaches();
+  }
   mergeProfile(profileFromUser(u, loadData().profile), u.id);
   void api.me
     .get()

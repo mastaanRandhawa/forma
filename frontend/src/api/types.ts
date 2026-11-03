@@ -1067,6 +1067,74 @@ export interface CustomizationState {
   balance: number;
 }
 
+// ── coin economy (backend/src/services/economy.ts) ──────────────────────────
+export interface EconomyReward {
+  amount: number;
+  label: string;
+  kind: string;
+}
+export interface EconomyEvent {
+  type: "freeze_used";
+  days: string[];
+}
+export interface EconomyChallenge {
+  id: string;
+  title: string;
+  detail: string;
+  target: number;
+  reward: number;
+  unit: string;
+  tone: "pink" | "cyan" | "lime" | "amber" | "violet";
+  current: number;
+  done: boolean;
+  paid: boolean;
+}
+export interface EconomyCap {
+  kind: string;
+  today: number;
+  week: number;
+  daily: number | null;
+  weekly: number | null;
+}
+export interface KaiReview {
+  title: string;
+  generatedAt: ISODate;
+  sections: { heading: string; body: string }[];
+}
+export interface EconomySnapshot {
+  balance: number;
+  lifetimeEarned: number;
+  earnedThisWeek: number;
+  recent: (WalletTransaction & { kind: string | null })[];
+  inventory: Record<string, number>;
+  protectedDays: string[];
+  streak: {
+    current: number;
+    repair: { days: string[]; restoresTo: number; price: number } | null;
+  };
+  week: string;
+  challenges: EconomyChallenge[];
+  rerollsLeft: number;
+  deals: { itemId: string; price: number; was: number }[];
+  caps: EconomyCap[];
+  lastReview: KaiReview | null;
+}
+export interface EconomySettled {
+  rewards: EconomyReward[];
+  events: EconomyEvent[];
+  economy: EconomySnapshot;
+}
+export interface EconomyPurchase extends EconomySettled {
+  customization: Omit<CustomizationState, "balance"> & { balance: number };
+}
+/** What `POST /sessions/:id/finish` paid. */
+export interface SessionEconomy {
+  rewards: EconomyReward[];
+  skipped: "too_few_sets" | "too_short" | null;
+  events: EconomyEvent[];
+  snapshot: EconomySnapshot;
+}
+
 export interface StoreItem {
   id: string;
   category: StoreCategory;

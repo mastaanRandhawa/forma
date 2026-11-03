@@ -71,7 +71,9 @@ export const insights = [
 
 export type CustomizationSlot =
   | "theme" | "accent" | "effect" | "avatar" | "chatTheme" | "frame" | "title" | "badge"
-  | "colorMode" | "font";
+  | "colorMode" | "font" | "persona" | "restSound" | "celebration"
+  /** an unlock with nothing to wear (a premium plan); never appears in the equipped map */
+  | "program";
 
 export type CustomizationRarity = "common" | "rare" | "epic" | "legendary";
 
@@ -79,7 +81,7 @@ export type CustomizationItem = {
   id: string;
   slot: CustomizationSlot;
   /** tab grouping on the store */
-  group: "Themes" | "Accents" | "Effects" | "Kai" | "Chat" | "Profile" | "Appearance" | "Font";
+  group: "Themes" | "Accents" | "Effects" | "Kai" | "Chat" | "Profile" | "Appearance" | "Font" | "Sounds" | "Programs";
   name: string;
   detail: string;
   price: number;
@@ -116,10 +118,10 @@ const effectItems: CustomizationItem[] = [
   { id: "fx-auto", slot: "effect", group: "Effects", name: "Match theme", detail: "use whatever ambience the theme ships with", price: 0, rarity: "common", glyph: "Wand2" },
   { id: "fx-none", slot: "effect", group: "Effects", name: "Clean", detail: "no ambient motion behind the UI", price: 0, rarity: "common", glyph: "Minus" },
   { id: "fx-glow", slot: "effect", group: "Effects", name: "Accent bloom", detail: "a soft breathing halo in the accent colour", price: 140, rarity: "rare", glyph: "Sun" },
-  { id: "fx-particles", slot: "effect", group: "Effects", name: "Drifting particles", detail: "slow motes of light float across the ground", price: 220, rarity: "rare", glyph: "Sparkles" },
-  { id: "fx-aurora", slot: "effect", group: "Effects", name: "Fast aurora", detail: "the background aurora moves noticeably quicker", price: 200, rarity: "rare", glyph: "Waves" },
+  { id: "fx-particles", slot: "effect", group: "Effects", name: "Drifting particles", detail: "slow motes of light float across the ground", price: 450, rarity: "rare", glyph: "Sparkles" },
+  { id: "fx-aurora", slot: "effect", group: "Effects", name: "Fast aurora", detail: "the background aurora moves noticeably quicker", price: 400, rarity: "rare", glyph: "Waves" },
   { id: "fx-grain", slot: "effect", group: "Effects", name: "Film grain", detail: "heavy analogue grain over everything", price: 160, rarity: "rare", glyph: "Grip" },
-  { id: "fx-scanlines", slot: "effect", group: "Effects", name: "CRT scanlines", detail: "horizontal scanlines and a faint flicker", price: 260, rarity: "epic", glyph: "Monitor" },
+  { id: "fx-scanlines", slot: "effect", group: "Effects", name: "CRT scanlines", detail: "horizontal scanlines and a faint flicker", price: 600, rarity: "epic", glyph: "Monitor" },
 ];
 
 const avatarItems: CustomizationItem[] = [
@@ -127,11 +129,11 @@ const avatarItems: CustomizationItem[] = [
   { id: "l-aurora", slot: "avatar", group: "Kai", name: "Aurora", detail: "pink into cyan", price: 150, rarity: "common", swatch: "linear-gradient(135deg,#D51A7A,#4D7CFF,#83E9F4)" },
   { id: "l-ember", slot: "avatar", group: "Kai", name: "Ember", detail: "coral and amber", price: 150, rarity: "common", swatch: "linear-gradient(135deg,#FF6B4A,#FFB661)" },
   { id: "l-frost", slot: "avatar", group: "Kai", name: "Frost", detail: "cool blue-white", price: 150, rarity: "common", swatch: "linear-gradient(135deg,#83E9F4,#4D7CFF)" },
-  { id: "l-nebula", slot: "avatar", group: "Kai", name: "Nebula", detail: "violet and wine", price: 220, rarity: "rare", swatch: "linear-gradient(135deg,#7F60FF,#7A174F)" },
-  { id: "l-jade", slot: "avatar", group: "Kai", name: "Jade", detail: "deep green glass", price: 220, rarity: "rare", swatch: "linear-gradient(135deg,#4FD6A6,#1C5C41)" },
-  { id: "l-mono", slot: "avatar", group: "Kai", name: "Monochrome", detail: "graphite and chrome", price: 260, rarity: "rare", swatch: "linear-gradient(135deg,#E8E8EC,#4A4A50)" },
-  { id: "l-gold", slot: "avatar", group: "Kai", name: "Midas", detail: "molten gold", price: 600, rarity: "epic", swatch: "linear-gradient(135deg,#F5C63C,#8A6A18)" },
-  { id: "l-holo", slot: "avatar", group: "Kai", name: "Holographic", detail: "shifting spectrum foil", price: 900, rarity: "legendary", swatch: "linear-gradient(135deg,#FF6CB0,#7BE0FF,#B6FF5C,#9C7BFF)" },
+  { id: "l-nebula", slot: "avatar", group: "Kai", name: "Nebula", detail: "violet and wine", price: 450, rarity: "rare", swatch: "linear-gradient(135deg,#7F60FF,#7A174F)" },
+  { id: "l-jade", slot: "avatar", group: "Kai", name: "Jade", detail: "deep green glass", price: 450, rarity: "rare", swatch: "linear-gradient(135deg,#4FD6A6,#1C5C41)" },
+  { id: "l-mono", slot: "avatar", group: "Kai", name: "Monochrome", detail: "graphite and chrome", price: 500, rarity: "rare", swatch: "linear-gradient(135deg,#E8E8EC,#4A4A50)" },
+  { id: "l-gold", slot: "avatar", group: "Kai", name: "Midas", detail: "molten gold", price: 1400, rarity: "epic", swatch: "linear-gradient(135deg,#F5C63C,#8A6A18)" },
+  { id: "l-holo", slot: "avatar", group: "Kai", name: "Holographic", detail: "shifting spectrum foil", price: 2600, rarity: "legendary", swatch: "linear-gradient(135deg,#FF6CB0,#7BE0FF,#B6FF5C,#9C7BFF)" },
 ];
 
 const chatItems: CustomizationItem[] = [
@@ -140,30 +142,30 @@ const chatItems: CustomizationItem[] = [
   { id: "t-terminal", slot: "chatTheme", group: "Chat", name: "Terminal", detail: "mono type, green cursor", price: 120, rarity: "common", swatch: "linear-gradient(135deg,#0A160A,#3BFF7A)" },
   { id: "t-paper", slot: "chatTheme", group: "Chat", name: "Paper", detail: "warm off-white note cards", price: 160, rarity: "rare", swatch: "linear-gradient(135deg,#E9E3D6,#C7BEA8)" },
   { id: "t-bubblegum", slot: "chatTheme", group: "Chat", name: "Bubblegum", detail: "rounded, bright, playful", price: 160, rarity: "rare", swatch: "linear-gradient(135deg,#FF8AC4,#7BE0FF)" },
-  { id: "t-ink", slot: "chatTheme", group: "Chat", name: "Ink", detail: "high-contrast black on cream", price: 200, rarity: "epic", swatch: "linear-gradient(135deg,#F4EEDF,#15130E)" },
+  { id: "t-ink", slot: "chatTheme", group: "Chat", name: "Ink", detail: "high-contrast black on cream", price: 400, rarity: "epic", swatch: "linear-gradient(135deg,#F4EEDF,#15130E)" },
 ];
 
 const profileItems: CustomizationItem[] = [
   // frames
   { id: "fr-none", slot: "frame", group: "Profile", name: "No frame", detail: "plain avatar pebble", price: 0, rarity: "common", glyph: "Circle" },
   { id: "fr-ring", slot: "frame", group: "Profile", name: "Accent ring", detail: "a glowing ring in your accent colour", price: 120, rarity: "common", glyph: "CircleDot" },
-  { id: "fr-laurel", slot: "frame", group: "Profile", name: "Laurel", detail: "for people who finish what they start", price: 300, rarity: "rare", glyph: "Award" },
-  { id: "fr-flame", slot: "frame", group: "Profile", name: "Streak flame", detail: "animated flame border, unlocks the vibe", price: 350, rarity: "rare", glyph: "Flame" },
-  { id: "fr-prism", slot: "frame", group: "Profile", name: "Prism", detail: "rotating spectrum edge", price: 700, rarity: "epic", glyph: "Aperture" },
-  { id: "fr-crown", slot: "frame", group: "Profile", name: "Crown", detail: "gold crown notch. subtle. mostly.", price: 1200, rarity: "legendary", glyph: "Crown" },
+  { id: "fr-laurel", slot: "frame", group: "Profile", name: "Laurel", detail: "for people who finish what they start", price: 500, rarity: "rare", glyph: "Award" },
+  { id: "fr-flame", slot: "frame", group: "Profile", name: "Streak flame", detail: "animated flame border, unlocks the vibe", price: 600, rarity: "rare", glyph: "Flame" },
+  { id: "fr-prism", slot: "frame", group: "Profile", name: "Prism", detail: "rotating spectrum edge", price: 1400, rarity: "epic", glyph: "Aperture" },
+  { id: "fr-crown", slot: "frame", group: "Profile", name: "Crown", detail: "gold crown notch. subtle. mostly.", price: 3000, rarity: "legendary", glyph: "Crown" },
   // titles
   { id: "ti-none", slot: "title", group: "Profile", name: "No title", detail: "just your name", price: 0, rarity: "common", glyph: "Minus" },
   { id: "ti-earlybird", slot: "title", group: "Profile", name: "“Early Bird”", detail: "shows under your name across the app", price: 150, rarity: "common", glyph: "Sunrise" },
   { id: "ti-ironwilled", slot: "title", group: "Profile", name: "“Iron-Willed”", detail: "shows under your name across the app", price: 150, rarity: "common", glyph: "Dumbbell" },
-  { id: "ti-relentless", slot: "title", group: "Profile", name: "“Relentless”", detail: "shows under your name across the app", price: 250, rarity: "rare", glyph: "Zap" },
-  { id: "ti-machine", slot: "title", group: "Profile", name: "“The Machine”", detail: "shows under your name across the app", price: 250, rarity: "rare", glyph: "Cpu" },
-  { id: "ti-legend", slot: "title", group: "Profile", name: "“Gym Legend”", detail: "you know why", price: 800, rarity: "epic", glyph: "Trophy" },
+  { id: "ti-relentless", slot: "title", group: "Profile", name: "“Relentless”", detail: "shows under your name across the app", price: 500, rarity: "rare", glyph: "Zap" },
+  { id: "ti-machine", slot: "title", group: "Profile", name: "“The Machine”", detail: "shows under your name across the app", price: 500, rarity: "rare", glyph: "Cpu" },
+  { id: "ti-legend", slot: "title", group: "Profile", name: "“Gym Legend”", detail: "you know why", price: 1600, rarity: "epic", glyph: "Trophy" },
   // badges
   { id: "bd-none", slot: "badge", group: "Profile", name: "No badge", detail: "no badge next to your name", price: 0, rarity: "common", glyph: "Minus" },
   { id: "bd-spark", slot: "badge", group: "Profile", name: "Spark badge", detail: "a small accent spark by your name", price: 100, rarity: "common", glyph: "Sparkle" },
   { id: "bd-bolt", slot: "badge", group: "Profile", name: "Bolt badge", detail: "a lightning mark by your name", price: 100, rarity: "common", glyph: "Zap" },
-  { id: "bd-star", slot: "badge", group: "Profile", name: "Star badge", detail: "a filled star by your name", price: 200, rarity: "rare", glyph: "Star" },
-  { id: "bd-diamond", slot: "badge", group: "Profile", name: "Diamond badge", detail: "a cut-gem mark by your name", price: 500, rarity: "epic", glyph: "Gem" },
+  { id: "bd-star", slot: "badge", group: "Profile", name: "Star badge", detail: "a filled star by your name", price: 400, rarity: "rare", glyph: "Star" },
+  { id: "bd-diamond", slot: "badge", group: "Profile", name: "Diamond badge", detail: "a cut-gem mark by your name", price: 1200, rarity: "epic", glyph: "Gem" },
 ];
 
 const colorModeItems: CustomizationItem[] = [
@@ -242,6 +244,36 @@ const fontItems: CustomizationItem[] = [
   },
 ];
 
+const personaItems: CustomizationItem[] = [
+  { id: "ps-kai", slot: "persona", group: "Kai", name: "Kai", detail: "steady, direct and on your side", price: 0, rarity: "common", glyph: "MessageSquare" },
+  { id: "ps-drill", slot: "persona", group: "Kai", name: "Drill Sergeant", detail: "Kai turns blunt and relentless, in chat and between your sets", price: 600, rarity: "epic", glyph: "Megaphone" },
+  { id: "ps-zen", slot: "persona", group: "Kai", name: "Zen Master", detail: "Kai turns patient and calm, in chat and between your sets", price: 600, rarity: "epic", glyph: "Leaf" },
+  { id: "ps-analyst", slot: "persona", group: "Kai", name: "The Analyst", detail: "Kai leads with the numbers, in chat and between your sets", price: 600, rarity: "epic", glyph: "ChartLine" },
+  { id: "ps-hype", slot: "persona", group: "Kai", name: "Hype Squad", detail: "Kai turns loud and positive, in chat and between your sets", price: 600, rarity: "epic", glyph: "PartyPopper" },
+];
+
+const soundItems: CustomizationItem[] = [
+  { id: "rs-chime", slot: "restSound", group: "Sounds", name: "Soft chime", detail: "two gentle tones when your rest is up", price: 0, rarity: "common", glyph: "BellRing" },
+  { id: "rs-bell", slot: "restSound", group: "Sounds", name: "Boxing bell", detail: "a sharp ding-ding to get you back in the ring", price: 120, rarity: "common", glyph: "Bell" },
+  { id: "rs-arcade", slot: "restSound", group: "Sounds", name: "Arcade", detail: "an 8-bit level-up jingle", price: 180, rarity: "rare", glyph: "Gamepad2" },
+  { id: "rs-sonar", slot: "restSound", group: "Sounds", name: "Sonar", detail: "a deep ping from far below", price: 180, rarity: "rare", glyph: "Radio" },
+  { id: "rs-bowl", slot: "restSound", group: "Sounds", name: "Singing bowl", detail: "a long, slow, resonant tone", price: 240, rarity: "rare", glyph: "Waves" },
+];
+
+const celebrationItems: CustomizationItem[] = [
+  { id: "cl-confetti", slot: "celebration", group: "Effects", name: "Confetti", detail: "the classic burst after a PR or a big milestone", price: 0, rarity: "common", glyph: "PartyPopper" },
+  { id: "cl-sparks", slot: "celebration", group: "Effects", name: "Sparks", detail: "a fast shower of sparks after a PR or a big milestone", price: 200, rarity: "rare", glyph: "Sparkles" },
+  { id: "cl-coins", slot: "celebration", group: "Effects", name: "Gold rain", detail: "coins pour down after a PR or a big milestone", price: 450, rarity: "epic", glyph: "Coins" },
+  { id: "cl-fireworks", slot: "celebration", group: "Effects", name: "Fireworks", detail: "rings of light burst overhead after a PR or a big milestone", price: 800, rarity: "epic", glyph: "Rocket" },
+];
+
+// the plans themselves are in lib/workoutPlans; this is what unlocks them
+const programItems: CustomizationItem[] = [
+  { id: "pl-powerbuilding", slot: "program", group: "Programs", name: "Powerbuilding", detail: "4 days a week: a heavy main lift, then real hypertrophy work", price: 1500, rarity: "epic", glyph: "Dumbbell" },
+  { id: "pl-arms", slot: "program", group: "Programs", name: "Arm Specialization", detail: "4 days a week, with biceps and triceps trained first on two of them", price: 900, rarity: "rare", glyph: "Dumbbell" },
+  { id: "pl-glutes", slot: "program", group: "Programs", name: "Glute Priority", detail: "3 days a week of hip-dominant lower body, plus balanced upper work", price: 900, rarity: "rare", glyph: "Dumbbell" },
+];
+
 export const customizationItems: CustomizationItem[] = [
   ...themeItems,
   ...accentItems,
@@ -251,6 +283,10 @@ export const customizationItems: CustomizationItem[] = [
   ...profileItems,
   ...colorModeItems,
   ...fontItems,
+  ...personaItems,
+  ...soundItems,
+  ...celebrationItems,
+  ...programItems,
 ];
 
 export type GoalTone = "pink" | "cyan" | "lime" | "amber" | "mauve" | "violet";

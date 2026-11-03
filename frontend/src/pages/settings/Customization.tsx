@@ -1,9 +1,9 @@
 import { Link } from "react-router-dom";
 import { Check, Lock, Monitor, Moon, Sun } from "lucide-react";
 import { Section } from "../../components/settings/ui";
-import { customizationItems, type CustomizationSlot } from "../../lib/data";
+import { customizationItems } from "../../lib/data";
 import { THEMES, resolveColorMode } from "../../lib/themes";
-import { useCustomization } from "../../lib/customization";
+import { useCustomization, type Slot } from "../../lib/customization";
 import { useWallet } from "../../lib/wallet";
 
 const RARITY_TEXT: Record<string, string> = {
@@ -13,13 +13,16 @@ const RARITY_TEXT: Record<string, string> = {
   legendary: "text-[var(--accent-amber)]",
 };
 
-const OTHER_SLOTS: { slot: CustomizationSlot; title: string; desc: string }[] = [
+const OTHER_SLOTS: { slot: Slot; title: string; desc: string }[] = [
   { slot: "effect", title: "ambient effect", desc: "the motion layer behind the interface. some themes ship their own." },
   { slot: "avatar", title: "kai's look", desc: "the gradient on kai's avatar in chat and on the coach orb." },
   { slot: "chatTheme", title: "chat skin", desc: "how the trainer conversation is styled." },
   { slot: "frame", title: "profile frame", desc: "the ring around your avatar in the top bar." },
   { slot: "title", title: "profile title", desc: "shown under your name across the app." },
   { slot: "badge", title: "profile badge", desc: "a small mark next to your name." },
+  { slot: "persona", title: "kai's persona", desc: "how kai talks to you, in chat and between your sets." },
+  { slot: "restSound", title: "rest-timer sound", desc: "what plays when your rest is up." },
+  { slot: "celebration", title: "celebration", desc: "the burst after a pr, weekly target or streak milestone." },
 ];
 
 const COLOR_MODES: { id: "cm-light" | "cm-dark" | "cm-system"; label: string; icon: typeof Sun }[] = [
@@ -40,7 +43,7 @@ function LockedNote({ count }: { count: number }) {
   );
 }
 
-function SlotGrid({ slot }: { slot: CustomizationSlot }) {
+function SlotGrid({ slot }: { slot: Slot }) {
   const cz = useCustomization();
   const items = customizationItems.filter((i) => i.slot === slot);
   const locked = items.filter((i) => !cz.isOwned(i.id)).length;
@@ -49,11 +52,11 @@ function SlotGrid({ slot }: { slot: CustomizationSlot }) {
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
         {items.map((item) => {
           const owned = cz.isOwned(item.id);
-          const active = cz.isEquipped(item.id, item.slot);
+          const active = cz.isEquipped(item.id, slot);
           return (
             <button
               key={item.id}
-              onClick={() => owned && cz.setSlot(item.slot, item.id)}
+              onClick={() => owned && cz.equip(item)}
               disabled={!owned}
               title={owned ? item.name : `${item.name} — ${item.price} coins`}
               className={`focus-ring relative flex items-center gap-2 rounded-xl border px-2.5 py-2 text-left transition-colors ${

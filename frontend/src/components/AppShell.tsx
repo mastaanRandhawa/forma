@@ -3,7 +3,7 @@ import { Suspense, useEffect, useState } from "react";
 import { House, Dumbbell, MessageSquare, Apple, Library, Trophy } from "lucide-react";
 import { API_ENABLED } from "../api/hooks";
 import { useFormaData } from "../lib/localStore";
-import { grantDailyBonus } from "../lib/rewards";
+import { settleEconomy } from "../lib/rewards";
 import { CoinToast } from "./CoinToast";
 import { AtmosphericBackground } from "./layout/AtmosphericBackground";
 import { TopNav, type NavItem } from "./layout/TopNav";
@@ -44,9 +44,9 @@ export function AppShell() {
   // Suspense handles that. The top progress bar reflects router loader work.
   const showSkeleton = navigation.state === "loading";
 
-  // pay the daily check-in bonus once per calendar day (idempotent)
+  // pay what's owed on open, once per calendar day per rule (idempotent)
   useEffect(() => {
-    const t = setTimeout(() => grantDailyBonus(), 1200);
+    const t = setTimeout(() => settleEconomy(), 1200);
     return () => clearTimeout(t);
   }, []);
 

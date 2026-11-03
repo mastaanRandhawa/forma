@@ -19,6 +19,7 @@ import {
 } from "../../lib/food";
 import { MiniCalendar } from "./MiniCalendar";
 import { AddFoodSheet } from "./AddFoodSheet";
+import { settleEconomy } from "../../lib/rewards";
 
 const TABS = ["today", "trends"] as const;
 
@@ -106,6 +107,7 @@ export default function FoodLog() {
         date={date}
         onClose={() => setAdd((s) => ({ ...s, open: false }))}
         onLogged={(d) => {
+          settleEconomy();
           setDay(d);
           setAdd((s) => ({ ...s, open: false }));
         }}

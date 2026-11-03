@@ -1,14 +1,22 @@
 import { useSyncExternalStore } from "react";
 import { API_ENABLED } from "../api/hooks";
 import { api } from "../api/client";
+import type { EconomySnapshot } from "../api/types";
+import { EARN_CAPS, type EarnKind } from "./economyConfig";
+import { weekStart } from "./streak";
 
 /**
- * Forma coin wallet — a persisted client-side economy.
+ * Forma coin wallet.
  *
- * Everything lives in this browser (localStorage). The store keeps a running
+ * Without a backend everything lives in this browser (localStorage): a running
  * balance, a lifetime-earned counter (drives the collector level), a ledger of
- * the most recent transactions, and a set of idempotency keys so a one-time
- * reward (an achievement, a milestone, today's check-in) is only ever paid once.
+ * the most recent transactions, idempotency keys so a one-time reward (an
+ * achievement, a milestone, today's check-in) is only ever paid once, and the
+ * payout times the daily and weekly caps count.
+ *
+ * With a backend the server owns all of that. This store only mirrors its
+ * balance and ledger (`applyServer`), and `earn()` refuses to run: a client must
+ * never decide how many coins it gets.
  *
  * `earn()` / `spend()` emit to subscribers; `useWalletBalance()` /
  * `useWallet()` / `useLedger()` re-render on any change. `earn()` also fans out
@@ -34,6 +42,10 @@ type WalletState = {
   ledger: LedgerEntry[];
   /** idempotency: reward key -> ISO timestamp it was granted */
   grants: Record<string, string>;
+  /** caps: rule -> when it paid, kept for about a week */
+  paid: Record<string, string[]>;
+  /** the server's figure in API mode, where the local ledger is only its last 25 rows */
+  earnedThisWeek?: number;
 };
 
 // ── collector levels ────────────────────────────────────────────────────────
@@ -67,7 +79,7 @@ export function levelFor(lifetimeEarned: number) {
 // ── persistence ─────────────────────────────────────────────────────────────
 /** A new wallet starts empty — every coin in it is one the user earned. */
 function seedState(): WalletState {
-  return { balance: 0, lifetimeEarned: 0, ledger: [], grants: {} };
+  return { balance: 0, lifetimeEarned: 0, ledger: [], grants: {}, paid: {} };
 }
 
 function load(): WalletState {
@@ -80,6 +92,8 @@ function load(): WalletState {
       lifetimeEarned: typeof p.lifetimeEarned === "number" ? p.lifetimeEarned : 0,
       ledger: Array.isArray(p.ledger) ? p.ledger.slice(0, LEDGER_CAP) : [],
       grants: p.grants && typeof p.grants === "object" ? p.grants : {},
+      paid: p.paid && typeof p.paid === "object" ? p.paid : {},
+      earnedThisWeek: typeof p.earnedThisWeek === "number" ? p.earnedThisWeek : undefined,
     };
   } catch {
     return seedState();
@@ -107,6 +121,20 @@ function pushLedger(entry: LedgerEntry) {
   state.ledger = [entry, ...state.ledger].slice(0, LEDGER_CAP);
 }
 
+const startOfToday = () => new Date().setHours(0, 0, 0, 0);
+const paidSince = (kind: string, from: number) =>
+  (state.paid[kind] ?? []).filter((at) => Date.parse(at) >= from).length;
+
+/** Has this rule hit its daily or weekly cap? */
+function capped(kind: string): boolean {
+  const caps = EARN_CAPS[kind as EarnKind];
+  if (!caps) return false;
+  return (
+    (caps.daily != null && paidSince(kind, startOfToday()) >= caps.daily) ||
+    (caps.weekly != null && paidSince(kind, weekStart()) >= caps.weekly)
+  );
+}
+
 // ── public API ──────────────────────────────────────────────────────────────
 export const walletStore = {
   get: () => state.balance,
@@ -115,26 +143,26 @@ export const walletStore = {
   /** Has this idempotency key already been paid? */
   hasGrant: (key: string) => Boolean(state.grants[key]),
 
+  /** How often a rule has paid today and this week, for the store's "earn" panel. */
+  capUsage: (kind: string) => ({ today: paidSince(kind, startOfToday()), week: paidSince(kind, weekStart()) }),
+
   /**
-   * Add coins. Returns false if `key` was already granted (nothing happens).
-   * `kind` tags the entry for the ledger UI ("workout" | "streak" | "goal" |
-   * "achievement" | "challenge" | "daily" | "milestone" | "bonus").
+   * Add coins (no-backend build only; the server pays in API mode). Returns false
+   * if `key` was already granted or the rule is at its cap (nothing happens).
+   * `kind` is an earn rule from lib/economyConfig, which sets the caps.
    */
   earn(amount: number, label: string, opts: { key?: string; kind?: string; silent?: boolean } = {}) {
-    if (amount <= 0) return false;
-    if (opts.key) {
-      if (state.grants[opts.key]) return false;
-      state.grants[opts.key] = new Date().toISOString();
+    if (API_ENABLED || amount <= 0) return false;
+    if (opts.key && state.grants[opts.key]) return false;
+    if (opts.kind && capped(opts.kind)) return false;
+    const now = new Date().toISOString();
+    if (opts.key) state.grants[opts.key] = now;
+    if (opts.kind) {
+      const keepFrom = weekStart() - 86_400_000;
+      state.paid[opts.kind] = [...(state.paid[opts.kind] ?? []).filter((at) => Date.parse(at) >= keepFrom), now];
     }
     state.balance += amount;
     state.lifetimeEarned += amount;
-    if (API_ENABLED) {
-      // mirror the credit to the server wallet; reconcile from its response
-      api.store
-        .earn(amount, label)
-        .then((w) => walletStore.setBalance((w as { balance: number }).balance))
-        .catch(() => {});
-    }
     pushLedger({
       id: `tx-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       type: "earn",
@@ -176,18 +204,28 @@ export const walletStore = {
     }
   },
 
+  /** mirror the server's wallet: balance, lifetime total, and ledger */
+  applyServer(s: Pick<EconomySnapshot, "balance" | "lifetimeEarned" | "earnedThisWeek" | "recent">) {
+    state.balance = s.balance;
+    state.lifetimeEarned = s.lifetimeEarned;
+    state.earnedThisWeek = s.earnedThisWeek;
+    state.ledger = s.recent.map((t) => ({
+      id: t.id,
+      type: t.type,
+      amount: t.amount,
+      label: t.label,
+      kind: t.kind ?? (t.type === "spend" ? "purchase" : "bonus"),
+      at: t.createdAt,
+    }));
+    emit();
+  },
+
   /** pull the authoritative balance from the server wallet (API builds only) */
   hydrateFromServer() {
     if (!API_ENABLED) return;
     api.store
       .wallet()
-      .then((w) => {
-        walletStore.setBalance(w.balance);
-        if (state.lifetimeEarned < w.balance) {
-          state.lifetimeEarned = w.balance;
-          emit();
-        }
-      })
+      .then((w) => walletStore.setBalance(w.balance))
       .catch(() => {});
   },
 
@@ -224,10 +262,10 @@ export function useWallet() {
     walletStore.snapshot,
     walletStore.snapshot,
   );
-  const weekAgo = Date.now() - 7 * 86_400_000;
-  const earnedThisWeek = snap.ledger
-    .filter((e) => e.type === "earn" && Date.parse(e.at) >= weekAgo)
-    .reduce((n, e) => n + e.amount, 0);
+  const from = weekStart();
+  const earnedThisWeek =
+    snap.earnedThisWeek ??
+    snap.ledger.filter((e) => e.type === "earn" && Date.parse(e.at) >= from).reduce((n, e) => n + e.amount, 0);
   return {
     balance: snap.balance,
     lifetimeEarned: snap.lifetimeEarned,

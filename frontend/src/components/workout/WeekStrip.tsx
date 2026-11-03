@@ -1,5 +1,6 @@
 import { Check, Flame } from "lucide-react";
 import { currentStreak, weekProgress } from "../../lib/fitness";
+import { useProtectedDays } from "../../lib/streak";
 import type { CompletedSession } from "../../lib/localStore";
 
 const LETTERS = ["m", "t", "w", "t", "f", "s", "s"];
@@ -19,6 +20,7 @@ export function WeekStrip({
   className?: string;
 }) {
   const { days, count, todayIndex } = weekProgress(sessions);
+  useProtectedDays();
   const streak = currentStreak(sessions);
   const hit = goal != null && count >= goal;
   return (

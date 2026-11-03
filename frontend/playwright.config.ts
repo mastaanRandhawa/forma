@@ -4,6 +4,8 @@ import { defineConfig, devices } from "@playwright/test";
 //   E2E_WEB_PORT (default 5178) — Vite;  E2E_API_PORT (default 4000) — the API.
 const WEB_PORT = Number(process.env.E2E_WEB_PORT ?? 5178);
 const API_PORT = Number(process.env.E2E_API_PORT ?? 4000);
+// the no-backend build, for specs that exercise local mode
+const OFFLINE_PORT = Number(process.env.E2E_OFFLINE_PORT ?? WEB_PORT + 1);
 const WEB_URL = `http://localhost:${WEB_PORT}`;
 const API_URL = `http://localhost:${API_PORT}/api/v1`;
 
@@ -59,6 +61,12 @@ export default defineConfig({
           command: `npx vite --port ${WEB_PORT} --strictPort`,
           url: WEB_URL,
           env: { VITE_API_URL: API_URL },
+          reuseExistingServer: true,
+          timeout: 60_000,
+        },
+        {
+          command: `npx vite --mode offline --port ${OFFLINE_PORT} --strictPort`,
+          url: `http://localhost:${OFFLINE_PORT}`,
           reuseExistingServer: true,
           timeout: 60_000,
         },

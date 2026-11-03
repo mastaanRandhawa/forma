@@ -1,4 +1,8 @@
-import { CalendarDays, ChevronRight, Clock, Play } from "lucide-react";
+import { CalendarDays, ChevronRight, Clock, Coins, Lock, Play } from "lucide-react";
+import { useState } from "react";
+import { useCustomization } from "../../lib/customization";
+import { buyItem, priceOf } from "../../lib/economy";
+import { useWalletBalance } from "../../lib/wallet";
 import { ExerciseThumb } from "../ExerciseThumb";
 import {
   EQUIPMENT_CLASS_LABEL,
@@ -14,6 +18,8 @@ import {
 
 /** A multi-day plan in the library grid. The whole card opens the plan. */
 export function PlanCard({ plan, onOpen }: { plan: WorkoutPlan; onOpen: () => void }) {
+  const cz = useCustomization();
+  const locked = plan.premium != null && !cz.isOwned(plan.premium);
   return (
     <article className="surface-soft flex flex-col p-5" aria-label={plan.name}>
       <button
@@ -21,7 +27,18 @@ export function PlanCard({ plan, onOpen }: { plan: WorkoutPlan; onOpen: () => vo
         aria-label={`view plan: ${plan.name}`}
         className="focus-ring group -m-1 flex-1 rounded-[var(--radius-medium)] p-1 text-left"
       >
-        <h3 className="text-[1rem] lowercase text-content-primary">{plan.name}</h3>
+        <h3 className="flex items-start justify-between gap-2 text-[1rem] lowercase text-content-primary">
+          <span>{plan.name}</span>
+          {plan.premium && (
+            <span
+              className="mt-0.5 inline-flex shrink-0 items-center gap-1 rounded-pill border border-[var(--accent-amber)]/40 px-2 py-0.5 text-[0.66rem] text-[var(--accent-amber)]"
+              data-testid={locked ? "plan-locked" : "plan-unlocked"}
+            >
+              {locked ? <Lock size={10} aria-label="locked" /> : null}
+              premium
+            </span>
+          )}
+        </h3>
         <p className="mt-1 line-clamp-2 text-[0.83rem] leading-snug text-content-secondary">{plan.description}</p>
         <div className="mt-3 flex items-center gap-1.5" aria-hidden>
           {planTemplates(plan).slice(0, 6).map(({ label, template }) => (
@@ -67,6 +84,22 @@ export function PlanPreview({
   onSaveAll: () => void;
   busy?: boolean;
 }) {
+  const cz = useCustomization();
+  const balance = useWalletBalance();
+  const [unlocking, setUnlocking] = useState(false);
+  const [unlockError, setUnlockError] = useState<string | null>(null);
+  const locked = plan.premium != null && !cz.isOwned(plan.premium);
+  const price = plan.premium ? priceOf(plan.premium) ?? 0 : 0;
+
+  const unlock = async () => {
+    if (!plan.premium) return;
+    setUnlocking(true);
+    setUnlockError(null);
+    const res = await buyItem(plan.premium);
+    setUnlocking(false);
+    if (!res.ok) setUnlockError(res.error);
+  };
+
   const days = planTemplates(plan);
   const facts: [string, string][] = [
     ["days / week", String(plan.daysPerWeek)],
@@ -113,26 +146,53 @@ export function PlanPreview({
             >
               details
             </button>
-            <button
-              onClick={() => onStartDay(template)}
-              disabled={busy}
-              aria-label={`start ${label}`}
-              className="focus-ring grid h-10 w-10 place-items-center rounded-full bg-[var(--accent-pink)] text-white disabled:opacity-50"
-            >
-              <Play size={14} aria-hidden />
-            </button>
+            {locked ? (
+              <span className="grid h-10 w-10 place-items-center rounded-full bg-white/[0.06] text-content-tertiary" aria-label="locked">
+                <Lock size={14} aria-hidden />
+              </span>
+            ) : (
+              <button
+                onClick={() => onStartDay(template)}
+                disabled={busy}
+                aria-label={`start ${label}`}
+                className="focus-ring grid h-10 w-10 place-items-center rounded-full bg-[var(--accent-pink)] text-white disabled:opacity-50"
+              >
+                <Play size={14} aria-hidden />
+              </button>
+            )}
           </li>
         ))}
       </ol>
 
-      <button
-        onClick={onSaveAll}
-        disabled={busy}
-        className="focus-ring mt-5 min-h-11 w-full rounded-pill border border-[var(--line-soft)] text-[0.84rem] lowercase text-content-secondary hover:text-content-primary disabled:opacity-50"
-      >
-        {busy ? "saving…" : `save all ${days.length} days to my workouts`}
-      </button>
-      <p className="label-instrument mt-2 text-center">saved days are your own copies — edit them freely.</p>
+      {locked ? (
+        <>
+          <button
+            onClick={unlock}
+            disabled={unlocking || balance < price}
+            className="focus-ring mt-5 flex min-h-11 w-full items-center justify-center gap-1.5 rounded-pill bg-[var(--accent-amber)] text-[0.84rem] font-medium lowercase text-[#0c0c0c] disabled:opacity-50"
+          >
+            <Coins size={14} aria-hidden />
+            {balance < price
+              ? `${(price - balance).toLocaleString()} more coins to unlock`
+              : unlocking
+                ? "unlocking…"
+                : `unlock for ${price.toLocaleString()}`}
+          </button>
+          {unlockError && <p className="label-instrument mt-2 text-center text-[var(--accent-pink)]">{unlockError}</p>}
+          <p className="label-instrument mt-2 text-center">a premium plan, yours for good once unlocked.</p>
+        </>
+      ) : (
+        <>
+          <button
+            onClick={onSaveAll}
+            disabled={busy}
+            className="focus-ring mt-5 min-h-11 w-full rounded-pill border border-[var(--line-soft)] text-[0.84rem] lowercase text-content-secondary hover:text-content-primary disabled:opacity-50"
+          >
+            {busy ? "saving…" : `save all ${days.length} days to my workouts`}
+          </button>
+          <p className="label-instrument mt-2 text-center">saved days are your own copies — edit them freely.</p>
+        </>
+      )}
     </div>
   );
 }

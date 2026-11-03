@@ -29,7 +29,7 @@ test.beforeEach(async ({ page }) => {
 
 test("library lists plans and single workouts with a live count", async ({ page }) => {
   await openTemplates(page);
-  await expect(count(page)).toHaveText(/10 plans · 5\d workouts/);
+  await expect(count(page)).toHaveText(/13 plans · 5\d workouts/);
   await expect(page.getByRole("heading", { name: "training plans" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "single workouts" })).toBeVisible();
   await expect(page.getByRole("article", { name: "Push / Pull / Legs — 6 days" })).toBeVisible();
@@ -64,7 +64,7 @@ test("goal, equipment and days filters combine; empty result offers a way out", 
   await page.getByRole("searchbox", { name: "search workouts and plans" }).fill("zzzz-no-match");
   await expect(page.getByText("nothing matches")).toBeVisible();
   await page.getByRole("button", { name: "clear filters" }).first().click();
-  await expect(count(page)).toHaveText(/10 plans/);
+  await expect(count(page)).toHaveText(/13 plans/);
 });
 
 test("plan details show schedule, progression and every day", async ({ page }) => {

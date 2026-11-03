@@ -9,6 +9,7 @@
  *   PR           = beats the previous best weight, e1RM, or set volume
  */
 import type { CompletedSession, LoggedExercise, LoggedSet } from "./localStore";
+import { localDayOf, shiftDay, streakLength, streakProtection, todayKey } from "./streak";
 
 export const epley1RM = (weight: number, reps: number): number =>
   reps <= 0 ? 0 : Math.round(weight * (1 + reps / 30));
@@ -27,23 +28,22 @@ const startOfDay = (iso: string) => {
   d.setHours(0, 0, 0, 0);
   return d;
 };
-const dayKey = (iso: string) => startOfDay(iso).toISOString().slice(0, 10);
+const dayKey = localDayOf;
+
+/** A session only counts toward a streak if a working set was actually done in it. */
+const hasWork = (s: CompletedSession) => s.exercises.some((e) => e.sets.some((set) => set.done && !set.warmup));
+
+/** The calendar days with real training on them. */
+export const trainedDays = (sessions: CompletedSession[]): Set<string> =>
+  new Set(sessions.filter(hasWork).map((s) => dayKey(s.finishedAt)));
 
 // ── streaks ─────────────────────────────────────────────────────────────────
-/** Consecutive days up to today (or yesterday) with a logged session. */
+/**
+ * Consecutive days up to today (or yesterday) with real training on them. A day
+ * covered by a Streak Freeze or Repair bridges the run but doesn't add to it.
+ */
 export function currentStreak(sessions: CompletedSession[]): number {
-  if (!sessions.length) return 0;
-  const days = new Set(sessions.map((s) => dayKey(s.finishedAt)));
-  let streak = 0;
-  const cursor = new Date();
-  cursor.setHours(0, 0, 0, 0);
-  // allow the streak to still count if today hasn't been trained yet
-  if (!days.has(cursor.toISOString().slice(0, 10))) cursor.setDate(cursor.getDate() - 1);
-  while (days.has(cursor.toISOString().slice(0, 10))) {
-    streak += 1;
-    cursor.setDate(cursor.getDate() - 1);
-  }
-  return streak;
+  return streakLength(trainedDays(sessions), streakProtection.get(), todayKey());
 }
 
 /** This week, Monday first: which days had a session, and how many sessions in total. */
@@ -55,7 +55,7 @@ export function weekProgress(sessions: CompletedSession[], now = new Date()): { 
   const keys = Array.from({ length: 7 }, (_, i) => {
     const d = new Date(monday);
     d.setDate(monday.getDate() + i);
-    return d.toISOString().slice(0, 10);
+    return todayKey(d);
   });
   const thisWeek = sessions.filter((s) => keys.includes(dayKey(s.finishedAt)));
   const trained = new Set(thisWeek.map((s) => dayKey(s.finishedAt)));
@@ -63,19 +63,16 @@ export function weekProgress(sessions: CompletedSession[], now = new Date()): { 
 }
 
 export function longestStreak(sessions: CompletedSession[]): number {
-  if (!sessions.length) return 0;
-  const days = [...new Set(sessions.map((s) => dayKey(s.finishedAt)))].sort();
-  let best = 1;
-  let run = 1;
-  for (let i = 1; i < days.length; i++) {
-    const prev = new Date(days[i - 1]);
-    prev.setDate(prev.getDate() + 1);
-    if (prev.toISOString().slice(0, 10) === days[i]) {
-      run += 1;
-      best = Math.max(best, run);
-    } else {
-      run = 1;
-    }
+  const trained = trainedDays(sessions);
+  if (!trained.size) return 0;
+  const cover = streakProtection.get();
+  const days = [...new Set([...trained, ...cover])].sort();
+  let best = 0;
+  let run = 0;
+  for (let i = 0; i < days.length; i++) {
+    if (i > 0 && shiftDay(days[i - 1], 1) !== days[i]) run = 0;
+    if (trained.has(days[i])) run += 1;
+    best = Math.max(best, run);
   }
   return best;
 }
@@ -185,6 +182,24 @@ export function detectPRs(session: { exercises: LoggedExercise[] }, priorSession
     }
   }
   return prs;
+}
+
+/**
+ * The lifts this session genuinely improved. Unlike `detectPRs` a lift's first
+ * log doesn't count: that's a baseline, not a record, and it mustn't pay coins.
+ */
+export function improvedLifts(session: { exercises: LoggedExercise[] }, priorSessions: CompletedSession[]): string[] {
+  const prior = bestByExercise(priorSessions);
+  return session.exercises.flatMap((e) => {
+    const was = prior.get(e.name);
+    if (!was) return [];
+    const beat = e.sets.some(
+      (set) =>
+        set.done && !set.warmup && set.weight && set.reps &&
+        (epley1RM(set.weight, set.reps) > was.max1RM || set.weight > was.maxWeight),
+    );
+    return beat ? [e.name] : [];
+  });
 }
 
 export interface PRRow {

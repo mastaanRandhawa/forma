@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Check, Moon } from "lucide-react";
 import { DetailDrawer } from "../dashboard/DetailDrawer";
 import { addCheckin, latestCheckin, useFormaData } from "../../lib/localStore";
+import { settleEconomy } from "../../lib/rewards";
 import { readinessFromCheckin } from "../../api/localDashboard";
 import { API_ENABLED } from "../../api/hooks";
 import { api } from "../../api/client";
@@ -64,6 +65,7 @@ export function DailyCheckinDrawer({ open, onClose }: { open: boolean; onClose: 
     if (API_ENABLED) {
       await api.progress.checkin({ sleepH, sleepQuality, fatigue, soreness }).catch(() => {});
     }
+    settleEconomy();
     setSaving(false);
     onClose();
   }

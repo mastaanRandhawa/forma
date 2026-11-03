@@ -3,6 +3,8 @@ import { type Page, expect } from "@playwright/test";
 // match playwright.config.ts: E2E_WEB_PORT / E2E_API_PORT override the defaults
 export const BASE = `http://localhost:${process.env.E2E_WEB_PORT ?? 5178}`;
 export const API = `http://localhost:${process.env.E2E_API_PORT ?? 4000}/api/v1`;
+/** The no-backend build, for specs that exercise local mode. */
+export const OFFLINE_BASE = `http://localhost:${process.env.E2E_OFFLINE_PORT ?? Number(process.env.E2E_WEB_PORT ?? 5178) + 1}`;
 
 export const TEST_USER = {
   email: "alex@forma.app",

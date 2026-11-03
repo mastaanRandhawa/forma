@@ -14,6 +14,7 @@ import { ActivityList } from "../components/dashboard/ActivityList";
 import { DashboardProvider, DashboardLoadingProvider } from "../api/dashboard-context";
 import { buildLocalDashboard, readinessFromCheckin } from "../api/localDashboard";
 import { useFormaData, hasRecoveryData, latestCheckin } from "../lib/localStore";
+import { useProtectedDays } from "../lib/streak";
 import { DailyCheckinCard } from "../components/health/DailyCheckin";
 import {
   adherence,
@@ -62,7 +63,10 @@ export default function Home() {
     [apiHist.data, data.sessions, units],
   );
 
-  const localDash = useMemo(() => buildLocalDashboard({ ...data, sessions }), [data, sessions]);
+  // a streak freeze changes the streak without touching the sessions
+  const protectedDays = useProtectedDays();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const localDash = useMemo(() => buildLocalDashboard({ ...data, sessions }), [data, sessions, protectedDays]);
   const dash = API_ENABLED && apiDash.data ? apiDash.data : localDash;
   const dashLoading = API_ENABLED && apiDash.initialLoading;
   const kaiLookId = useEquippedItem("avatar")?.id;

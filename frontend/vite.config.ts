@@ -9,7 +9,9 @@ export default defineConfig(({ command, mode }) => ({
   base: process.env.VITE_BASE ?? (command === "build" ? "/forma/" : "/"),
   plugins: [react()],
   server: { port: 5178, host: true },
-  ...(mode === "offline" ? { define: { "import.meta.env.VITE_API_URL": JSON.stringify("") } } : {}),
+  ...(mode === "offline"
+    ? { define: { "import.meta.env.VITE_API_URL": JSON.stringify("") }, cacheDir: "node_modules/.vite-offline" }
+    : {}),
   build: {
     rollupOptions: {
       output: {

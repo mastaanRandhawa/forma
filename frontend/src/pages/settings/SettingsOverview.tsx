@@ -7,6 +7,7 @@ import { customizationItems } from "../../lib/data";
 import { useFormaData } from "../../lib/localStore";
 import { GOAL_LABELS } from "../../lib/profileOptions";
 import { Section, Row } from "../../components/settings/ui";
+import { ProfileBadge, ProfileTitle } from "../../components/ProfileTag";
 import { SETTINGS_CATEGORIES } from "../../components/settings/SettingsNav";
 
 export default function SettingsOverview() {
@@ -42,7 +43,11 @@ export default function SettingsOverview() {
       <Section>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <div className="text-[1.05rem] lowercase text-content-primary">{name}</div>
+            <div className="text-[1.05rem] lowercase text-content-primary">
+              {name}
+              <ProfileBadge />
+            </div>
+            <ProfileTitle className="mt-0.5" />
             <div className="mt-0.5 text-[0.84rem] lowercase text-content-tertiary">
               {summary || "no training profile yet"}
             </div>

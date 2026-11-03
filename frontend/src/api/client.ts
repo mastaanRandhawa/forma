@@ -348,7 +348,7 @@ export const api = {
     formAnalysis: (sessionId: string, body: T.FormAnalysisInput) =>
       post<{ ok: true; reps: number }>(`/sessions/${sessionId}/form-analysis`, body),
     finish: (sessionId: string, body?: { durationSeconds?: number; caloriesEstimate?: number }) =>
-      post<T.WorkoutSession>(`/sessions/${sessionId}/finish`, body ?? {}),
+      post<T.WorkoutSession & { economy?: T.SessionEconomy | null }>(`/sessions/${sessionId}/finish`, body ?? {}),
     abandon: (sessionId: string) => post<T.WorkoutSession>(`/sessions/${sessionId}/abandon`),
   },
 
@@ -433,7 +433,6 @@ export const api = {
   // store
   store: {
     wallet: () => get<T.WalletSummary>("/store/wallet"),
-    earn: (amount: number, label: string) => post<T.Wallet>("/store/wallet/earn", { amount, label }),
     items: (category?: T.StoreCategory) => get<T.StoreItem[]>("/store/items", { category }),
     buy: (id: string) => post<{ item: unknown; balance: number }>(`/store/items/${id}/buy`),
     equip: (id: string) => post<{ ok: true }>(`/store/items/${id}/equip`),
@@ -446,6 +445,18 @@ export const api = {
     equip: (itemId: string) => post<T.CustomizationState>("/customization/equip", { itemId }),
     setSlot: (slot: string, itemId: string) =>
       post<T.CustomizationState>("/customization/slot", { slot, itemId }),
+  },
+
+  // the coin economy: the server decides what's owed, so nothing here sends an amount
+  economy: {
+    get: (tz?: number) => get<T.EconomySnapshot>("/economy", { tz }),
+    settle: (tzOffsetMin: number) => post<T.EconomySettled>("/economy/settle", { tzOffsetMin }),
+    buy: (itemId: string, expectedPrice?: number) =>
+      post<T.EconomyPurchase>("/economy/buy", { itemId, expectedPrice }),
+    reroll: (challengeId: string) =>
+      post<{ economy: T.EconomySnapshot }>(`/economy/challenges/${challengeId}/reroll`),
+    repairStreak: () => post<T.EconomySettled>("/economy/streak-repair"),
+    kaiReview: () => post<{ review: T.KaiReview; economy: T.EconomySnapshot }>("/economy/kai-review"),
   },
 
   // chat

@@ -18,6 +18,7 @@ import {
 import { buildLocalDashboard } from "../api/localDashboard";
 import { useFormaData } from "../lib/localStore";
 import { useCustomization, useEquippedItem } from "../lib/customization";
+import { personaOpener } from "../lib/personas";
 import { api } from "../api";
 import type { ChatMessage, Trainer as TrainerT, TrainerPatch } from "../api/types";
 
@@ -91,6 +92,8 @@ export default function Trainer() {
   const formaData = useFormaData();
   const equippedLook = useEquippedItem("avatar");
   const lookId = equippedLook?.id;
+  const chatSkin = useEquippedItem("chatTheme")?.id;
+  const persona = useEquippedItem("persona")?.id;
   const mood = coachMood(buildLocalDashboard(formaData));
   const name = trainer.data?.name?.trim() || "Kai";
 
@@ -143,7 +146,7 @@ export default function Trainer() {
         ...t,
         {
           from: "trainer",
-          text: "Thanks for the context — noted. Automatic program adjustments aren't wired up in this build yet, so nothing changes on its own. When you start your next session you can tweak the weights and swap exercises directly in the logger.",
+          text: `${personaOpener(persona) ?? "Thanks for the context."} Noted. Automatic program adjustments aren't wired up in this build yet, so nothing changes on its own. When you start your next session you can tweak the weights and swap exercises directly in the logger.`,
           time: timeLabel(),
           isProgram: false,
         },
@@ -174,7 +177,7 @@ export default function Trainer() {
       className="mx-auto flex w-full max-w-[900px] flex-col"
       style={{ height: "calc(100dvh - 13rem)", minHeight: 440 }}
     >
-      <div className="ai-card flex flex-1 flex-col overflow-hidden">
+      <div className="ai-card flex flex-1 flex-col overflow-hidden" data-chat-skin={chatSkin}>
         {/* header bar */}
         <div className="flex items-center gap-3 border-b border-white/[0.06] px-5 py-3">
           <KaiOrb size={38} state={typing ? "thinking" : mood} look={lookId} />
@@ -236,10 +239,10 @@ export default function Trainer() {
                     <span className="w-6 shrink-0">{!mine && !grouped ? <ChatDot look={lookId} /> : null}</span>
                     <div className={`flex max-w-[78%] flex-col ${mine ? "items-end" : "items-start"}`}>
                       <div
-                        className={`px-4 py-2.5 text-[0.92rem] leading-relaxed ${
+                        className={`chat-bubble whitespace-pre-line px-4 py-2.5 text-[0.92rem] leading-relaxed ${
                           mine
-                            ? "surface-float rounded-2xl rounded-br-md text-content-primary"
-                            : "surface-recessed rounded-2xl rounded-bl-md text-content-secondary"
+                            ? "chat-bubble--user surface-float rounded-2xl rounded-br-md text-content-primary"
+                            : "chat-bubble--kai surface-recessed rounded-2xl rounded-bl-md text-content-secondary"
                         }`}
                       >
                         {m.text}

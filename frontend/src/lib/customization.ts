@@ -35,7 +35,8 @@ import { api } from "../api/client";
  * Free / default items are considered owned implicitly.
  */
 
-export type Slot = CustomizationSlot;
+/** every slot that can be worn; "program" items only ever unlock */
+export type Slot = Exclude<CustomizationSlot, "program">;
 
 const LS_KEY = "forma.customization.v1";
 
@@ -50,6 +51,9 @@ const DEFAULT_EQUIPPED: Record<Slot, string> = {
   badge: "bd-none",
   colorMode: "cm-system",
   font: "fn-system",
+  persona: "ps-kai",
+  restSound: "rs-chime",
+  celebration: "cl-confetti",
 };
 
 type State = {
@@ -125,30 +129,18 @@ export const customizationStore = {
     api.customization.get().then(hydrate).catch(() => {});
   },
 
-  /** buy an item — spends coins, adds to owned; pass autoEquip=true to also equip instantly */
-  buy(item: CustomizationItem, autoEquip = false): boolean {
-    if (state.owned.includes(item.id)) return false;
-    if (!walletStore.spend(item.price, item.name, "purchase")) return false;
+  /** no-backend purchases only (lib/economy): add to owned, wearing it if it can be worn */
+  grantLocal(ids: string[], wear?: CustomizationItem) {
     state = {
-      owned: [...state.owned, item.id],
-      equipped: autoEquip ? { ...state.equipped, [item.slot]: item.id } : state.equipped,
+      owned: Array.from(new Set([...state.owned, ...ids])),
+      equipped: wear && wear.slot !== "program" ? { ...state.equipped, [wear.slot]: wear.id } : state.equipped,
     };
     emit();
-    if (API_ENABLED) {
-      api.customization.buy(item.id)
-        .then((res) => {
-          hydrate(res);
-          // chain equip only after buy succeeds so the server owns the item first
-          if (autoEquip) return api.customization.equip(item.id).then(hydrate);
-        })
-        .catch(() => customizationStore.refresh());
-    }
-    return true;
   },
 
   /** equip an owned item into its slot */
   equip(item: CustomizationItem) {
-    if (!state.owned.includes(item.id)) return;
+    if (!state.owned.includes(item.id) || item.slot === "program") return;
     state = { ...state, equipped: { ...state.equipped, [item.slot]: item.id } };
     emit();
     if (API_ENABLED) api.customization.equip(item.id).then(hydrate).catch(() => customizationStore.refresh());
@@ -203,7 +195,6 @@ interface CustomizationCtx {
   isOwned: (id: string) => boolean;
   isEquipped: (id: string, slot: Slot) => boolean;
   equippedId: (slot: Slot) => string;
-  buy: (item: CustomizationItem, autoEquip?: boolean) => boolean;
   equip: (item: CustomizationItem) => void;
   setSlot: (slot: Slot, id: string) => void;
   /** shortcut for setSlot("colorMode", id) */
@@ -294,7 +285,6 @@ export function CustomizationProvider({
       isOwned: customizationStore.isOwned,
       isEquipped: customizationStore.isEquipped,
       equippedId: customizationStore.equippedId,
-      buy: customizationStore.buy,
       equip: customizationStore.equip,
       setSlot: customizationStore.set,
       setColorMode: (id: "cm-system" | "cm-light" | "cm-dark") =>

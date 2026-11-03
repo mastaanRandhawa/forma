@@ -31,6 +31,8 @@ export interface WorkoutPlan {
   progression: string;
   /** the rotation; may be shorter than daysPerWeek (A / B alternation) */
   days: { label: string; templateId: string }[];
+  /** the store item that unlocks this plan; absent means it's free */
+  premium?: string;
 }
 
 const DOUBLE_PROGRESSION =
@@ -203,6 +205,62 @@ export const WORKOUT_PLANS: WorkoutPlan[] = [
       { label: "Conditioning", templateId: "conditioning-intervals" },
       { label: "Strength C", templateId: "full-body-c" },
       { label: "Mobility (optional)", templateId: "mobility-recovery" },
+    ],
+  },
+
+  // ── premium: bought in the store ──────────────────────────────────────────
+  {
+    id: "powerbuilding-4",
+    premium: "pl-powerbuilding",
+    name: "Powerbuilding — 4 days",
+    description: "One big lift a day, trained heavy, then the hypertrophy work that makes it bigger.",
+    objective: "Get genuinely stronger on all four main lifts while still building muscle.",
+    goals: ["strength", "muscle"],
+    difficulty: "advanced",
+    daysPerWeek: 4,
+    schedule: "Mon (squat) · Tue (bench) · Thu (deadlift) · Fri (overhead), with weekends off",
+    progression:
+      "Add the smallest weight step to a top set when you hit the top of its rep range at RPE 8 or below. Back-off sets follow the top set. If a top set hits RPE 10 twice in a row, drop it 10% and build back up.",
+    days: [
+      { label: "Squat Day", templateId: "pb-squat" },
+      { label: "Bench Day", templateId: "pb-bench" },
+      { label: "Deadlift Day", templateId: "pb-deadlift" },
+      { label: "Overhead Day", templateId: "pb-press" },
+    ],
+  },
+  {
+    id: "arms-4",
+    premium: "pl-arms",
+    name: "Arm Specialization — 4 days",
+    description: "Two arm-first days and two full lower and upper days, so your arms get priority without losing the rest.",
+    objective: "Put size on lagging arms for 6–8 weeks, then return to a balanced plan.",
+    goals: ["muscle"],
+    difficulty: "intermediate",
+    daysPerWeek: 4,
+    schedule: "Mon (biceps first) · Tue (lower) · Thu (triceps first) · Fri (upper), with weekends off",
+    progression: DOUBLE_PROGRESSION,
+    days: [
+      { label: "Biceps Priority", templateId: "arms-a" },
+      { label: "Lower Body", templateId: "lower-body" },
+      { label: "Triceps Priority", templateId: "arms-b" },
+      { label: "Upper Body", templateId: "upper-b" },
+    ],
+  },
+  {
+    id: "glutes-3",
+    premium: "pl-glutes",
+    name: "Glute Priority — 3 days",
+    description: "A heavy hinge day, a volume day and an upper-body day to keep everything else moving.",
+    objective: "Build the glutes as the main goal while the rest of your body holds its ground.",
+    goals: ["muscle"],
+    difficulty: "intermediate",
+    daysPerWeek: 3,
+    schedule: "Mon (heavy) · Wed (upper) · Fri (volume), with a rest day between sessions",
+    progression: DOUBLE_PROGRESSION,
+    days: [
+      { label: "Heavy Hinge", templateId: "glutes-a" },
+      { label: "Upper Balance", templateId: "glutes-b" },
+      { label: "Volume Pump", templateId: "glutes-c" },
     ],
   },
 ];

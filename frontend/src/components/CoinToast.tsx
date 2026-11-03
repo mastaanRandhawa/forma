@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { Coins } from "lucide-react";
+import { Coins, Snowflake } from "lucide-react";
 
 /**
  * CoinToast — global listener for `forma:coin-earn`. Every `walletStore.earn`
@@ -37,12 +37,20 @@ export function CoinToast() {
             transition={{ type: "spring", stiffness: 380, damping: 26 }}
             className="flex items-center gap-2.5 rounded-pill border border-[var(--accent-amber)]/30 bg-[color-mix(in_oklab,var(--background)_88%,transparent)] px-4 py-2.5 shadow-[0_18px_46px_-16px_rgba(0,0,0,0.7)] backdrop-blur-md"
           >
-            <span className="grid h-6 w-6 place-items-center rounded-full bg-[var(--accent-amber)]/15">
-              <Coins size={13} strokeWidth={2.4} className="text-[var(--accent-amber)]" />
-            </span>
-            <span className="num text-[0.95rem] font-semibold tabular-nums text-[var(--accent-amber)]">
-              +{t.amount}
-            </span>
+            {t.amount > 0 ? (
+              <>
+                <span className="grid h-6 w-6 place-items-center rounded-full bg-[var(--accent-amber)]/15">
+                  <Coins size={13} strokeWidth={2.4} className="text-[var(--accent-amber)]" />
+                </span>
+                <span className="num text-[0.95rem] font-semibold tabular-nums text-[var(--accent-amber)]">
+                  +{t.amount}
+                </span>
+              </>
+            ) : (
+              <span className="grid h-6 w-6 place-items-center rounded-full bg-[var(--accent-cyan)]/15">
+                <Snowflake size={13} strokeWidth={2.4} className="text-[var(--accent-cyan)]" />
+              </span>
+            )}
             <span className="text-[0.82rem] lowercase text-content-secondary">{t.label}</span>
           </motion.div>
         ))}

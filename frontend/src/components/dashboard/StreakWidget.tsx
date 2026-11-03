@@ -1,7 +1,10 @@
+import { useSyncExternalStore } from "react";
 import { Link } from "react-router-dom";
 import { motion, useReducedMotion } from "motion/react";
-import { Flame } from "lucide-react";
+import { Flame, Snowflake } from "lucide-react";
 import { useDashboardData } from "../../api/dashboard-context";
+import { economyStore } from "../../lib/economy";
+import { FREEZE_ID } from "../../lib/economyConfig";
 
 const DAYS = ["m", "t", "w", "t", "f", "s", "s"];
 
@@ -18,6 +21,7 @@ export function StreakWidget({
   const reduce = useReducedMotion();
   const dash = useDashboardData();
   const days = dash?.streakDays ?? 0;
+  const freezes = useSyncExternalStore(economyStore.subscribe, () => economyStore.held(FREEZE_ID));
   const best = days;
   const weekDone = dash?.weeklyRing.done ?? 0;
   const weekTarget = dash?.weeklyRing.target ?? 4;
@@ -51,6 +55,11 @@ export function StreakWidget({
             {days === 0 ? "start one today" : `days · best ${best}`}
           </span>
         </div>
+        {freezes > 0 && (
+          <div className="mt-2 flex items-center gap-1.5 text-[0.72rem] lowercase text-[var(--accent-cyan)]" data-testid="streak-freezes">
+            <Snowflake size={12} aria-hidden /> {freezes} streak freeze{freezes === 1 ? "" : "s"} ready
+          </div>
+        )}
 
         <div className="mt-4">
           <div className="mb-1.5 flex items-center justify-between">

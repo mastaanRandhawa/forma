@@ -4,6 +4,7 @@ import { Button } from "../primitives";
 import { EmptyState } from "../EmptyState";
 import { TemplateCard } from "./TemplateCard";
 import { PlanCard } from "./PlanViews";
+import { useCustomization } from "../../lib/customization";
 import { presetToRow, type TemplateRow } from "../../lib/templates";
 import {
   DURATION_BUCKET_LABEL,
@@ -67,6 +68,7 @@ export function TemplateLibrary({
   onPreview: (row: TemplateRow) => void;
   onOpenPlan: (plan: WorkoutPlan) => void;
 }) {
+  const { owned } = useCustomization();
   const [query, setQuery] = useState("");
   const [goal, setGoal] = useState<TrainingGoal | Any>("any");
   const [level, setLevel] = useState<Difficulty | Any>("any");
@@ -118,13 +120,15 @@ export function TemplateLibrary({
         ? []
         : WORKOUT_TEMPLATES.filter(
             (t) =>
+              // a premium plan's days stay inside the plan until it's bought
+              (!t.premium || owned.includes(t.premium)) &&
               matchesTemplateQuery(t, query) &&
               (goal === "any" || templateGoals(t).includes(goal)) &&
               (level === "any" || t.difficulty === level) &&
               (kit === "any" || equipmentClass(t.equipment) === kit) &&
               (length === "any" || durationBucket(t.durationMin) === length),
           ),
-    [query, goal, level, kit, length, days],
+    [query, goal, level, kit, length, days, owned],
   );
 
   const chip = (active: boolean) =>

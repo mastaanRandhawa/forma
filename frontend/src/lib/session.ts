@@ -7,6 +7,7 @@
  * running sequence; deferring / jumping / substituting only edits that and the
  * per-exercise flags (`deferred`, `skipped`, `substitutedFrom`).
  */
+import { personaCue } from "./personas";
 import type { ActiveSession, LoggedExercise, LoggedSet } from "./localStore";
 import type { RepDbCatalogEntry } from "./repdb";
 
@@ -398,8 +399,11 @@ export interface CueContext {
 
 const pick = (arr: string[], seed = Date.now()) => arr[Math.floor(seed / 1000) % arr.length];
 
-/** A short, contextual line for Kai. Deterministic-ish so it doesn't flicker. */
-export function trainerCue(event: CueEvent, ctx: CueContext = {}): string {
+/** A short, contextual line for Kai, in the equipped persona's voice if there is one. */
+export function trainerCue(event: CueEvent, ctx: CueContext = {}, persona?: string): string {
+  const inVoice = personaCue(persona, event, ctx);
+  if (inVoice) return inVoice;
+  // Deterministic-ish so it doesn't flicker.
   switch (event) {
     case "start":
       return ctx.totalExercises

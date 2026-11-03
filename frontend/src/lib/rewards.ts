@@ -1,40 +1,38 @@
-import { useSyncExternalStore } from "react";
 import { API_ENABLED } from "../api/hooks";
-import { currentStreak, sessionsPerGroup } from "./fitness";
+import { api } from "../api/client";
+import type { EconomyEvent, EconomyReward, SessionEconomy } from "../api/types";
+import { applyLocalFreezes, applyServerEconomy, announceRewards, challengeKey, completedChallenges } from "./economy";
+import {
+  ACHIEVEMENT_COINS,
+  CHECKIN_COINS,
+  FOOD_REWARD,
+  PR_REWARD,
+  PROTEIN_COINS,
+  STREAK_MILESTONES,
+  VISIT_REWARD,
+  weekTargetCoins,
+  WEEK_TARGET_REWARD,
+  WELCOME_COINS,
+  workoutCoins,
+  type EarnKind,
+} from "./economyConfig";
+import { currentStreak, improvedLifts, sessionsPerGroup, trainedDays } from "./fitness";
 import { fromKg } from "./lifecycle";
-import { useFormaData, type CompletedSession } from "./localStore";
+import { loadData, type CompletedSession, type FormaData } from "./localStore";
+import { deriveTargets, sumMeals } from "./nutrition";
+import { localDayOf, todayKey, weekKey } from "./streak";
 import { walletStore } from "./wallet";
+
+export { todayKey, weekKey };
 
 /**
  * Reward engine — every way a coin enters the wallet.
  *
- * Rules split into three shapes:
- *  - one-time      (`key` fixed)            paid once, ever
- *  - periodic      (`key` = base + period)  paid once per day / week
- *  - repeatable    (no key)                 paid every time it fires
- *
- * Screens call the small `grant*` helpers; they resolve the amount, build the
- * idempotency key, and hand off to `walletStore.earn`. Weekly challenge progress
- * is measured from this week's sessions, so the store can show
- * "3 / 4 workouts · +180" without keeping a counter of its own.
+ * With a backend the server pays: `settleEconomy()` asks it to work out what's
+ * owed, and a finished workout comes back with its rewards. Without one the same
+ * rules run here against localStore. Either way the amounts and caps are in
+ * lib/economyConfig, and docs/COIN_ECONOMY.md explains them.
  */
-
-// ── day / week helpers ──────────────────────────────────────────────────────
-export function todayKey(d = new Date()) {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
-    d.getDate(),
-  ).padStart(2, "0")}`;
-}
-/** Local midnight on the Monday of `d`'s week, in ms. */
-function weekStart(d = new Date()) {
-  const t = new Date(d);
-  t.setHours(0, 0, 0, 0);
-  t.setDate(t.getDate() - ((t.getDay() + 6) % 7)); // Monday = 0
-  return t.getTime();
-}
-export function weekKey(d = new Date()) {
-  return `w${todayKey(new Date(weekStart(d)))}`;
-}
 
 // ── the earn catalogue (shown on the store "earn" panel) ────────────────────
 export type EarnWay = {
@@ -42,149 +40,216 @@ export type EarnWay = {
   label: string;
   detail: string;
   coins: string; // display string, e.g. "+40" or "+15–90"
-  cadence: "per session" | "daily" | "weekly" | "one time" | "ongoing";
-  icon: "dumbbell" | "flame" | "target" | "trophy" | "calendar" | "sparkles" | "sunrise" | "medal";
-  /** who pays it: this module, the server (API builds only), or nothing yet */
-  payout: "client" | "server" | null;
+  cadence: "per workout" | "daily" | "weekly" | "one time" | "ongoing";
+  icon: "dumbbell" | "flame" | "target" | "trophy" | "calendar" | "sparkles" | "sunrise" | "medal" | "apple" | "heart";
+  /** the rule whose caps this row reports */
+  cap?: EarnKind;
 };
 
 export const EARN_WAYS: EarnWay[] = [
-  { id: "workout", label: "Finish a workout", detail: "Base reward scales with volume and completion", coins: "+40–120", cadence: "per session", icon: "dumbbell", payout: "client" },
-  // needs a form score, which the web app doesn't compute yet
-  { id: "form", label: "Clean form session", detail: "Average form above 90% across the session", coins: "+25", cadence: "per session", icon: "sparkles", payout: null },
-  { id: "pr", label: "Set a personal record", detail: "Any lift beats its previous best", coins: "+50 each", cadence: "per session", icon: "medal", payout: "client" },
-  { id: "daily", label: "Daily check-in", detail: "Open Forma once a day", coins: "+15", cadence: "daily", icon: "sunrise", payout: "client" },
-  { id: "streak", label: "Keep your streak", detail: "Milestone bonuses at 3 / 7 / 14 / 30 / 60 / 100 days", coins: "+30–400", cadence: "ongoing", icon: "flame", payout: "client" },
-  // grantGoalReward has no caller yet; goal and weekly-target payouts wait on server-side rewards
-  { id: "goal", label: "Hit a goal", detail: "Every daily or weekly goal you complete", coins: "+20–60", cadence: "ongoing", icon: "target", payout: null },
-  { id: "week", label: "Weekly training target", detail: "Reach your planned sessions for the week", coins: "+90", cadence: "weekly", icon: "calendar", payout: null },
-  { id: "achievement", label: "Unlock an achievement", detail: "One-off payouts for long-run milestones", coins: "+75–500", cadence: "one time", icon: "trophy", payout: "server" },
-  { id: "challenge", label: "Complete a challenge", detail: "Rotating multi-step objectives in the store", coins: "+150–220", cadence: "weekly", icon: "target", payout: "client" },
+  { id: "workout", label: "Finish a workout", detail: "At least 3 working sets and 5 minutes. More working sets pay more", coins: "+36–60", cadence: "per workout", icon: "dumbbell", cap: "workout" },
+  { id: "pr", label: "Set a personal record", detail: "Beat your best on a lift you've logged before, up to 3 a workout", coins: "+25 each", cadence: "per workout", icon: "medal", cap: "pr" },
+  { id: "week", label: "Hit your weekly target", detail: "Reach your training days for the week. A bigger target pays more", coins: "+50–125", cadence: "weekly", icon: "calendar", cap: "week" },
+  { id: "challenge", label: "Finish a challenge", detail: "Three new ones every Monday", coins: "+40–70", cadence: "weekly", icon: "target", cap: "challenge" },
+  { id: "streak", label: "Build a streak", detail: "Milestones at 3 / 7 / 14 / 30 / 60 / 100 days, each paid once", coins: "+15–400", cadence: "ongoing", icon: "flame" },
+  { id: "achievement", label: "Unlock an achievement", detail: "One-off payouts for long-run milestones", coins: "+25–400", cadence: "one time", icon: "trophy" },
+  { id: "checkin", label: "Recovery check-in", detail: "Log how you slept and feel", coins: "+10", cadence: "daily", icon: "heart", cap: "checkin" },
+  { id: "food", label: "Log your food", detail: "Log 2 or more items in a day", coins: "+10", cadence: "daily", icon: "apple", cap: "food" },
+  { id: "protein", label: "Reach your protein target", detail: "Hit your daily protein goal", coins: "+10", cadence: "daily", icon: "sparkles", cap: "protein" },
+  { id: "visit", label: "Open Forma", detail: "Your first visit of the day", coins: "+5", cadence: "daily", icon: "sunrise", cap: "visit" },
 ];
 
-/** The earn ways this build can actually pay out. */
-export const LIVE_EARN_WAYS = EARN_WAYS.filter(
-  (w) => w.payout === "client" || (w.payout === "server" && API_ENABLED),
-);
-
-// ── weekly challenges (measured from this week's sessions) ──────────────────
 type MuscleOf = Parameters<typeof sessionsPerGroup>[1];
 
-export type Challenge = {
-  id: string;
-  title: string;
-  detail: string;
-  target: number;
-  reward: number;
-  unit: string;
-  expires: string;
-  tone: "pink" | "cyan" | "lime" | "amber" | "violet";
-  /** progress from the sessions finished since Monday 00:00 */
-  measure: (week: CompletedSession[], muscleOf: MuscleOf | null) => number;
-};
+// ── settling ────────────────────────────────────────────────────────────────
+let inFlight = false;
+let again = false;
 
-export const CHALLENGES: Challenge[] = [
-  {
-    id: "ch-consistency", title: "Show up", detail: "Complete 4 workouts this week", target: 4, reward: 180, unit: "workouts", expires: "resets monday", tone: "pink",
-    measure: (week) => week.length,
-  },
-  {
-    id: "ch-volume", title: "Move weight", detail: "Log 120,000 lb of total volume", target: 120000, reward: 220, unit: "lb", expires: "resets monday", tone: "cyan",
-    measure: (week) => Math.round(week.reduce((n, s) => n + (s.units === "lb" ? s.volume : fromKg(s.volume, "lb")), 0)),
-  },
-  {
-    id: "ch-early", title: "Early sets", detail: "Train before 9am twice", target: 2, reward: 150, unit: "sessions", expires: "resets monday", tone: "amber",
-    measure: (week) => week.filter((s) => new Date(s.startedAt).getHours() < 9).length,
-  },
-  {
-    id: "ch-explorer", title: "Mix it up", detail: "Train 5 different muscle groups", target: 5, reward: 160, unit: "groups", expires: "resets monday", tone: "violet",
-    measure: (week, muscleOf) => (muscleOf ? sessionsPerGroup(week, muscleOf, 7).filter((g) => g.sessions > 0).length : 0),
-  },
-];
-
-const sessionsThisWeek = (sessions: CompletedSession[]) => {
-  const from = weekStart();
-  return sessions.filter((s) => Date.parse(s.finishedAt) >= from);
-};
-
-/** Same key the wallet has used for challenge payouts since v1, so nothing pays twice. */
-const challengeKey = (id: string) => `${id}:${weekKey()}`;
-
-function payChallenge(c: Challenge) {
-  return walletStore.earn(c.reward, `Challenge · ${c.title}`, { kind: "challenge", key: challengeKey(c.id) });
+/**
+ * Pay whatever is owed right now. Safe to call as often as you like: on app open,
+ * after a check-in or food log. Repeats pay nothing.
+ */
+export function settleEconomy(muscleOf: MuscleOf | null = null): void {
+  if (!API_ENABLED) {
+    settleLocal(loadData(), muscleOf);
+    return;
+  }
+  if (inFlight) {
+    again = true;
+    return;
+  }
+  inFlight = true;
+  api.economy
+    .settle(-new Date().getTimezoneOffset())
+    .then((res) => {
+      applyServerEconomy(res.economy);
+      announceRewards(res.rewards, res.events);
+    })
+    .catch(() => {})
+    .finally(() => {
+      inFlight = false;
+      if (again) {
+        again = false;
+        settleEconomy(muscleOf);
+      }
+    });
 }
 
-/** Pays every challenge this week's sessions have completed. Safe to repeat. */
-export function settleChallenges(sessions: CompletedSession[], muscleOf: MuscleOf | null) {
-  const week = sessionsThisWeek(sessions);
-  for (const c of CHALLENGES) if (c.measure(week, muscleOf) >= c.target) payChallenge(c);
+const pay = (kind: EarnKind, key: string, amount: number, label: string) =>
+  walletStore.earn(amount, label, { kind, key });
+
+function settleLocal(d: FormaData, muscleOf: MuscleOf | null) {
+  applyLocalFreezes(d);
+
+  const day = todayKey();
+  const week = weekKey();
+  const isToday = (at: string) => localDayOf(at) === day;
+
+  if (d.profile.onboardedAt) pay("welcome", "welcome", WELCOME_COINS, "Welcome to Forma");
+  pay("visit", `daily:${day}`, VISIT_REWARD.coins, "Daily check-in");
+
+  if (d.checkins.some((c) => isToday(c.createdAt))) pay("checkin", `checkin:${day}`, CHECKIN_COINS, "Recovery check-in");
+
+  const meals = d.meals.filter((m) => isToday(m.at));
+  if (meals.length >= FOOD_REWARD.minItems) pay("food", `food:${day}`, FOOD_REWARD.coins, "Food logged");
+  const protein = d.nutritionTargets?.protein ?? deriveTargets(d.profile)?.protein;
+  if (protein && sumMeals(meals).protein >= protein) pay("protein", `protein:${day}`, PROTEIN_COINS, "Protein target");
+
+  // only workouts that qualified for coins count, so empty sessions can't reach it
+  const target = d.profile.daysPerWeek;
+  if (target && walletStore.capUsage("workout").week >= Math.max(target, WEEK_TARGET_REWARD.minTarget)) {
+    pay("week", `week:${week}`, weekTargetCoins(target), "Weekly training target");
+  }
+
+  for (const c of completedChallenges(d, muscleOf)) {
+    pay("challenge", challengeKey(c.id), c.reward, `Challenge · ${c.title}`);
+  }
+
+  const streak = currentStreak(d.sessions);
+  for (const [days, coins] of Object.entries(STREAK_MILESTONES)) {
+    if (streak >= Number(days)) pay("streak", `streak:${days}`, coins, `${days}-day streak`);
+  }
+
+  settleAchievements(d);
 }
 
-/** Store cards; `claim` pays a completed challenge the workout summary didn't settle. */
-export function useChallenges(muscleOf: MuscleOf | null) {
-  const { sessions } = useFormaData();
-  useSyncExternalStore(walletStore.subscribe, walletStore.snapshot, walletStore.snapshot);
-  const week = sessionsThisWeek(sessions);
-  return CHALLENGES.map((c) => {
-    const current = Math.min(c.target, c.measure(week, muscleOf));
-    const done = current >= c.target;
-    return {
-      ...c,
-      current,
-      done,
-      claimed: walletStore.hasGrant(challengeKey(c.id)),
-      claim: () => done && payChallenge(c),
-    };
-  });
-}
-
-// ── grant helpers ───────────────────────────────────────────────────────────
-const STREAK_MILESTONES: Record<number, number> = {
-  3: 30, 7: 70, 14: 120, 30: 220, 60: 320, 100: 400,
+// ── achievements (the server evaluates these in API mode) ───────────────────
+const ACHIEVEMENT_TITLES: Record<string, string> = {
+  "first-session": "Day one", "first-pr": "On the board", "first-superset": "Two at once",
+  "session-60min": "Hour of work", "session-90min": "Marathon session", "session-early": "Early bird",
+  "sessions-10": "Getting started", "sessions-25": "Quarter century", "sessions-50": "Fifty sessions",
+  "sessions-100": "Century club", "sessions-250": "Dedicated",
+  "volume-10k": "10,000 kg moved", "volume-50k": "50,000 kg moved", "volume-100k": "100,000 kg moved",
+  "volume-500k": "500,000 kg moved", "volume-1m": "One million kilos",
+  "prs-5": "Record setter", "prs-10": "PR machine", "prs-25": "Always improving", "prs-50": "Living legend",
+  "pr-bench": "Bench PR", "pr-squat": "Squat PR", "pr-deadlift": "Deadlift PR", "pr-ohp": "Overhead PR", "pr-row": "Row PR",
+  "active-days-30": "30 active days", "active-days-100": "100 active days",
+  "food-log-30": "Tracking everything", "checkin-14": "Check-in streak",
+};
+const LIFTS: Record<string, RegExp> = {
+  "pr-bench": /bench/i,
+  "pr-squat": /squat/i,
+  "pr-deadlift": /deadlift/i,
+  "pr-ohp": /overhead press|shoulder press|military press/i,
+  "pr-row": /barbell row|bent.over.*row/i,
 };
 
-/** Called from the workout summary, after the finished session has been saved. */
+function settleAchievements(d: FormaData) {
+  const worked = d.sessions
+    .filter((s) => s.exercises.some((e) => e.sets.some((x) => x.done && !x.warmup)))
+    .sort((a, b) => a.finishedAt.localeCompare(b.finishedAt));
+  const prLifts = worked.flatMap((s) =>
+    improvedLifts(s, worked.filter((p) => p.finishedAt < s.finishedAt)),
+  );
+  const volumeKg = worked.reduce((n, s) => n + (s.units === "kg" ? s.volume : fromKg(s.volume, "kg")), 0);
+  const count = (key: string, base: string) => Number(key.slice(base.length).replace("k", "000").replace("m", "000000"));
+
+  const reached = (key: string): boolean => {
+    if (key in LIFTS) return prLifts.some((name) => LIFTS[key].test(name));
+    if (key.startsWith("sessions-")) return worked.length >= count(key, "sessions-");
+    if (key.startsWith("volume-")) return volumeKg >= count(key, "volume-");
+    if (key.startsWith("prs-")) return prLifts.length >= count(key, "prs-");
+    if (key.startsWith("active-days-")) return trainedDays(worked).size >= count(key, "active-days-");
+    switch (key) {
+      case "first-session": return worked.length > 0;
+      case "first-pr": return prLifts.length > 0;
+      case "first-superset": return worked.some((s) => s.exercises.some((e) => e.supersetGroup != null));
+      case "session-60min": return worked.some((s) => s.durationSec >= 3600);
+      case "session-90min": return worked.some((s) => s.durationSec >= 5400);
+      case "session-early": return worked.some((s) => new Date(s.startedAt).getHours() < 7);
+      case "food-log-30": return new Set(d.meals.map((m) => localDayOf(m.at))).size >= 30;
+      case "checkin-14": return d.checkins.length >= 14;
+      default: return false;
+    }
+  };
+
+  for (const [key, coins] of Object.entries(ACHIEVEMENT_COINS)) {
+    if (ACHIEVEMENT_TITLES[key] && reached(key)) {
+      pay("achievement", `ach:${key}`, coins, `Achievement · ${ACHIEVEMENT_TITLES[key]}`);
+    }
+  }
+}
+
+// ── workouts ────────────────────────────────────────────────────────────────
+/** What a finished workout paid, for the summary screen. */
+export interface WorkoutPayout {
+  coins: number;
+  rewards: EconomyReward[];
+  skipped: SessionEconomy["skipped"];
+  events: EconomyEvent[];
+}
+
+const NO_PAYOUT: WorkoutPayout = { coins: 0, rewards: [], skipped: null, events: [] };
+
+/** API mode: the server already paid; mirror what it says and tell the user. */
+export function applySessionEconomy(economy: SessionEconomy | null | undefined): WorkoutPayout {
+  if (!economy) return NO_PAYOUT;
+  applyServerEconomy(economy.snapshot);
+  announceRewards(economy.rewards, economy.events);
+  return {
+    coins: economy.rewards.reduce((n, r) => n + r.amount, 0),
+    rewards: economy.rewards,
+    skipped: economy.skipped,
+    events: economy.events,
+  };
+}
+
+/**
+ * No-backend build: pay a finished workout and anything else it made due. Call it
+ * after the session has been saved. A lift's first log is a baseline, not a PR.
+ */
 export function grantWorkoutRewards(input: {
-  sessionId?: string;
-  volume: number;
-  prs: number;
-  /** every saved session, including the one just finished */
-  sessions: CompletedSession[];
+  session: CompletedSession;
+  /** every session before this one */
+  prior: CompletedSession[];
   muscleOf: MuscleOf | null;
-}) {
-  const id = input.sessionId ?? `sess-${todayKey()}-${Math.round(input.volume)}`;
-  // base: 40 + up to 80 more, scaled by volume (10k lb ≈ full bonus)
-  const base = 40 + Math.min(80, Math.round(input.volume / 125));
-  walletStore.earn(base, "Workout complete", { kind: "workout", key: `workout:${id}` });
+}): WorkoutPayout {
+  const { session, prior, muscleOf } = input;
+  const before = walletStore.snapshot().ledger[0]?.id;
+  const workingSets = session.exercises.reduce(
+    (n, e) => n + e.sets.filter((s) => s.done && !s.warmup && (s.reps ?? 0) > 0).length,
+    0,
+  );
+  const coins = workoutCoins(workingSets, session.durationSec);
+  const skipped: SessionEconomy["skipped"] =
+    coins != null ? null : workingSets < 3 ? "too_few_sets" : "too_short";
 
-  if (input.prs > 0) {
-    walletStore.earn(input.prs * 50, `${input.prs} personal record${input.prs > 1 ? "s" : ""}`, {
-      kind: "achievement",
-      key: `workout-pr:${id}`,
-    });
+  if (coins != null) {
+    pay("workout", `workout:${session.id}`, coins, "Workout complete");
+    for (const name of [...new Set(improvedLifts(session, prior))].slice(0, PR_REWARD.perWorkout)) {
+      pay("pr", `pr:${session.id}:${name}`, PR_REWARD.coins, `PR · ${name}`);
+    }
   }
-  const streakDays = currentStreak(input.sessions);
-  if (STREAK_MILESTONES[streakDays]) {
-    walletStore.earn(STREAK_MILESTONES[streakDays], `${streakDays}-day streak`, {
-      kind: "streak",
-      key: `streak:${streakDays}`,
-    });
-  }
-  settleChallenges(input.sessions, input.muscleOf);
-}
+  settleLocal(loadData(), muscleOf);
 
-/** Daily check-in — safe to call on every app mount. */
-export function grantDailyBonus() {
-  return walletStore.earn(15, "Daily check-in", { kind: "daily", key: `daily:${todayKey()}` });
-}
-
-/** Goal completion — call with a stable goal id. */
-export function grantGoalReward(goalId: string, label: string, amount = 30) {
-  const key = `goal:${goalId}:${todayKey()}`;
-  return walletStore.earn(amount, `Goal · ${label}`, { kind: "goal", key });
-}
-
-/** Achievement unlock — one-time per achievement key. */
-export function grantAchievementReward(key: string, label: string, amount: number) {
-  return walletStore.earn(amount, `Achievement · ${label}`, { kind: "achievement", key: `ach:${key}` });
+  // everything added to the ledger since the top entry we saw on the way in
+  const ledger = walletStore.snapshot().ledger;
+  const end = ledger.findIndex((e) => e.id === before);
+  const paid = (end < 0 ? ledger : ledger.slice(0, end)).filter((e) => e.type === "earn");
+  return {
+    coins: paid.reduce((n, e) => n + e.amount, 0),
+    rewards: paid.map((e) => ({ amount: e.amount, label: e.label, kind: e.kind ?? "bonus" })).reverse(),
+    skipped,
+    events: [],
+  };
 }

@@ -139,7 +139,8 @@ const finish = useMutation({
 | `api.body.*` | muscleMap, balance, muscle detail |
 | `api.progress.*` | metrics, measurements, PRs, strength, overview, readiness, consistency, formTrends, photos, report |
 | `api.goals.*` | list, upsert, log, remove |
-| `api.store.*` | wallet, earn, items, buy, equip |
+| `api.store.*` | wallet, items, buy, equip |
+| `api.economy.*` | snapshot, settle, buy, reroll, repairStreak, kaiReview (see docs/COIN_ECONOMY.md) |
 | `api.chat.*` | history, send, sendVoice, applyAction, clear, suggestedPrompts |
 | `api.notifications.*` | list, markRead, markAllRead, remove, preferences |
 | `api.achievements.*` | list, evaluate |

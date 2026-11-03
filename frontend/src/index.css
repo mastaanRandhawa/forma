@@ -353,3 +353,49 @@ body {
   border-color: var(--line-soft);
 }
 
+
+/* ── chat skins (bought in the store, read from data-chat-skin on the trainer card) ── */
+[data-chat-skin="t-minimal"] .chat-bubble {
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  border-radius: 6px !important;
+  padding: 0.2rem 0.4rem !important;
+}
+[data-chat-skin="t-minimal"] .chat-bubble--kai {
+  border-left: 2px solid var(--line-soft) !important;
+  border-radius: 0 !important;
+}
+[data-chat-skin="t-terminal"] .chat-bubble {
+  background: #07120a !important;
+  border: 1px solid #1f5a34 !important;
+  border-radius: 4px !important;
+  box-shadow: none !important;
+  color: #7dffa8 !important;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace !important;
+  font-size: 0.84rem !important;
+}
+[data-chat-skin="t-terminal"] .chat-bubble--user::before { content: "> "; opacity: 0.7; }
+[data-chat-skin="t-paper"] .chat-bubble {
+  background: #efe9dc !important;
+  border: 1px solid #d6cdb8 !important;
+  border-radius: 10px !important;
+  box-shadow: 0 6px 16px -10px rgba(40, 30, 10, 0.5) !important;
+  color: #3a3226 !important;
+}
+[data-chat-skin="t-bubblegum"] .chat-bubble {
+  border: 0 !important;
+  border-radius: 22px !important;
+  box-shadow: none !important;
+  color: #1a0f1c !important;
+}
+[data-chat-skin="t-bubblegum"] .chat-bubble--kai { background: #9fe6ff !important; }
+[data-chat-skin="t-bubblegum"] .chat-bubble--user { background: #ffa7d3 !important; }
+[data-chat-skin="t-ink"] .chat-bubble {
+  background: #f4eedf !important;
+  border: 1px solid #15130e !important;
+  border-radius: 2px !important;
+  box-shadow: 3px 3px 0 #15130e !important;
+  color: #15130e !important;
+  font-family: Georgia, "Times New Roman", serif !important;
+}

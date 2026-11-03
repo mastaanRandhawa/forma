@@ -17,6 +17,7 @@ import {
   waterCupsToday,
   type NutritionTargets,
 } from "../../lib/localStore";
+import { settleEconomy } from "../../lib/rewards";
 import {
   deriveTargets,
   mealsByDay,
@@ -241,6 +242,7 @@ function TargetsEditor({
 
 function log(entry: { label: string; kcal: number | null; protein: number | null; carbs: number | null; fat: number | null }) {
   addMeal(entry);
+  settleEconomy();
   if (API_ENABLED) {
     void api.progress
       .addNutrition({

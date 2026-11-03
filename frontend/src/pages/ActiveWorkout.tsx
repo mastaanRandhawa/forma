@@ -68,9 +68,10 @@ import {
   type SetSuggestion,
   type SubstituteSuggestion,
 } from "../lib/session";
-import { grantWorkoutRewards } from "../lib/rewards";
-import { playRestChime, primeRestAlert, useWakeLock } from "../lib/restAlert";
-import { walletStore } from "../lib/wallet";
+import { applySessionEconomy, grantWorkoutRewards, type WorkoutPayout } from "../lib/rewards";
+import { playRestSound, primeRestAlert, useWakeLock } from "../lib/restAlert";
+import { customizationStore, useEquippedItem } from "../lib/customization";
+import type { SessionEconomy } from "../api/types";
 import type { RepDbCatalogEntry } from "../lib/repdb";
 import { repdbThumb, repdbImage } from "../lib/repdb";
 import { loadMuscleLookup, useMuscleLookup } from "../lib/muscleLookup";
@@ -181,6 +182,7 @@ export default function ActiveWorkout() {
   const [endEarly, setEndEarly] = useState(false);
   const finishedRef = useRef<CompletedSession | null>(null);
   const [cue, setCue] = useState<{ event: CueEvent; ctx: CueContext }>({ event: "start", ctx: {} });
+  const persona = useEquippedItem("persona")?.id;
   const [milestone, setMilestone] = useState<null | { kind: "pr" | "exercise"; title: string; detail?: string }>(null);
   const [summary, setSummary] = useState<null | {
     durationSec: number;
@@ -189,7 +191,7 @@ export default function ActiveWorkout() {
     completed: number;
     skipped: number;
     sets: number;
-    coins: number;
+    payout: WorkoutPayout;
     muscles: string[];
     /** body group → 1 (primary) / 0.5 (secondary), for the muscles-worked map */
     activation: Record<string, number>;
@@ -501,6 +503,7 @@ export default function ActiveWorkout() {
     setFinishing(true);
     const working = session.exercises.filter((e) => !e.skipped);
     let prs = detectPRs({ exercises: working }, priorSessions);
+    let apiEconomy: SessionEconomy | null | undefined;
     let volume = sessionVolume(session.exercises);
     let durationSec = Math.max(
       0,
@@ -508,9 +511,14 @@ export default function ActiveWorkout() {
     );
 
     if (API_ENABLED && session.apiId) {
-      for (let e = 0; e < session.exercises.length; e++)
-        for (let s = 0; s < session.exercises[e].sets.length; s++) queueSync(e, s, true);
-      const result = await finishApiSession(session, durationSec);
+      // every set has to be on the server before it finalizes: volume, PRs and coins all read them
+      Object.values(syncTimers.current).forEach(clearTimeout);
+      const latest = loadData().active ?? session;
+      await Promise.all(
+        latest.exercises.flatMap((ex, e) => ex.sets.map((_, s) => syncSet(latest, e, s, units))),
+      );
+      const result = await finishApiSession(latest, durationSec);
+      apiEconomy = result?.economy;
       if (result) {
         volume = fromKg(result.totalVolumeKg, units);
         durationSec = result.durationSeconds || durationSec;
@@ -520,7 +528,6 @@ export default function ActiveWorkout() {
       }
     }
 
-    const before = walletStore.snapshot().lifetimeEarned;
     const completed = finishSession(volume, units, prs, session.apiId);
     finishedRef.current = completed;
     const lastSame = priorSessions.find((s) => s.name === session.name) ?? null;
@@ -529,15 +536,11 @@ export default function ActiveWorkout() {
       : null;
     // null when the catalog chunk can't load (offline): muscle-based extras are skipped
     const muscleOf = await loadMuscleLookup().catch(() => null);
-    grantWorkoutRewards({
-      sessionId: session.apiId ?? session.startedAt,
-      volume,
-      prs: prs.length,
-      // includes the session just saved by finishSession()
-      sessions: loadData().sessions,
-      muscleOf,
-    });
-    const coins = walletStore.snapshot().lifetimeEarned - before;
+    const payout = API_ENABLED
+      ? applySessionEconomy(apiEconomy)
+      : completed
+        ? grantWorkoutRewards({ session: completed, prior: priorSessions, muscleOf })
+        : applySessionEconomy(null);
 
     const muscleSet = new Set<string>();
     const activation: Record<string, number> = {};
@@ -592,7 +595,7 @@ export default function ActiveWorkout() {
       completed: working.filter((e) => e.sets.some((s) => s.done)).length,
       skipped: session.exercises.filter((e) => e.skipped).length,
       sets: session.exercises.reduce((n, e) => n + e.sets.filter((s) => s.done && !s.warmup).length, 0),
-      coins,
+      payout,
       muscles,
       activation,
       vsLast,
@@ -771,7 +774,7 @@ export default function ActiveWorkout() {
           rxReps={rxReps}
           suggestion={suggestion}
           missingField={missingField}
-          cueText={trainerCue(cue.event, cue.ctx)}
+          cueText={trainerCue(cue.event, cue.ctx, persona)}
           onStopRest={stopRest}
           onStartRest={startRest}
           onPatchActiveSet={patchActiveSet}
@@ -986,14 +989,33 @@ export default function ActiveWorkout() {
 
               <WeekStrip sessions={summary.weekSessions} goal={data.profile.daysPerWeek ?? null} className="mt-3 !p-3.5" />
 
-              {summary.coins > 0 && (
-                <div className="mt-3 flex items-center justify-center gap-2 rounded-hero border border-[var(--accent-amber)]/25 bg-[var(--accent-amber)]/[0.08] py-2.5">
-                  <Coins size={14} className="text-[var(--accent-amber)]" />
-                  <span className="num text-[0.95rem] font-semibold tabular-nums text-[var(--accent-amber)]">
-                    +{summary.coins}
-                  </span>
-                  <span className="text-[0.82rem] lowercase text-content-secondary">earned this session</span>
+              {summary.payout.coins > 0 && (
+                <div className="mt-3 rounded-hero border border-[var(--accent-amber)]/25 bg-[var(--accent-amber)]/[0.08] px-3.5 py-2.5" data-testid="workout-coins">
+                  <div className="flex items-center justify-center gap-2">
+                    <Coins size={14} className="text-[var(--accent-amber)]" />
+                    <span className="num text-[0.95rem] font-semibold tabular-nums text-[var(--accent-amber)]">
+                      +{summary.payout.coins}
+                    </span>
+                    <span className="text-[0.82rem] lowercase text-content-secondary">earned this session</span>
+                  </div>
+                  {summary.payout.rewards.length > 1 && (
+                    <ul className="mt-2 space-y-0.5 border-t border-[var(--accent-amber)]/15 pt-2">
+                      {summary.payout.rewards.map((r, i) => (
+                        <li key={`${r.label}-${i}`} className="flex justify-between gap-3 text-[0.76rem] lowercase text-content-secondary">
+                          <span className="min-w-0 truncate">{r.label}</span>
+                          <span className="num shrink-0 tabular-nums">+{r.amount}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </div>
+              )}
+              {summary.payout.skipped && (
+                <p className="mt-3 text-center text-[0.78rem] lowercase text-content-tertiary" data-testid="workout-no-coins">
+                  {summary.payout.skipped === "too_few_sets"
+                    ? "no coins for this one: a workout pays from 3 completed working sets."
+                    : "no coins for this one: a workout pays from 5 minutes."}
+                </p>
               )}
 
               {summary.prs.length > 0 && (
@@ -1074,7 +1096,7 @@ export default function ActiveWorkout() {
 
               <p className="mt-4 flex items-start gap-2 text-[0.9rem] italic leading-relaxed text-content-secondary">
                 <span aria-hidden>"</span>
-                {trainerCue("finish")}
+                {trainerCue("finish", {}, persona)}
               </p>
 
               <div className="mt-6 flex flex-col gap-2.5">
@@ -1240,7 +1262,7 @@ function RestOrFocus(props: {
     if (restEndsAt && remaining <= 0) {
       vibrate([40, 30, 40]); // Android only — iOS Safari and desktops have no vibration
       // not for a rest that ran out while the page was closed
-      if (Date.now() - restEndsAt < 5000) playRestChime();
+      if (Date.now() - restEndsAt < 5000) playRestSound(customizationStore.equippedId("restSound"));
       props.onStopRest();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
