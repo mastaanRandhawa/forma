@@ -33,6 +33,17 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
 
       - run: npm ci
+
+      # Exercise images are generated, not committed (docs/EXERCISE_IMAGES.md).
+      # The cache only saves time: the sync still checks for a newer pack.
+      - uses: actions/cache@v4
+        with:
+          path: |
+            frontend/public/exercise-img
+            frontend/.cache/repdb
+          key: exercise-img-${{ hashFiles('frontend/scripts/sync-exercise-images.mjs', 'frontend/scripts/lib/cutout.mjs') }}
+      - run: npm run images:sync
+
       - run: npm run build
         env:
           VITE_API_URL: ${{ vars.VITE_API_URL }}

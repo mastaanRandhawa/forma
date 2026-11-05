@@ -1,6 +1,6 @@
 import { DetailDrawer } from "./dashboard/DetailDrawer";
 import { ExerciseThumb } from "./ExerciseThumb";
-import { repdbImage, type RepDbCatalogEntry } from "../lib/repdb";
+import type { RepDbCatalogEntry } from "../lib/repdb";
 
 /**
  * ExerciseDetailDrawer — the deep-dive for one exercise, reusing the app's
@@ -15,8 +15,8 @@ export function ExerciseDetailDrawer({
   onClose: () => void;
 }) {
   const e = exercise;
-  const start = repdbImage(e?.imgStart);
-  const end = repdbImage(e?.imgEnd);
+  const start = e?.imgStart;
+  const end = e?.imgEnd;
 
   const chips = [
     e?.equipment,
@@ -33,8 +33,8 @@ export function ExerciseDetailDrawer({
         <div className="space-y-6">
           {(start || end) && (
             <div className="flex gap-3">
-              {start && <Figure src={start} label={end ? "start" : undefined} alt={`${e.name} — start position`} />}
-              {end && <Figure src={end} label="peak" alt={`${e.name} — peak position`} />}
+              {start && <Figure file={start} label={end ? "start" : undefined} alt={`${e.name} — start position`} />}
+              {end && <Figure file={end} label="peak" alt={`${e.name} — peak position`} />}
             </div>
           )}
 
@@ -97,10 +97,10 @@ export function ExerciseDetailDrawer({
 
 const cap = (s: string | null | undefined) => (s ? s[0].toUpperCase() + s.slice(1) : null);
 
-function Figure({ src, label, alt }: { src: string; label?: string; alt: string }) {
+function Figure({ file, label, alt }: { file: string; label?: string; alt: string }) {
   return (
     <figure className="flex-1">
-      <ExerciseThumb src={src} alt={alt} fill />
+      <ExerciseThumb file={file} alt={alt} fill />
       {label && <figcaption className="label-instrument mt-1 text-center">{label}</figcaption>}
     </figure>
   );

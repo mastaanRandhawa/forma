@@ -67,7 +67,7 @@ flowchart LR
 | `workout/SessionDetailDrawer`, `TemplateCard`, `WorkoutInProgressBar` | Workouts, Home | |
 | `workout/TemplateLibrary`, `TemplatePreview`, `PlanViews` | Workouts (Templates tab) | data from `lib/workoutTemplates.ts` (templates, filters) and `lib/workoutPlans.ts` (plans) |
 | `workout/WeekStrip`, `workout/Celebration` | Workouts (Today), ActiveWorkout summary | `weekProgress` in `lib/fitness.ts`; Celebration renders nothing under reduced motion |
-| `ExerciseThumb` (`name`, `motion`) | Library, Builder, Workouts, ActiveWorkout, SessionDetailDrawer | `repdbFrames(name)` → start / peak frames; crossfade on hover or loop |
+| `ExerciseThumb` (`file` + `peakFile`, or `name`; `motion`) | Library, Builder, Workouts, ActiveWorkout, SessionDetailDrawer | `entryFrames(entry)` / `repdbFrames(name)` → start / peak frames from `public/exercise-img` (generated, see `docs/EXERCISE_IMAGES.md`); crossfade on hover or loop |
 | `dashboard/*` (RingStat, DetailDrawer, MetricDetailBody, GoalsCard, AchievementStrip, Greeting…) | Home | `MetricDetailBody` takes real-data `detail` only; `WeeklySummary` deleted (T-30) |
 | `health/*` (DailyCheckin, MetricCard, CircularDial…) | Home | DailyCheckin writes local + `progress.checkin` |
 | `nutrition/*` | Nutrition | FoodLog = API, OfflineNutrition = local |

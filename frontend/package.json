@@ -12,7 +12,9 @@
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:report": "playwright show-report",
-    "test:e2e:stack": "node scripts/e2e-stack.mjs"
+    "test:e2e:stack": "node scripts/e2e-stack.mjs",
+    "images:sync": "node scripts/sync-exercise-images.mjs",
+    "catalog:sync": "node scripts/build-repdb-catalog.mjs"
   },
   "dependencies": {
     "body-muscles": "^1.0.0",
@@ -33,8 +35,10 @@
     "autoprefixer": "^10.4.20",
     "eslint": "^10.14.0",
     "eslint-plugin-react-hooks": "^7.1.1",
+    "fflate": "^0.8.3",
     "globals": "^17.13.0",
     "postcss": "^8.4.47",
+    "sharp": "^0.35.5",
     "tailwindcss": "^3.4.13",
     "typescript": "^5.5.4",
     "typescript-eslint": "^8.72.1",

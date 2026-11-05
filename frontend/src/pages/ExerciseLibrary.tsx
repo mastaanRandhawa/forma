@@ -3,7 +3,7 @@ import { PageHeader } from "../components/PageHeader";
 import { Reveal } from "../components/Reveal";
 import { ExerciseThumb } from "../components/ExerciseThumb";
 import { ExerciseDetailDrawer } from "../components/ExerciseDetailDrawer";
-import { REPDB_URL, repdbImage, type RepDbCatalogEntry } from "../lib/repdb";
+import { REPDB_URL, entryFrames, type RepDbCatalogEntry } from "../lib/repdb";
 import { REPDB_CATALOG } from "../lib/repdb.catalog";
 
 const MUSCLES = ["All", "Chest", "Back", "Lats", "Shoulders", "Biceps", "Triceps", "Glutes", "Quads", "Hamstrings", "Abs", "Calves"];
@@ -55,7 +55,7 @@ export default function ExerciseLibrary() {
               onClick={() => setSelected(e)}
               className="focus-ring flex w-full items-center gap-3.5 py-3 text-left"
             >
-              <ExerciseThumb name={e.name} src={repdbImage(e.imgStart ?? e.imgEnd)} alt={e.name} size={52} />
+              <ExerciseThumb {...entryFrames(e)} alt={e.name} size={52} />
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-[0.95rem] text-content-primary">{e.name}</span>
                 <span className="label-instrument mt-0.5 block truncate">

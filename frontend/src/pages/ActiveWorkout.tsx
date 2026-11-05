@@ -73,7 +73,7 @@ import { playRestSound, primeRestAlert, useWakeLock } from "../lib/restAlert";
 import { customizationStore, useEquippedItem } from "../lib/customization";
 import type { SessionEconomy } from "../api/types";
 import type { RepDbCatalogEntry } from "../lib/repdb";
-import { repdbThumb, repdbImage } from "../lib/repdb";
+import { entryFrames, repdbFrames } from "../lib/repdb";
 import { loadMuscleLookup, useMuscleLookup } from "../lib/muscleLookup";
 import { plateCombo, plateLabel } from "../lib/plates";
 import { API_ENABLED } from "../api/hooks";
@@ -1238,18 +1238,7 @@ function RestOrFocus(props: {
 }) {
   const { session, currentEx, catEntry, units, activeSet, cueText } = props;
   const [now, setNow] = useState(() => Date.now());
-  const [imgFrame, setImgFrame] = useState(0);
   const restEndsAt = session.restEndsAt;
-
-  // Animate between start/end RepDB frames when resting or viewing the card
-  const imgStart = catEntry?.imgStart ? repdbImage(catEntry.imgStart) : null;
-  const imgEnd = catEntry?.imgEnd ? repdbImage(catEntry.imgEnd) : null;
-  const hasAnim = !!(imgStart && imgEnd);
-  useEffect(() => {
-    if (!hasAnim) return;
-    const id = setInterval(() => setImgFrame((f) => (f === 0 ? 1 : 0)), 800);
-    return () => clearInterval(id);
-  }, [hasAnim]);
 
   useEffect(() => {
     if (!restEndsAt) return;
@@ -1270,8 +1259,8 @@ function RestOrFocus(props: {
 
   if (!currentEx) return null;
 
-  const thumb = repdbThumb(currentEx.name);
-  const animSrc = hasAnim ? (imgFrame === 0 ? imgStart! : imgEnd!) : thumb;
+  // the session's catalog match first: it survives names the free-text lookup misses
+  const frames = catEntry ? entryFrames(catEntry) : repdbFrames(currentEx.name);
   const nextWeight = activeSet?.weight ?? props.suggestion?.weight ?? null;
   const nextReps = activeSet?.reps ?? props.suggestion?.reps ?? null;
 
@@ -1337,7 +1326,7 @@ function RestOrFocus(props: {
         <div className="surface-recessed mx-5 mb-5 rounded-hero p-4 text-left">
           <div className="label-instrument mb-2">next up</div>
           <div className="flex items-center gap-3">
-            <ExerciseThumb name={currentEx.name} src={thumb} alt="" size={72} motion="loop" />
+            <ExerciseThumb {...frames} alt="" size={72} motion="loop" />
             <div className="min-w-0">
               <div className="truncate text-[0.95rem] lowercase text-content-primary">{currentEx.name}</div>
               <div className="label-instrument mt-0.5 tabular-nums">
@@ -1365,16 +1354,10 @@ function RestOrFocus(props: {
   const missingHint = props.missingField ? "set-missing-hint" : undefined;
   return (
     // wide screens put the picture beside the controls, so "complete set" fits on a laptop without scrolling
-    <div className={`surface-soft overflow-hidden ${animSrc ? "lg:grid lg:grid-cols-[minmax(0,4fr)_minmax(0,8fr)]" : ""}`}>
-      {animSrc && (
-        <div className="relative aspect-[16/10] w-full bg-[#150c12] lg:aspect-auto lg:h-full lg:min-h-[320px]">
-          <img
-            key={animSrc}
-            src={animSrc}
-            alt={currentEx.name}
-            className="h-full w-full object-cover opacity-90 transition-opacity duration-300"
-            loading="eager"
-          />
+    <div className={`surface-soft overflow-hidden ${frames.file ? "lg:grid lg:grid-cols-[minmax(0,4fr)_minmax(0,8fr)]" : ""}`}>
+      {frames.file && (
+        <div className="relative aspect-[16/10] w-full lg:aspect-auto lg:h-full lg:min-h-[320px]">
+          <ExerciseThumb {...frames} alt={currentEx.name} fill="parent" motion="loop" />
           <button
             onClick={props.onHowto}
             className="focus-ring absolute bottom-3 right-3 rounded-pill bg-[rgba(12,6,10,0.7)] px-3 py-1.5 text-[0.76rem] lowercase text-content-primary backdrop-blur-sm hover:bg-[rgba(12,6,10,0.85)]"

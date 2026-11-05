@@ -1,6 +1,6 @@
 /**
- * Full RepDB display catalog — 601 exercises with descriptions, instructions and
- * form tips. ~640 kB of JSON; import it only from lazily-loaded Library code so
+ * Full RepDB display catalog — 701 exercises with descriptions, instructions and
+ * form tips. Large JSON; import it only from lazily-loaded Library code so
  * it never lands in the main bundle. See `./repdb.ts` for the light helpers.
  */
 import catalog from "./repdb.catalog.json";
