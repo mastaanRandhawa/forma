@@ -136,8 +136,8 @@ export function buildMetricDetails(
       weeklyCounts.push(days.slice(days.length - (w + 1) * 7, days.length - w * 7).reduce((a, b) => a + b, 0));
     const thisWeek = new Set(sessionsInLastDays(sessions, 7).map((s) => s.finishedAt.slice(0, 10))).size;
     const target = profile.daysPerWeek ?? 3;
-    const cur = currentStreak(sessions);
-    const best = longestStreak(sessions);
+    const cur = currentStreak(sessions, profile);
+    const best = longestStreak(sessions, profile);
 
     out.consistency = {
       eyebrow: "last 13 weeks",

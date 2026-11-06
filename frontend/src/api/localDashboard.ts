@@ -31,7 +31,7 @@ export function buildLocalDashboard(d: FormaData): T.Dashboard {
     sessionsInLastDays(d.sessions, 7).map((s) => s.finishedAt.slice(0, 10)),
   ).size;
   const readiness = readinessFromCheckin(d);
-  const streak = currentStreak(d.sessions);
+  const streak = currentStreak(d.sessions, d.profile);
 
   return {
     greeting: h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening",

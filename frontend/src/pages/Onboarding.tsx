@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { ArrowRight, ArrowLeft, Check } from "lucide-react";
 import { AtmosphericBackground } from "../components/layout/AtmosphericBackground";
+import { holdStreakForPlan } from "../lib/economy";
 import { saveProfile, type Environment, type Experience, type Units } from "../lib/localStore";
 import { todayPlan } from "../lib/program";
 import {
@@ -97,6 +98,7 @@ export default function Onboarding() {
     const dateOfBirth =
       Number.isFinite(yr) && yr >= 1900 && yr <= nowYear ? `${yr}-01-01` : undefined;
 
+    if (!API_ENABLED) holdStreakForPlan({ daysPerWeek, preferredDays });
     saveProfile({
       goal,
       experience,

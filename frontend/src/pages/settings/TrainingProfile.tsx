@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { loadData, saveProfile, useFormaData, type Profile } from "../../lib/localStore";
 import { api } from "../../api/client";
 import { API_ENABLED } from "../../api/hooks";
+import { holdStreakForPlan, refreshEconomy } from "../../lib/economy";
 import {
   DAYS,
   DURATIONS,
@@ -24,6 +25,7 @@ import type { ProfilePatch, TrainingLocation, UnitPreference } from "../../api/t
 /** Persist a profile change locally, and mirror the fields the API knows about. */
 function persist(patch: Partial<Profile>) {
   const before = loadData().profile;
+  if (!API_ENABLED) holdStreakForPlan(patch);
   saveProfile(patch); // a unit switch also converts stored weights and bodyweight
   if (!API_ENABLED) return;
   const p: ProfilePatch = {};
@@ -37,7 +39,13 @@ function persist(patch: Partial<Profile>) {
     const kg = before.units === "kg" ? patch.bodyweight : patch.bodyweight * LB_TO_KG;
     p.weightKg = Math.round(kg * 10) / 10;
   }
-  if (Object.keys(p).length) void api.me.update(p).catch(() => {});
+  // a new weekly target can move the streak, so pick up what the server makes of it
+  if (Object.keys(p).length) {
+    void api.me
+      .update(p)
+      .then(() => (p.trainingFrequencyTarget != null ? refreshEconomy() : undefined))
+      .catch(() => {});
+  }
   if (patch.equipment) void api.me.setEquipment(equipmentToApiKeys(patch.equipment)).catch(() => {});
   if (patch.injuries != null) void replaceInjuries(patch.injuries);
 }

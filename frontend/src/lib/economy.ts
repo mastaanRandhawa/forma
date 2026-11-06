@@ -29,12 +29,13 @@ import {
   type EarnKind,
   type WeekFacts,
 } from "./economyConfig";
-import { improvedLifts, sessionsPerGroup, trainedDays } from "./fitness";
+import { improvedLifts, planOf, sessionsPerGroup, trainedDays } from "./fitness";
 import { buildLocalReview } from "./kaiReview";
 import { fromKg } from "./lifecycle";
-import { loadData, useFormaData, type CompletedSession, type FormaData } from "./localStore";
+import { loadData, useFormaData, type CompletedSession, type FormaData, type Profile } from "./localStore";
 import {
   daysToFreeze,
+  daysToHold,
   localDayOf,
   repairOption,
   streakLength,
@@ -60,7 +61,7 @@ type MuscleOf = Parameters<typeof sessionsPerGroup>[1];
 interface State {
   // no-backend build
   inventory: Record<string, number>;
-  protections: { date: string; source: "freeze" | "repair"; at: string }[];
+  protections: { date: string; source: "freeze" | "repair" | "plan"; at: string }[];
   challengeWeek: { week: string; slots: string[]; retired: string[]; rerolls: number } | null;
   lastReview: KaiReview | null;
   // API mode: the server's latest word on everything above and more
@@ -168,13 +169,27 @@ export function priceOf(itemId: string, owned: readonly string[] = customization
 export function applyLocalFreezes(data: FormaData = loadData()): void {
   const held = state.inventory[FREEZE_ID] ?? 0;
   const covered = new Set(state.protections.map((p) => p.date));
-  const days = daysToFreeze(trainedDays(data.sessions), covered, todayKey(), held);
+  const days = daysToFreeze(trainedDays(data.sessions), covered, todayKey(), held, planOf(data.profile));
   if (!days.length) return;
   state.inventory = { ...state.inventory, [FREEZE_ID]: held - days.length };
   const at = new Date().toISOString();
   state.protections = [...state.protections, ...days.map((date) => ({ date, source: "freeze" as const, at }))];
   emit();
   announceRewards([], [{ type: "freeze_used", days }]);
+}
+
+/**
+ * Call before saving a new plan, so it can't shorten the streak behind you
+ * (no-backend build; the server does this in API mode).
+ */
+export function holdStreakForPlan(next: Partial<Profile>): void {
+  const data = loadData();
+  const covered = new Set(state.protections.map((p) => p.date));
+  const days = daysToHold(trainedDays(data.sessions), covered, todayKey(), planOf(data.profile), planOf({ ...data.profile, ...next }));
+  if (!days.length) return;
+  const at = new Date().toISOString();
+  state.protections = [...state.protections, ...days.map((date) => ({ date, source: "plan" as const, at }))];
+  emit();
 }
 
 // ── the week's facts, which challenges measure ──────────────────────────────
@@ -366,7 +381,7 @@ export async function spendKaiReview(muscleOf: MuscleOf | null): Promise<{ revie
 function localRepairOption(data: FormaData): RepairOption | null {
   const cutoff = Date.now() - STREAK_REPAIR.cooldownDays * 86_400_000;
   if (state.protections.some((p) => p.source === "repair" && Date.parse(p.at) > cutoff)) return null;
-  return repairOption(trainedDays(data.sessions), new Set(state.protections.map((p) => p.date)), todayKey());
+  return repairOption(trainedDays(data.sessions), new Set(state.protections.map((p) => p.date)), todayKey(), planOf(data.profile));
 }
 
 // ── what the store shows ────────────────────────────────────────────────────
@@ -436,7 +451,7 @@ export function useEconomy(muscleOf: MuscleOf | null): EconomyView {
       }),
       rerollsLeft: Math.max(0, REROLLS_PER_WEEK - cw.rerolls),
       deals: dealsFor(cw.week),
-      streak: streakLength(trainedDays(data.sessions), covered, todayKey()),
+      streak: streakLength(trainedDays(data.sessions), covered, todayKey(), planOf(data.profile)),
       repair: option ? { ...option, price: STREAK_REPAIR.price } : null,
       capFor: (kind) => ({ ...walletStore.capUsage(kind), ...EARN_CAPS[kind] }),
       lastReview: snap.lastReview,

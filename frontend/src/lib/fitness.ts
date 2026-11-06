@@ -8,8 +8,8 @@
  *   estimated 1RM = Epley: weight × (1 + reps / 30)
  *   PR           = beats the previous best weight, e1RM, or set volume
  */
-import type { CompletedSession, LoggedExercise, LoggedSet } from "./localStore";
-import { localDayOf, shiftDay, streakLength, streakProtection, todayKey } from "./streak";
+import type { CompletedSession, LoggedExercise, LoggedSet, Profile } from "./localStore";
+import { localDayOf, longestRun, plannedDays, streakLength, streakProtection, todayKey } from "./streak";
 
 export const epley1RM = (weight: number, reps: number): number =>
   reps <= 0 ? 0 : Math.round(weight * (1 + reps / 30));
@@ -38,12 +38,17 @@ export const trainedDays = (sessions: CompletedSession[]): Set<string> =>
   new Set(sessions.filter(hasWork).map((s) => dayKey(s.finishedAt)));
 
 // ── streaks ─────────────────────────────────────────────────────────────────
+type TrainingPlan = Pick<Profile, "daysPerWeek" | "preferredDays">;
+
+/** The days a week this profile plans to train. */
+export const planOf = (p: TrainingPlan): number => plannedDays(p.daysPerWeek, p.preferredDays);
+
 /**
- * Consecutive days up to today (or yesterday) with real training on them. A day
- * covered by a Streak Freeze or Repair bridges the run but doesn't add to it.
+ * Days with real training on them in the current run. A rest day in the plan, or
+ * a day covered by a Streak Freeze or Repair, bridges the run but doesn't add to it.
  */
-export function currentStreak(sessions: CompletedSession[]): number {
-  return streakLength(trainedDays(sessions), streakProtection.get(), todayKey());
+export function currentStreak(sessions: CompletedSession[], profile: TrainingPlan): number {
+  return streakLength(trainedDays(sessions), streakProtection.get(), todayKey(), planOf(profile));
 }
 
 /** This week, Monday first: which days had a session, and how many sessions in total. */
@@ -62,19 +67,8 @@ export function weekProgress(sessions: CompletedSession[], now = new Date()): { 
   return { days: keys.map((k) => trained.has(k)), count: thisWeek.length, todayIndex };
 }
 
-export function longestStreak(sessions: CompletedSession[]): number {
-  const trained = trainedDays(sessions);
-  if (!trained.size) return 0;
-  const cover = streakProtection.get();
-  const days = [...new Set([...trained, ...cover])].sort();
-  let best = 0;
-  let run = 0;
-  for (let i = 0; i < days.length; i++) {
-    if (i > 0 && shiftDay(days[i - 1], 1) !== days[i]) run = 0;
-    if (trained.has(days[i])) run += 1;
-    best = Math.max(best, run);
-  }
-  return best;
+export function longestStreak(sessions: CompletedSession[], profile: TrainingPlan): number {
+  return longestRun(trainedDays(sessions), streakProtection.get(), todayKey(), planOf(profile));
 }
 
 // ── counts / volume windows ─────────────────────────────────────────────────

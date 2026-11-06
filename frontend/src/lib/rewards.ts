@@ -51,7 +51,7 @@ export const EARN_WAYS: EarnWay[] = [
   { id: "pr", label: "Set a personal record", detail: "Beat your best on a lift you've logged before, up to 3 a workout", coins: "+25 each", cadence: "per workout", icon: "medal", cap: "pr" },
   { id: "week", label: "Hit your weekly target", detail: "Reach your training days for the week. A bigger target pays more", coins: "+50–125", cadence: "weekly", icon: "calendar", cap: "week" },
   { id: "challenge", label: "Finish a challenge", detail: "Three new ones every Monday", coins: "+40–70", cadence: "weekly", icon: "target", cap: "challenge" },
-  { id: "streak", label: "Build a streak", detail: "Milestones at 3 / 7 / 14 / 30 / 60 / 100 days, each paid once", coins: "+15–400", cadence: "ongoing", icon: "flame" },
+  { id: "streak", label: "Build a streak", detail: "Milestones at 3 / 7 / 14 / 30 / 60 / 100 trained days, each paid once. Rest days in your plan don't break it", coins: "+10–300", cadence: "ongoing", icon: "flame" },
   { id: "achievement", label: "Unlock an achievement", detail: "One-off payouts for long-run milestones", coins: "+25–400", cadence: "one time", icon: "trophy" },
   { id: "checkin", label: "Recovery check-in", detail: "Log how you slept and feel", coins: "+10", cadence: "daily", icon: "heart", cap: "checkin" },
   { id: "food", label: "Log your food", detail: "Log 2 or more items in a day", coins: "+10", cadence: "daily", icon: "apple", cap: "food" },
@@ -125,7 +125,7 @@ function settleLocal(d: FormaData, muscleOf: MuscleOf | null) {
     pay("challenge", challengeKey(c.id), c.reward, `Challenge · ${c.title}`);
   }
 
-  const streak = currentStreak(d.sessions);
+  const streak = currentStreak(d.sessions, d.profile);
   for (const [days, coins] of Object.entries(STREAK_MILESTONES)) {
     if (streak >= Number(days)) pay("streak", `streak:${days}`, coins, `${days}-day streak`);
   }

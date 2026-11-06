@@ -1,7 +1,7 @@
 import { Check, Flame } from "lucide-react";
 import { currentStreak, weekProgress } from "../../lib/fitness";
 import { useProtectedDays } from "../../lib/streak";
-import type { CompletedSession } from "../../lib/localStore";
+import { useFormaData, type CompletedSession } from "../../lib/localStore";
 
 const LETTERS = ["m", "t", "w", "t", "f", "s", "s"];
 const NAMES = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
@@ -21,7 +21,8 @@ export function WeekStrip({
 }) {
   const { days, count, todayIndex } = weekProgress(sessions);
   useProtectedDays();
-  const streak = currentStreak(sessions);
+  const { profile } = useFormaData();
+  const streak = currentStreak(sessions, profile);
   const hit = goal != null && count >= goal;
   return (
     <section aria-label="this week" className={`surface-soft flex flex-wrap items-center justify-between gap-4 p-4 sm:p-5 ${className}`}>

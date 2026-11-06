@@ -277,7 +277,7 @@ export default function Progress() {
         <MetricCard
           tone="mauve"
           label="longest streak"
-          countTo={longestStreak(sessions)}
+          countTo={longestStreak(sessions, profile)}
           unit="days"
           revealDelay={0.16}
           className="min-h-[168px]"

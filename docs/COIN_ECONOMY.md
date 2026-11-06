@@ -69,7 +69,7 @@ personalities) has no screen in the web app.
 | `protein` | Reach your protein target today | 10 | 1 | 7 |
 | `week` | Reach your weekly training target | 25 × target, target clamped to 2–5, so 50–125 | none | 1 |
 | `challenge` | Finish one of this week's 3 challenges | 40–70 | none | 3 |
-| `streak` | Reach a 3/7/14/30/60/100-day streak | 15/40/80/150/250/400 | once each, ever | |
+| `streak` | Reach a streak of 3/7/14/30/60/100 trained days | 10/25/50/100/175/300 | once each, ever | |
 | `achievement` | Unlock an achievement | 25–400 | once each, ever | |
 | `welcome` | A new account (API), or finishing onboarding (local) | 100 | once, ever | |
 
@@ -78,6 +78,55 @@ item id, so the rotation is stable and needs no storage: 4 workouts (60), 50,000
 volume (70), 2 sessions before 9am (50), 5 muscle groups (60), 60 working sets (60), 1 PR
 (50), food logged 4 days (50), 4 recovery check-ins (40), a weekend session (40), 2
 sessions of 45+ minutes (50).
+
+### How a streak works
+
+A streak counts trained days, and it lasts as long as the user can still hit their plan.
+A 7-day streak means 7 days of training with nothing missed, not 7 calendar days.
+
+- **The plan** is how many days a week the user means to train. That's their weekly
+  target (`trainingFrequencyTarget` on the server, `daysPerWeek` locally), or how many
+  weekdays they've picked if there's no target (an active program's `preferredWeekdays`,
+  or `preferredDays` locally).
+- **Rest days.** Planning N days leaves 7 − N rest days in each Monday-to-Sunday week. A
+  day off uses one up, bridges the streak without adding to it, and costs nothing.
+- **Misses.** A day off beyond that is a miss, which makes it exactly the day the week's
+  target stops being reachable. A miss breaks the streak unless a Freeze or Repair covers
+  it. A covered day doesn't use up a rest day.
+- **Starting over.** Days before a first session don't count against anything. Training
+  again after a miss starts a new run with its rest days back for that week.
+
+**Why a count and not fixed weekdays.** A fixed schedule would charge someone a freeze for
+training on Tuesday instead of Monday, even though they hit their week. The count allows
+everything a schedule would: Mon/Wed/Fri on a 3-day plan leaves exactly the 4 rest days
+that week needs. It also behaves the same in both modes, because the server doesn't store
+preferred weekdays.
+
+**Users with no plan** are held to 3 days a week (`DEFAULT_PLANNED_DAYS`), the same as the
+casual user in section 5. Having no plan shouldn't cost more than having one, and 3 is
+still a low bar that means something. Onboarding asks for a target, so this mostly covers
+accounts that never finished it.
+
+**Streaks already in progress** need no migration, because a streak is worked out from
+sessions and protected days every time it's read:
+
+- Everyone's history is re-read under this rule the next time it's read. A streak can only
+  get longer, since every day that bridged before still bridges.
+- Someone whose streak broke on rest days may see it jump. Any milestones they've now
+  passed pay on the next settle at the new amounts, 660 coins at the very most, and only
+  for days they really trained.
+- Milestones already paid stay paid at the old amounts. Freezes on hand stay on hand, and
+  days already covered stay covered. Freezes already spent on what would now be rest days
+  aren't refunded.
+
+**Changing the plan.** History is read under the current plan, so raising a target would
+turn past rest days into misses and could break a long streak. Lowering one can shorten a
+streak too, if the run restarted mid-week after a miss and the lighter plan would have
+used up that week's rest before the restart. So before a new target is saved, any day it
+would call a miss in the current run is saved as a protected day (source `plan`). The
+streak you have stays whole, and the new plan applies from today on. Rest already taken
+this week still counts against the new plan, so a change doesn't free up more rest, and a
+streak that's already broken has nothing saved for it.
 
 ## 4. Things to buy
 
@@ -88,15 +137,15 @@ sessions of 45+ minutes (50).
 | Small | 60–300 | Whenever | Most weeks |
 | Mid | 400–800 | About 1 a week | Every 2–3 weeks |
 | High | 900–1,600 | Every 1–2 weeks | Every 3–5 weeks |
-| Top | 2,600–3,000 | About a month | 9–10 weeks |
-| Prestige | 4,950 (bundle) | About 6 weeks | 16 weeks |
+| Top | 2,600–3,000 | About a month | 8–9 weeks |
+| Prestige | 4,950 (bundle) | About 6 weeks | 15 weeks |
 
 ### New items
 
 | Item | Price | What it really does |
 | --- | --- | --- |
-| **Streak Freeze** `cs-freeze` | 150, hold 2 | Used automatically when a missed day would break a streak of 3+ days. The day bridges the streak but doesn't add to it. |
-| **Streak Repair** `cs-repair` | 450, once a week | Restores a streak lost to a 1–3 day gap, if the earlier run was 3+ days and the gap was in the last 3 days. Charged only when it can be applied. |
+| **Streak Freeze** `cs-freeze` | 100, hold 2 | Used automatically when a missed training day would break a streak of 3+ days. Rest days in the plan never use one. The day bridges the streak but doesn't add to it. |
+| **Streak Repair** `cs-repair` | 450, once a week | Restores a streak lost to 1–3 missed training days, if the earlier run was 3+ days and the last miss was in the last 3 days. Charged only when it can be applied. |
 | **Challenge Reroll** `cs-reroll` | 60, hold 3, 2 uses a week | Swaps an unfinished challenge for one you haven't already met. |
 | **Kai Deep Review** `cs-review` | 300, hold 3 | A 28-day report: training frequency, volume trend, lift progress, PRs, muscle balance and one concrete next step. It's saved to your Kai chat in API mode, and Kai adds a written take when the AI service is configured. |
 | **Kai personas** `ps-drill` `ps-zen` `ps-analyst` `ps-hype` | 600 each | Changes Kai's voice: Kai's chat instructions in API mode, and the in-workout cues in both modes. |
@@ -143,34 +192,56 @@ challenges. They expire on Monday, which gives saved-up coins a reason to move.
 | Weekly target | 75, 3 weeks in 4 = 56 | 125 | 125 |
 | Challenges | 0.5 at 55 = 27 | 2 at 60 = 120 | 190 (top 3 in the pool) |
 | **Recurring total** | **about 295** | **about 770** | **1,080** |
-| One-offs, averaged over 12 weeks | about 15 | about 30–50 | |
-| **Per week** | **about 310** | **about 800** | |
+| Streak milestones, averaged over 12 weeks | 185 ÷ 12 = about 15 | 360 ÷ 12 = 30 | |
+| Other one-offs, averaged over 12 weeks | about 15 | about 30–50 | |
+| **Per week** | **about 325** | **about 840** | |
 
 The `Everything capped` column is a hard ceiling on recurring income. Even at that rate a
 3,000-coin item takes nearly 3 weeks, so nothing at the top can be bought in one week.
 
+**Streak milestones are easier to reach.** Training to plan now earns them with no
+freezes at all:
+
+| Trained days | 3 | 7 | 14 | 30 | 60 | 100 |
+| --- | --- | --- | --- | --- | --- | --- |
+| Coins | 10 | 25 | 50 | 100 | 175 | 300 |
+| Reached on 5 days a week | Week 1 | Week 2 | Week 3 | Week 6 | Week 12 | Week 20 |
+| Reached on 3 days a week | Week 1 | Week 3 | Week 5 | Week 10 | Week 20 | Week 34 |
+
+Holding one used to cost 300 coins a week in freezes, so the milestones rarely paid. Almost
+everyone reaches them now, so the amounts came down by about 30% (935 to 660 in total) to
+keep them a small bonus on top of training. They pay once each, and all of them have paid
+by about week 20 of a committed user's training.
+
 ### Checking against the goals
 
-- **Mid-tier about weekly (committed):** 800 a week against mid prices of 400–800. Yes.
-- **Top item in about a month (committed):** 3,000 ÷ 800 = 3.75 weeks. Yes.
-- **Casual users aren't locked out:** 310 a week buys a small item most weeks, a mid item
-  every 2–3 weeks, and the top item in 9–10 weeks.
+- **Mid-tier about weekly (committed):** 840 a week against mid prices of 400–800. Yes.
+- **Top item in about a month (committed):** 3,000 ÷ 840 = 3.6 weeks. Yes.
+- **Casual users aren't locked out:** 325 a week buys a small item most weeks, a mid item
+  every 2–3 weeks, and the top item in about 9 weeks.
 
 ### Sinks
 
-The whole one-time catalogue costs about 27,000 coins at list price, about 34 weeks of
+The whole one-time catalogue costs about 27,000 coins at list price, about 32 weeks of
 committed income. Recurring sinks keep coins moving after that:
 
 | Sink | Weekly use | Cost a week |
 | --- | --- | --- |
-| Streak Freeze | 2 rest days | 300 |
+| Streak Freeze | 1 missed training day a month | about 25 |
 | Challenge Reroll | 1 | 60 |
 | Kai Deep Review | Monthly | about 75 |
 | Streak Repair | Occasional | Up to 450 |
 
-That is about 435 a week, a bit over half of committed income, so the catalogue takes
-well over a year to finish with freezes in use. Weekly deals and the 4,950-coin Champion
-bundle give saved-up coins somewhere to go.
+That is about 160 a week, about a fifth of committed income. It was 435 when freezes paid
+for rest days, so the catalogue now takes about 40 weeks to finish rather than well over a
+year. That is the cost of not charging for rest, and it's worth paying. Weekly deals and
+the 4,950-coin Champion bundle give saved-up coins somewhere to go.
+
+**Why a freeze costs 100.** A freeze now only covers a real miss, such as a week off sick,
+so it works as insurance and should be cheap enough to keep one in the kit. 100 is a third
+of a casual week and under a quarter of a Repair, which covers the same thing after the
+fact. Raising the price to win back the lost sink would charge most the people having a
+bad week.
 
 **No balance cap.** A wallet cap or decay punishes the most committed users for doing
 what the app asks. It is worth revisiting only if real balances grow past about 10,000.
@@ -192,7 +263,9 @@ what the app asks. It is worth revisiting only if real balances grow past about 
 | Add and delete food logs | Paid once per day per rule, and the key stays spent if the log is deleted. |
 | Regain an achievement after a broken streak | Achievements no longer re-lock, and `ach:<key>` pays once. |
 | Buy your way to a streak milestone | Frozen and repaired days bridge a streak but never add to its length. |
-| Waste a freeze on a tiny streak | A freeze only fires on a streak of 3+ days and only if it covers the whole gap. |
+| Lower your target so days off stop counting | A streak only counts days really trained, so a lower target can't add to it or reach a milestone sooner, and it pays less for the weekly target. |
+| Change your target to avoid paying for a Freeze or Repair | Accepted. History is read under the current plan, so lowering a target can rejoin an old gap, and raising then lowering it each week can hold a streak with no training. Neither adds a day that wasn't trained, and milestones pay once each (660 coins in total), so all it saves is the cost of a Freeze or Repair. Closing it would mean storing every past plan. |
+| Waste a freeze on a tiny streak | A freeze only fires on a streak of 3+ days and only if it covers every miss in the gap. |
 | Reroll onto a challenge you've already met | Replacements skip anything already complete, and rerolled-away challenges don't come back that week. |
 | Buy at a stale deal price | The server charges its own price and rejects a mismatched `expectedPrice`. |
 | Buy two items with the same coins, or one item twice | Guarded balance decrement and optimistic lock, as before, now shared by every purchase. |
@@ -235,10 +308,11 @@ day and week (Monday first). Week keys match the client format, such as `w2026-1
   after a first PR row and a coin in the wallet, which normally means after the first
   workout. Until then the wallet pill links to a locked page. That gate predates this work
   and hasn't changed, but it's worth revisiting now that the store sells useful things.
-- **Streaks count consecutive days**, so someone training 5 days a week needs 2 freezes a
-  week to hold a streak. That makes freezes a strong sink, but it also charges for rest
-  days. A plan-aware streak that treats scheduled rest as safe would be kinder, and it
-  would need these prices revisited.
+- **Preferred weekdays aren't on the server.** They stay in the browser, so they're lost on
+  sign-out and API-mode streaks never read them. The weekly target decides the plan in both
+  modes, so a user whose target and picked weekdays disagree is held to the target. The
+  streak rule doesn't need the weekdays, but the calendar's "planned" dots would benefit
+  from a server column.
 - **Voices aren't sold.** The app has no text-to-speech, so a voice pack wouldn't do
   anything yet. The old catalogue stays unused until it does.
 - **Only achievements with a real evaluator can pay.** Those needing data the app doesn't

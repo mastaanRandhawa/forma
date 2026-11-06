@@ -9,7 +9,7 @@ import { test, expect, type Page } from "@playwright/test";
 import { OFFLINE_BASE } from "./helpers";
 import { dealsFor } from "../../src/lib/economyConfig";
 import { customizationItems } from "../../src/lib/data";
-import { weekKey } from "../../src/lib/streak";
+import { daysToFreeze, daysToHold, plannedDays, repairOption, shiftDay, streakLength, weekKey } from "../../src/lib/streak";
 
 test.use({ baseURL: OFFLINE_BASE });
 
@@ -80,7 +80,13 @@ interface Seed {
   active?: unknown;
   coins?: number;
   inventory?: Record<string, number>;
+  /** the weekly target; null for none. Defaults to the profile's three days. */
+  daysPerWeek?: number | null;
+  preferredDays?: number[];
 }
+
+/** Every day off is a miss on this plan, whatever day of the week the test runs. */
+const DAILY = { daysPerWeek: 7 };
 
 /** Fill this browser's storage, then open the page. */
 async function seed(page: Page, s: Seed = {}) {
@@ -91,7 +97,11 @@ async function seed(page: Page, s: Seed = {}) {
       localStorage.setItem(
         "forma.data.v1",
         JSON.stringify({
-          profile: PROFILE,
+          profile: {
+            ...PROFILE,
+            daysPerWeek: s.daysPerWeek === undefined ? PROFILE.daysPerWeek : s.daysPerWeek,
+            preferredDays: s.preferredDays ?? PROFILE.preferredDays,
+          },
           active: s.active ?? null,
           sessions: s.sessions ?? [],
           localTemplates: [],
@@ -219,20 +229,146 @@ test("three real days in a row pay the streak milestone once", async ({ page }) 
 
 test("an empty workout doesn't count toward a streak", async ({ page }) => {
   const empty = { ...session(1), id: "empty", exercises: [exercise("Barbell Bench Press", [set(false)])] };
-  await seed(page, { sessions: [session(0), empty, session(2), session(3)] });
+  await seed(page, { ...DAILY, sessions: [session(0), empty, session(2), session(3)] });
   await page.goto("/dashboard");
   await expect(streakCard(page)).toHaveText("1", { timeout: 10_000 });
 });
 
+// ── the plan ────────────────────────────────────────────────────────────────
+test("the streak maths match the server's", () => {
+  // the same cases as backend/src/services/streak.test.ts, whose copy of this maths must agree
+  const TODAY = "2026-11-11"; // a Wednesday
+  const days = (...back: number[]) => new Set(back.map((n) => shiftDay(TODAY, -n)));
+  const none = new Set<string>();
+  const on = (n: number) => shiftDay(TODAY, -n);
+  const friday = on(5);
+  const saturday = on(4);
+  const sunday = on(3);
+
+  expect(plannedDays(5, [1, 3, 5])).toBe(5);
+  expect(plannedDays(null, [1, 3, 5])).toBe(3);
+  expect(plannedDays(null, [])).toBe(3);
+  expect(plannedDays(9)).toBe(7);
+
+  expect(streakLength(days(0, 1, 2), none, TODAY, 7)).toBe(3);
+  expect(streakLength(days(2, 3, 4), none, TODAY, 7)).toBe(0);
+  expect(streakLength(days(2, 3, 4), none, TODAY, 6)).toBe(3);
+  expect(streakLength(days(0, 2, 3), days(1), TODAY, 7)).toBe(3);
+  // five days a week, weekends off, for two weeks and into this one
+  expect(streakLength(days(16, 15, 14, 13, 12, 9, 8, 7, 6, 5, 1, 2), none, TODAY, 5)).toBe(12);
+  // three days a week, on different days each week
+  expect(streakLength(days(16, 14, 12, 8, 4, 3, 1), none, TODAY, 3)).toBe(7);
+  // Monday trained, then off: Friday is the fourth rest day, Saturday the miss
+  const monday = days(16, 15, 14, 13, 9);
+  expect(streakLength(monday, none, saturday, 3)).toBe(5);
+  expect(streakLength(monday, none, sunday, 3)).toBe(0);
+  // a run gets its rest days back after a miss, and days before it started don't count
+  expect(streakLength(days(14, 13, 12, 6, 4, 3), none, on(2), 5)).toBe(3);
+  expect(streakLength(days(6, 4, 3), none, on(2), 6)).toBe(3);
+  // a protected day doesn't use up the week's rest
+  expect(streakLength(days(9, 8, 7), days(6), sunday, 5)).toBe(3);
+
+  expect(daysToFreeze(days(2, 3, 4), none, TODAY, 1, 7)).toEqual([on(1)]);
+  expect(daysToFreeze(days(0, 2, 3, 4), none, TODAY, 1, 7)).toEqual([on(1)]);
+  expect(daysToFreeze(days(2, 3, 4), none, TODAY, 2, 5)).toEqual([]);
+  expect(daysToFreeze(days(10, 11, 12), none, friday, 2, 5)).toEqual([on(7), on(6)]);
+  expect(daysToFreeze(days(10, 11, 12), none, friday, 1, 5)).toEqual([]);
+
+  expect(repairOption(days(2, 3, 4), none, TODAY, 7)).toEqual({ days: [on(1)], restoresTo: 3 });
+  expect(repairOption(days(0, 2, 3, 4), none, TODAY, 7)).toEqual({ days: [on(1)], restoresTo: 4 });
+  expect(repairOption(days(0, 1, 2, 3, 5, 6, 7), none, TODAY, 7)).toBeNull();
+  expect(repairOption(days(2, 3, 4), none, TODAY, 5)).toBeNull();
+  expect(repairOption(days(10, 11, 12), none, saturday, 5)).toEqual({ days: [on(7), on(6), on(5)], restoresTo: 3 });
+  expect(repairOption(days(10, 11, 12, 6, 5), none, sunday, 5)).toEqual({ days: [on(7), on(4)], restoresTo: 5 });
+
+  // changing the plan saves what the new one would call misses in the live run, and no more
+  expect(daysToHold(days(9), none, saturday, 3, 6)).toEqual([on(7), on(6), on(5)]);
+  expect(daysToHold(days(9), none, friday, 3, 5)).toEqual([on(6)]);
+  expect(streakLength(days(9), days(6), saturday, 5)).toBe(0);
+  expect(daysToHold(days(2, 3, 4), none, TODAY, 7, 5)).toEqual([]);
+  expect(daysToHold(days(2, 3, 4), none, TODAY, 5, 3)).toEqual([]);
+  expect(daysToHold(none, none, TODAY, 3, 7)).toEqual([]);
+  // even to a lighter plan, when the run restarted mid-week
+  const restarted = days(10, 6, 3);
+  expect(streakLength(restarted, none, on(2), 5)).toBe(2);
+  expect(streakLength(restarted, none, on(2), 4)).toBe(1);
+  expect(daysToHold(restarted, none, on(2), 5, 4)).toEqual([on(5), on(4)]);
+});
+
+test("a five-day week holds a streak with no freezes, at no cost", async ({ page }) => {
+  // Monday to Friday for the last three weeks, however far into this week today is
+  const back = Array.from({ length: 21 }, (_, i) => i + 1);
+  const isWeekday = (n: number) => ![0, 6].includes(new Date(Date.now() - n * DAY).getDay());
+  const trained = back.filter(isWeekday);
+  await seed(page, { daysPerWeek: 5, sessions: trained.map((n) => session(n)), inventory: { "cs-freeze": 2 } });
+  await page.goto("/dashboard");
+  await expect(streakCard(page)).toHaveText(String(trained.length), { timeout: 10_000 });
+
+  const after = await economy(page);
+  expect(after.inventory["cs-freeze"]).toBe(2);
+  expect(after.protections).toEqual([]);
+  await page.goto("/store");
+  await expect(page.getByTestId("streak-repair")).toHaveCount(0);
+  await expect.poll(async () => (await wallet(page)).ledger.find((e) => e.label === "14-day streak")?.amount).toBe(50);
+});
+
+test("a rest day in the plan doesn't break the streak or spend a freeze", async ({ page }) => {
+  await seed(page, { daysPerWeek: 5, sessions: [session(2), session(3), session(4)], inventory: { "cs-freeze": 2 } });
+  await page.goto("/dashboard");
+  await expect(streakCard(page)).toHaveText("3", { timeout: 10_000 });
+  expect((await economy(page)).inventory["cs-freeze"]).toBe(2);
+});
+
+test("with no weekly target, the days you've picked are the plan", async ({ page }) => {
+  // six picked days allow one day off a week, and three in a row is more than that on any weekdays
+  await seed(page, { daysPerWeek: null, preferredDays: [1, 2, 3, 4, 5, 6], sessions: [session(4), session(5), session(6)] });
+  await page.goto("/dashboard");
+  await expect(streakCard(page)).toHaveText("0", { timeout: 10_000 });
+});
+
+test("with no plan at all, days off don't break the streak", async ({ page }) => {
+  await seed(page, { daysPerWeek: null, sessions: [session(2), session(3), session(4)], inventory: { "cs-freeze": 1 } });
+  await page.goto("/dashboard");
+  await expect(streakCard(page)).toHaveText("3", { timeout: 10_000 });
+  expect((await economy(page)).inventory["cs-freeze"]).toBe(1);
+});
+
+test("lowering your target needs nothing saved, and keeps the streak", async ({ page }) => {
+  await seed(page, { daysPerWeek: 5, sessions: [session(2), session(3), session(4)] });
+  await page.goto("/settings/training");
+  await page.getByRole("button", { name: /training frequency/i }).click();
+  await page.getByRole("button", { name: "3 days" }).click();
+  await expect(page.getByRole("button", { name: /training frequency/i })).toContainText("3 days / week");
+
+  expect((await economy(page)).protections).toEqual([]);
+  await page.goto("/dashboard");
+  await expect(streakCard(page)).toHaveText("3", { timeout: 10_000 });
+});
+
+test("raising your target keeps the streak behind you", async ({ page }) => {
+  await seed(page, { sessions: [session(2), session(4), session(6)] });
+  await page.goto("/settings/training");
+  await page.getByRole("button", { name: /training frequency/i }).click();
+  await page.getByRole("button", { name: "6 days" }).click();
+  await expect(page.getByRole("button", { name: /training frequency/i })).toContainText("6 days / week");
+
+  // three days off in a stretch this short are more than six days a week allows, on any weekdays
+  const { protections } = await economy(page);
+  expect(protections.length).toBeGreaterThan(0);
+  expect(protections.every((p) => p.source === "plan")).toBe(true);
+  await page.goto("/dashboard");
+  await expect(streakCard(page)).toHaveText("3", { timeout: 10_000 });
+});
+
 // ── streak protection ───────────────────────────────────────────────────────
 test("without a freeze, a missed day breaks the streak", async ({ page }) => {
-  await seed(page, { sessions: [session(2), session(3), session(4)] });
+  await seed(page, { ...DAILY, sessions: [session(2), session(3), session(4)] });
   await page.goto("/dashboard");
   await expect(streakCard(page)).toHaveText("0", { timeout: 10_000 });
 });
 
 test("a held freeze really protects the streak, on every screen, and only fires once", async ({ page }) => {
-  await seed(page, { sessions: [session(2), session(3), session(4)], inventory: { "cs-freeze": 2 } });
+  await seed(page, { ...DAILY, sessions: [session(2), session(3), session(4)], inventory: { "cs-freeze": 2 } });
   await page.goto("/dashboard");
   // the dashboard reads the protected streak
   await expect(streakCard(page)).toHaveText("3", { timeout: 10_000 });
@@ -253,21 +389,21 @@ test("a held freeze really protects the streak, on every screen, and only fires 
 });
 
 test("a freeze isn't wasted on a gap it can't cover", async ({ page }) => {
-  await seed(page, { sessions: [session(4), session(5), session(6)], inventory: { "cs-freeze": 2 } });
+  await seed(page, { ...DAILY, sessions: [session(4), session(5), session(6)], inventory: { "cs-freeze": 2 } });
   await page.goto("/store");
   await page.waitForTimeout(1800);
   expect((await economy(page)).inventory["cs-freeze"]).toBe(2);
 });
 
 test("a freeze isn't spent on a tiny streak", async ({ page }) => {
-  await seed(page, { sessions: [session(2), session(3)], inventory: { "cs-freeze": 2 } });
+  await seed(page, { ...DAILY, sessions: [session(2), session(3)], inventory: { "cs-freeze": 2 } });
   await page.goto("/store");
   await page.waitForTimeout(1800);
   expect((await economy(page)).inventory["cs-freeze"]).toBe(2);
 });
 
 test("a frozen day bridges the streak without adding to it", async ({ page }) => {
-  await seed(page, { sessions: [session(2), session(3), session(4), session(5), session(6), session(7)], inventory: { "cs-freeze": 1 } });
+  await seed(page, { ...DAILY, sessions: [session(2), session(3), session(4), session(5), session(6), session(7)], inventory: { "cs-freeze": 1 } });
   await page.goto("/store");
   await expect(page.getByTestId("kit")).toContainText("6-day streak", { timeout: 10_000 });
   // 6 trained plus a frozen day is still under the 7-day milestone
@@ -275,7 +411,7 @@ test("a frozen day bridges the streak without adding to it", async ({ page }) =>
 });
 
 test("buying a freeze can rescue a streak that's already due one", async ({ page }) => {
-  await seed(page, { sessions: [session(2), session(3), session(4)], coins: 300 });
+  await seed(page, { ...DAILY, sessions: [session(2), session(3), session(4)], coins: 300 });
   await page.goto("/store");
   await page.getByRole("tab", { name: "boosts" }).click();
   await page.getByRole("button", { name: "buy Streak Freeze" }).click();
@@ -284,7 +420,7 @@ test("buying a freeze can rescue a streak that's already due one", async ({ page
 });
 
 test("a streak repair restores a broken streak, once a week", async ({ page }) => {
-  await seed(page, { sessions: [session(3), session(4), session(5), session(6)], coins: 1000 });
+  await seed(page, { ...DAILY, sessions: [session(3), session(4), session(5), session(6)], coins: 1000 });
   await page.goto("/store");
   const banner = page.getByTestId("streak-repair");
   await expect(banner).toContainText("back to 4 days");
@@ -316,7 +452,7 @@ test("consumables stop at the hold limit, and coins only go when something's bou
   await expect(page.locator('[data-kit="streak freezes"]')).toHaveText("2");
   await expect(buy).toBeDisabled();
   await expect(buy).toHaveText("kit full");
-  expect((await wallet(page)).ledger.filter((e) => e.type === "spend").reduce((n, e) => n + e.amount, 0)).toBe(300);
+  expect((await wallet(page)).ledger.filter((e) => e.type === "spend").reduce((n, e) => n + e.amount, 0)).toBe(200);
 });
 
 test("items you can't afford say how far off you are", async ({ page }) => {

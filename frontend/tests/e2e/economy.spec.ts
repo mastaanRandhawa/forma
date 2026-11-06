@@ -19,6 +19,7 @@ import {
   CONSUMABLES,
   dealsFor,
   DEALS,
+  DEFAULT_PLANNED_DAYS,
   EARN_CAPS,
   FOOD_REWARD,
   FREEZE_MIN_STREAK,
@@ -113,6 +114,7 @@ test("the client's rules match the server's", async ({ page }) => {
   expect(server.weekTarget).toEqual(WEEK_TARGET_REWARD);
   expect(server.welcome).toBe(WELCOME_COINS);
   expect(server.streakMilestones).toEqual(STREAK_MILESTONES);
+  expect(server.defaultPlannedDays).toBe(DEFAULT_PLANNED_DAYS);
   expect(server.achievements).toEqual(ACHIEVEMENT_COINS);
   expect(server.repair).toEqual(STREAK_REPAIR);
   expect(server.freezeMinStreak).toBe(FREEZE_MIN_STREAK);

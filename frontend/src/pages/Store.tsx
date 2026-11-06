@@ -225,7 +225,7 @@ export default function Store() {
       {/* ── your kit ────────────────────────────────────────────────────── */}
       <SectionLabel>your kit</SectionLabel>
       <div className="grid gap-2.5 sm:grid-cols-3" data-testid="kit">
-        <KitCard icon={Snowflake} tone="var(--accent-cyan)" title="streak freezes" count={freezes} detail={`${economy.streak}-day streak. Covers a missed day on its own.`} />
+        <KitCard icon={Snowflake} tone="var(--accent-cyan)" title="streak freezes" count={freezes} detail={`${economy.streak}-day streak. Covers a missed training day on its own.`} />
         <KitCard icon={Dices} tone="var(--accent-mauve)" title="challenge rerolls" count={rerolls} detail={`${economy.rerollsLeft} use${economy.rerollsLeft === 1 ? "" : "s"} left this week.`} />
         <KitCard icon={ScrollText} tone="var(--accent-amber)" title="kai reviews" count={reviews} detail="A full report on your last 28 days.">
           <div className="mt-2.5 flex flex-wrap gap-2">

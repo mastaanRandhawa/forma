@@ -568,7 +568,7 @@ export default function ActiveWorkout() {
       : loadData().sessions;
     const goal = data.profile.daysPerWeek ?? null;
     const weekCount = weekProgress(weekSessions).count;
-    const streak = currentStreak(weekSessions);
+    const streak = currentStreak(weekSessions, data.profile);
     const headline =
       prs.length > 0
         ? `new personal record${prs.length > 1 ? "s" : ""}`

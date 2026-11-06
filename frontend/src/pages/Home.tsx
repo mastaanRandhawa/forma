@@ -75,7 +75,7 @@ export default function Home() {
     ? (apiDash.data?.readinessAvailable ?? "unavailable") !== "unavailable"
     : hasRecoveryData(data);
   const readiness = API_ENABLED ? (apiDash.data?.readiness ?? null) : readinessFromCheckin(data);
-  const streak = API_ENABLED ? (apiDash.data?.streakDays ?? 0) : currentStreak(data.sessions);
+  const streak = API_ENABLED ? (apiDash.data?.streakDays ?? 0) : currentStreak(data.sessions, data.profile);
   const last7Vol = volumeInLastDays(sessions, 7);
   const hasVolume = sessions.length > 0;
 
