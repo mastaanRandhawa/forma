@@ -1,7 +1,7 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { ArrowRight, ArrowLeft, Check } from "lucide-react";
+import { ArrowRight, ArrowLeft, Check, Gauge, Leaf, type LucideIcon } from "lucide-react";
 import { AtmosphericBackground } from "../components/layout/AtmosphericBackground";
 import { saveProfile, type Environment, type Experience, type Units } from "../lib/localStore";
 import { todayPlan } from "../lib/program";
@@ -10,9 +10,12 @@ import {
   GOAL_TO_API,
   EXPERIENCE,
   DAYS,
+  DAYS_HINT,
   DURATIONS,
   ENVIRONMENTS,
   EQUIPMENT,
+  COACH_STYLES,
+  HEALTH_AREAS,
   WEEKDAYS,
   LB_TO_KG,
   IN_TO_CM,
@@ -20,13 +23,26 @@ import {
 import { api } from "../api/client";
 import { API_ENABLED } from "../api/hooks";
 import { useAuth } from "../api/auth";
-import type { TrainingLocation, ProfilePatch } from "../api/types";
+import { useSettings } from "../api/settings";
+import type { Equipment, TrainingLocation, ProfilePatch } from "../api/types";
 
 type BiologicalSex = NonNullable<ProfilePatch["biologicalSex"]>;
 
 const EASE = [0.22, 1, 0.36, 1] as const;
 
-const STEPS = ["goal", "baseline", "environment", "safety", "schedule", "basics", "ready"] as const;
+const STEPS = [
+  { id: "goal", label: "goal" },
+  { id: "experience", label: "experience" },
+  { id: "schedule", label: "schedule" },
+  { id: "place", label: "where you train" },
+  { id: "health", label: "health" },
+  { id: "about", label: "about you" },
+  { id: "coach", label: "coaching" },
+  { id: "review", label: "review" },
+] as const;
+const LAST = STEPS.length - 1;
+/** steps that can be skipped */
+const OPTIONAL = new Set([4, 5, 6]);
 
 const SEXES: { id: BiologicalSex; label: string }[] = [
   { id: "female", label: "female" },
@@ -35,10 +51,95 @@ const SEXES: { id: BiologicalSex; label: string }[] = [
   { id: "prefer_not_to_say", label: "prefer not to say" },
 ];
 
+const toggle = <T,>(list: T[], v: T) => (list.includes(v) ? list.filter((x) => x !== v) : [...list, v]);
+
+const field =
+  "focus-ring w-full rounded-2xl border border-white/[0.08] bg-white/[0.03] p-3.5 text-[0.9rem] text-content-primary outline-none placeholder:text-content-tertiary";
+
+const chip = (active: boolean) =>
+  `focus-ring tactile rounded-pill border px-3.5 py-1.5 text-[0.8rem] lowercase transition-colors ${
+    active
+      ? "border-[var(--accent-pink)] bg-[color-mix(in_srgb,var(--accent-pink)_12%,transparent)] text-content-primary"
+      : "border-white/10 text-content-tertiary hover:text-content-secondary"
+  }`;
+
+/** A tappable answer: icon, title, a line of help, and a clear selected state. */
+function Choice({
+  icon: Icon,
+  title,
+  hint,
+  active,
+  onClick,
+  tile,
+}: {
+  icon?: LucideIcon;
+  title: string;
+  hint?: string;
+  active: boolean;
+  onClick: () => void;
+  tile?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      role="radio"
+      aria-checked={active}
+      onClick={onClick}
+      className={`focus-ring tactile rounded-2xl border p-3.5 text-left transition-colors ${
+        tile ? "flex flex-col gap-2.5 p-4" : "flex items-center gap-3.5"
+      } ${
+        active
+          ? "border-[var(--accent-pink)] bg-[color-mix(in_srgb,var(--accent-pink)_12%,transparent)]"
+          : "border-white/[0.08] bg-white/[0.03] hover:border-white/20"
+      }`}
+    >
+      {Icon ? (
+        <span
+          className="grid h-9 w-9 shrink-0 place-items-center rounded-full"
+          style={{ background: active ? "color-mix(in srgb, var(--accent-pink) 24%, transparent)" : "rgba(255,255,255,0.06)" }}
+        >
+          <Icon size={17} strokeWidth={1.75} className={active ? "text-[var(--accent-pink)]" : "text-content-secondary"} />
+        </span>
+      ) : null}
+      <span className="min-w-0 flex-1">
+        <span className="block text-[0.92rem] lowercase text-content-primary">{title}</span>
+        {hint ? <span className="mt-0.5 block text-[0.8rem] leading-snug text-content-tertiary">{hint}</span> : null}
+      </span>
+      {!tile ? (
+        <span
+          aria-hidden
+          className={`grid h-5 w-5 shrink-0 place-items-center rounded-full border ${
+            active ? "border-transparent bg-[var(--accent-pink)]" : "border-white/25"
+          }`}
+        >
+          {active ? <Check size={12} strokeWidth={3} className="text-white" /> : null}
+        </span>
+      ) : null}
+    </button>
+  );
+}
+
+function Heading({ title, sub }: { title: string; sub?: ReactNode }) {
+  return (
+    <>
+      <h1 className="text-[1.7rem] font-light lowercase leading-tight text-content-primary">{title}</h1>
+      {sub ? <p className="mt-2 text-[0.9rem] text-content-secondary">{sub}</p> : null}
+    </>
+  );
+}
+
+const Group = ({ label, children }: { label: string; children: ReactNode }) => (
+  <div className="mt-6">
+    <div className="label-instrument">{label}</div>
+    <div className="mt-2">{children}</div>
+  </div>
+);
+
 export default function Onboarding() {
   const nav = useNavigate();
   const reduce = useReducedMotion();
-  const { refreshUser } = useAuth();
+  const { refreshUser, user } = useAuth();
+  const { update: updateSettings } = useSettings();
   const [step, setStep] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -47,16 +148,32 @@ export default function Onboarding() {
   const [experience, setExperience] = useState<Experience | null>(null);
   const [daysPerWeek, setDaysPerWeek] = useState<number | null>(null);
   const [sessionMin, setSessionMin] = useState<number | null>(45);
+  const [preferredDays, setPreferredDays] = useState<number[]>([]);
+  const [mondayStart, setMondayStart] = useState(false);
   const [units, setUnits] = useState<Units>("lb");
   const [environment, setEnvironment] = useState<Environment | null>(null);
+  const [equipmentAll, setEquipmentAll] = useState<Array<{ key: string; name: string }>>(
+    EQUIPMENT.map((e) => ({ key: e, name: e })),
+  );
   const [equipment, setEquipment] = useState<string[]>([]);
-  const [injuries, setInjuries] = useState("");
-  const [preferredDays, setPreferredDays] = useState<number[]>([]);
+  const [areas, setAreas] = useState<string[]>([]);
+  const [injuryNote, setInjuryNote] = useState("");
   const [bodyweight, setBodyweight] = useState("");
   const [heightPrimary, setHeightPrimary] = useState(""); // cm, or feet when units === "lb"
   const [heightInches, setHeightInches] = useState(""); // only when units === "lb"
   const [birthYear, setBirthYear] = useState("");
   const [sex, setSex] = useState<BiologicalSex | null>(null);
+  const [coach, setCoach] = useState("steady");
+  const [calm, setCalm] = useState(false);
+
+  // with a backend, equipment answers are saved by key, so use the server's list
+  useEffect(() => {
+    if (!API_ENABLED) return;
+    api.me
+      .equipment()
+      .then((l: Array<Equipment & { owned: boolean }>) => l.length && setEquipmentAll(l.map((e) => ({ key: e.key, name: e.name.toLowerCase() }))))
+      .catch(() => {});
+  }, []);
 
   const plan = useMemo(() => todayPlan(), []);
   const nextTrainingDay = useMemo(() => {
@@ -67,14 +184,23 @@ export default function Onboarding() {
     return next === (dow + 1) % 7 ? "tomorrow" : WEEKDAYS[next];
   }, [preferredDays]);
 
-  const canNext =
-    (step === 0 && goal) ||
-    (step === 1 && experience && daysPerWeek && sessionMin) ||
-    (step === 2 && environment) ||
-    step === 3 ||
-    (step === 4 && preferredDays.length > 0) ||
-    step === 5 ||
-    step === 6;
+  const goalInfo = GOALS.find((g) => g.id === goal);
+  const canNext = [
+    !!goal,
+    !!experience,
+    !!daysPerWeek && !!sessionMin && preferredDays.length > 0,
+    !!environment,
+    true,
+    true,
+    true,
+    true,
+  ][step];
+
+  const pickEnvironment = (id: Environment) => {
+    setEnvironment(id);
+    // a full gym has everything: save a dozen taps
+    if (id === "gym" && !equipment.length) setEquipment(equipmentAll.map((e) => e.key));
+  };
 
   const finish = async () => {
     const bwNum = Number.parseFloat(bodyweight);
@@ -93,8 +219,15 @@ export default function Onboarding() {
 
     const yr = Number.parseInt(birthYear, 10);
     const nowYear = new Date().getFullYear();
-    const dateOfBirth =
-      Number.isFinite(yr) && yr >= 1900 && yr <= nowYear ? `${yr}-01-01` : undefined;
+    const dateOfBirth = Number.isFinite(yr) && yr >= 1900 && yr <= nowYear ? `${yr}-01-01` : undefined;
+
+    const note = injuryNote.trim();
+    // areas become named injuries; a note rides on the first one. A note with no area stays a free-text entry.
+    const injuries = areas.length
+      ? areas.map((a, i) => ({ tag: a.toLowerCase(), ...(i === 0 && note ? { note } : {}) }))
+      : note
+        ? [{ tag: note }]
+        : undefined;
 
     saveProfile({
       goal,
@@ -104,65 +237,109 @@ export default function Onboarding() {
       units,
       environment,
       equipment,
-      injuries: injuries.trim(),
+      injuries: [...areas.map((a) => a.toLowerCase()), note].filter(Boolean).join(", "),
       preferredDays,
       bodyweight: bw,
     });
 
-    if (API_ENABLED) {
-      setSubmitting(true);
-      setSubmitError(null);
-      try {
+    setSubmitting(true);
+    setSubmitError(null);
+    try {
+      if (API_ENABLED) {
         await api.me.onboarding({
           fitnessGoal: goal ? GOAL_TO_API[goal] : undefined,
           experienceLevel: experience ?? undefined,
           trainingLocation: (environment as TrainingLocation | null) ?? undefined,
           unitPreference: units === "kg" ? "metric" : "imperial",
+          weekStartsMonday: mondayStart,
           trainingFrequencyTarget: daysPerWeek ?? undefined,
           sessionLengthTargetMin: sessionMin ?? undefined,
           equipmentKeys: equipment.length ? equipment : undefined,
-          injuries: injuries.trim() ? [{ tag: injuries.trim() }] : undefined,
+          injuries,
           weightKg: weightKg == null ? undefined : Math.round(weightKg * 10) / 10,
           heightCm: heightCm == null ? undefined : Math.round(heightCm),
           dateOfBirth,
           biologicalSex: sex ?? undefined,
+          trainer: COACH_STYLES.find((c) => c.id === coach)?.v,
+          experience: { calmMode: calm },
         });
-        await refreshUser();
-      } catch (e) {
-        setSubmitting(false);
-        setSubmitError(e instanceof Error ? e.message : "Couldn't save your setup. Try again.");
-        return;
       }
+      // the server only applies "calm" when it creates your settings, and the app has usually fetched them by now: set it explicitly
+      if (calm) await updateSettings({ disclosure: { mode: "on_interaction" } }).catch(() => {});
+      if (API_ENABLED) await refreshUser();
+      nav("/dashboard");
+    } catch (e) {
+      setSubmitting(false);
+      setSubmitError(e instanceof Error ? e.message : "Couldn't save your setup. Try again.");
     }
-    nav("/dashboard");
   };
 
-  const next = () => (step < STEPS.length - 1 ? setStep(step + 1) : void finish());
+  const next = () => (step < LAST ? setStep(step + 1) : void finish());
   const back = () => setStep(Math.max(0, step - 1));
 
-  const toggle = <T,>(list: T[], v: T, set: (l: T[]) => void) =>
-    set(list.includes(v) ? list.filter((x) => x !== v) : [...list, v]);
+  const wUnit = units === "kg" ? "kg" : "lb";
+  const recap = [
+    { step: 0, label: "goal", value: goalInfo?.label ?? "—" },
+    { step: 1, label: "experience", value: experience ?? "—" },
+    {
+      step: 2,
+      label: "schedule",
+      value: `${daysPerWeek ?? "—"} days a week · ${sessionMin ?? "—"} min · ${
+        [...preferredDays].sort((a, b) => a - b).map((d) => WEEKDAYS[d]).join(", ") || "no days picked"
+      }`,
+    },
+    {
+      step: 3,
+      label: "where you train",
+      value: `${ENVIRONMENTS.find((e) => e.id === environment)?.label ?? "—"}${equipment.length ? ` · ${equipment.length} equipment` : ""}`,
+    },
+    { step: 4, label: "work around", value: areas.length ? areas.join(", ").toLowerCase() : injuryNote.trim() || "nothing" },
+    {
+      step: 5,
+      label: "about you",
+      value:
+        [
+          bodyweight && `${bodyweight} ${wUnit}`,
+          heightPrimary && (units === "lb" ? `${heightPrimary}'${heightInches || 0}"` : `${heightPrimary} cm`),
+          birthYear && `born ${birthYear}`,
+        ]
+          .filter(Boolean)
+          .join(" · ") || "skipped",
+    },
+    {
+      step: 6,
+      label: "coaching",
+      value: `${COACH_STYLES.find((c) => c.id === coach)?.name} · ${calm ? "calm dashboard" : "full dashboard"}`,
+    },
+  ];
 
-  const chip = (active: boolean) =>
-    `focus-ring tactile rounded-pill border px-3.5 py-1.5 text-[0.8rem] lowercase transition-colors ${
-      active
-        ? "border-[var(--accent-pink)] bg-[color-mix(in_srgb,var(--accent-pink)_12%,transparent)] text-content-primary"
-        : "border-white/10 text-content-tertiary hover:text-content-secondary"
-    }`;
+  const slide = {
+    initial: reduce ? { opacity: 0 } : { opacity: 0, x: 24 },
+    animate: { opacity: 1, x: 0 },
+    exit: reduce ? { opacity: 0 } : { opacity: 0, x: -24 },
+    transition: { duration: 0.28, ease: EASE },
+  } as const;
 
   return (
     <div className="relative flex min-h-[100dvh] flex-col">
       <AtmosphericBackground />
 
       <div className="mx-auto flex w-full max-w-[560px] flex-1 flex-col px-5 py-8">
-        <div className="flex items-center gap-2">
+        <div
+          className="flex items-center gap-1.5"
+          role="progressbar"
+          aria-valuemin={1}
+          aria-valuemax={STEPS.length}
+          aria-valuenow={step + 1}
+          aria-label="onboarding progress"
+        >
           {STEPS.map((s, i) => (
-            <div key={s} className="flex-1">
+            <div key={s.id} className="flex-1">
               <div className="h-1 overflow-hidden rounded-full bg-white/10">
                 <motion.div
                   className="h-full rounded-full bg-[var(--accent-pink)]"
                   initial={false}
-                  animate={{ width: i < step ? "100%" : i === step ? "45%" : "0%" }}
+                  animate={{ width: i < step ? "100%" : i === step ? "50%" : "0%" }}
                   transition={{ duration: 0.4, ease: EASE }}
                 />
               </div>
@@ -170,38 +347,18 @@ export default function Onboarding() {
           ))}
         </div>
         <div className="mt-2 label-instrument">
-          step {step + 1} of {STEPS.length} · {STEPS[step]}
+          step {step + 1} of {STEPS.length} · {STEPS[step].label}
         </div>
 
-        <div className="flex flex-1 flex-col justify-center py-10">
+        <div className="flex flex-1 flex-col justify-center overflow-x-clip py-8">
           <AnimatePresence mode="wait">
-            <motion.div
-              key={step}
-              initial={reduce ? { opacity: 0 } : { opacity: 0, x: 24 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={reduce ? { opacity: 0 } : { opacity: 0, x: -24 }}
-              transition={{ duration: 0.28, ease: EASE }}
-            >
+            <motion.div key={step} {...slide}>
               {step === 0 && (
                 <>
-                  <h1 className="text-[1.7rem] font-light lowercase leading-tight text-content-primary">
-                    what's your primary goal?
-                  </h1>
-                  <p className="mt-2 text-[0.9rem] text-content-secondary">pick one — it shapes your program.</p>
-                  <div className="mt-6 grid grid-cols-2 gap-2.5">
-                    {GOALS.map(({ id, label, icon: Icon }) => (
-                      <button
-                        key={id}
-                        onClick={() => setGoal(id)}
-                        className={`focus-ring tactile flex flex-col gap-2.5 rounded-2xl border p-4 text-left transition-colors ${
-                          goal === id
-                            ? "border-[var(--accent-pink)] bg-[color-mix(in_srgb,var(--accent-pink)_12%,transparent)]"
-                            : "border-white/[0.08] bg-white/[0.03] hover:border-white/20"
-                        }`}
-                      >
-                        <Icon size={18} strokeWidth={1.75} className="text-[var(--accent-pink)]" />
-                        <span className="text-[0.88rem] lowercase text-content-primary">{label}</span>
-                      </button>
+                  <Heading title="what's your main goal?" sub="pick one. it shapes your program and what kai coaches." />
+                  <div role="radiogroup" className="mt-6 grid grid-cols-2 gap-2.5 [&>*:last-child:nth-child(odd)]:col-span-2">
+                    {GOALS.map((g) => (
+                      <Choice key={g.id} tile icon={g.icon} title={g.label} hint={g.hint} active={goal === g.id} onClick={() => setGoal(g.id)} />
                     ))}
                   </div>
                 </>
@@ -209,51 +366,10 @@ export default function Onboarding() {
 
               {step === 1 && (
                 <>
-                  <h1 className="text-[1.7rem] font-light lowercase leading-tight text-content-primary">
-                    your training baseline
-                  </h1>
-                  <div className="mt-6 label-instrument">experience</div>
-                  <div className="mt-2 flex flex-col gap-2">
+                  <Heading title="how experienced are you?" sub="be honest. it sets your starting weights and how fast we progress." />
+                  <div role="radiogroup" className="mt-6 flex flex-col gap-2.5">
                     {EXPERIENCE.map((e) => (
-                      <button
-                        key={e.id}
-                        onClick={() => setExperience(e.id)}
-                        className={`focus-ring tactile rounded-2xl border p-3.5 text-left transition-colors ${
-                          experience === e.id
-                            ? "border-[var(--accent-pink)] bg-[color-mix(in_srgb,var(--accent-pink)_12%,transparent)]"
-                            : "border-white/[0.08] bg-white/[0.03] hover:border-white/20"
-                        }`}
-                      >
-                        <div className="text-[0.9rem] lowercase text-content-primary">{e.label}</div>
-                        <div className="label-instrument mt-0.5 normal-case">{e.hint}</div>
-                      </button>
-                    ))}
-                  </div>
-
-                  <div className="mt-5 label-instrument">training days per week</div>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {DAYS.map((d) => (
-                      <button key={d} onClick={() => setDaysPerWeek(d)} className={chip(daysPerWeek === d)}>
-                        {d}
-                      </button>
-                    ))}
-                  </div>
-
-                  <div className="mt-5 label-instrument">session length</div>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {DURATIONS.map((d) => (
-                      <button key={d} onClick={() => setSessionMin(d)} className={chip(sessionMin === d)}>
-                        {d} min
-                      </button>
-                    ))}
-                  </div>
-
-                  <div className="mt-5 label-instrument">units</div>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {(["lb", "kg"] as Units[]).map((u) => (
-                      <button key={u} onClick={() => setUnits(u)} className={chip(units === u)}>
-                        {u}
-                      </button>
+                      <Choice key={e.id} icon={e.icon} title={e.label} hint={e.help} active={experience === e.id} onClick={() => setExperience(e.id)} />
                     ))}
                   </div>
                 </>
@@ -261,170 +377,197 @@ export default function Onboarding() {
 
               {step === 2 && (
                 <>
-                  <h1 className="text-[1.7rem] font-light lowercase leading-tight text-content-primary">
-                    where do you train?
-                  </h1>
-                  <p className="mt-2 text-[0.9rem] text-content-secondary">this picks which exercises you'll see.</p>
-                  <div className="mt-5 flex flex-wrap gap-2">
-                    {ENVIRONMENTS.map((e) => (
-                      <button key={e.id} onClick={() => setEnvironment(e.id)} className={chip(environment === e.id)}>
-                        {e.label}
-                      </button>
-                    ))}
-                  </div>
-                  <div className="mt-5 label-instrument">available equipment</div>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {EQUIPMENT.map((eq) => (
-                      <button
-                        key={eq}
-                        onClick={() => toggle(equipment, eq, setEquipment)}
-                        className={chip(equipment.includes(eq))}
-                      >
-                        {eq}
-                      </button>
-                    ))}
-                  </div>
+                  <Heading title="build your week" sub={experience ? `${DAYS_HINT[experience]}.` : "how often, how long, and on which days."} />
+                  <Group label="days per week">
+                    <div className="flex flex-wrap gap-2">
+                      {DAYS.map((d) => (
+                        <button key={d} onClick={() => setDaysPerWeek(d)} className={chip(daysPerWeek === d)}>
+                          {d}
+                        </button>
+                      ))}
+                    </div>
+                  </Group>
+                  <Group label="session length">
+                    <div className="flex flex-wrap gap-2">
+                      {DURATIONS.map((d) => (
+                        <button key={d} onClick={() => setSessionMin(d)} className={chip(sessionMin === d)}>
+                          {d} min
+                        </button>
+                      ))}
+                    </div>
+                  </Group>
+                  <Group label="which days work best">
+                    <div className="flex flex-wrap gap-2">
+                      {WEEKDAYS.map((d, i) => (
+                        <button key={d} onClick={() => setPreferredDays(toggle(preferredDays, i))} className={chip(preferredDays.includes(i))}>
+                          {d}
+                        </button>
+                      ))}
+                    </div>
+                    {daysPerWeek && preferredDays.length > 0 && preferredDays.length !== daysPerWeek ? (
+                      <p className="mt-2 label-instrument normal-case">
+                        {preferredDays.length < daysPerWeek
+                          ? `you picked ${preferredDays.length} of ${daysPerWeek} days. we'll fit the rest around them.`
+                          : `that's more than ${daysPerWeek} days, so we'll use the ones that fit best.`}
+                      </p>
+                    ) : null}
+                  </Group>
+                  <Group label="week starts on">
+                    <div className="flex flex-wrap gap-2">
+                      <button onClick={() => setMondayStart(false)} className={chip(!mondayStart)}>sunday</button>
+                      <button onClick={() => setMondayStart(true)} className={chip(mondayStart)}>monday</button>
+                    </div>
+                  </Group>
                 </>
               )}
 
               {step === 3 && (
                 <>
-                  <h1 className="text-[1.7rem] font-light lowercase leading-tight text-content-primary">
-                    anything to work around?
-                  </h1>
-                  <p className="mt-2 text-[0.9rem] text-content-secondary">
-                    injuries, limitations, or lifts to avoid. optional — skip if nothing applies.
-                  </p>
-                  <textarea
-                    value={injuries}
-                    onChange={(e) => setInjuries(e.target.value)}
-                    rows={4}
-                    placeholder="e.g. left shoulder — no heavy overhead pressing"
-                    className="focus-ring mt-5 w-full resize-none rounded-2xl border border-white/[0.08] bg-white/[0.03] p-4 text-[0.9rem] text-content-primary outline-none placeholder:text-content-tertiary"
-                  />
+                  <Heading title="where do you train?" sub="this picks which exercises you'll see." />
+                  <div role="radiogroup" className="mt-6 flex flex-col gap-2.5">
+                    {ENVIRONMENTS.map((e) => (
+                      <Choice key={e.id} icon={e.icon} title={e.label} hint={e.hint} active={environment === e.id} onClick={() => pickEnvironment(e.id)} />
+                    ))}
+                  </div>
+                  <div className="mt-6 flex items-center justify-between">
+                    <div className="label-instrument">
+                      equipment · {equipment.length} of {equipmentAll.length}
+                    </div>
+                    <button
+                      onClick={() => setEquipment(equipment.length === equipmentAll.length ? [] : equipmentAll.map((e) => e.key))}
+                      className="focus-ring text-[0.78rem] lowercase text-[var(--accent-pink)]"
+                    >
+                      {equipment.length === equipmentAll.length ? "clear" : "select all"}
+                    </button>
+                  </div>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {equipmentAll.map((eq) => (
+                      <button key={eq.key} onClick={() => setEquipment(toggle(equipment, eq.key))} className={chip(equipment.includes(eq.key))}>
+                        {eq.name}
+                      </button>
+                    ))}
+                  </div>
                 </>
               )}
 
               {step === 4 && (
                 <>
-                  <h1 className="text-[1.7rem] font-light lowercase leading-tight text-content-primary">
-                    which days work best?
-                  </h1>
-                  <p className="mt-2 text-[0.9rem] text-content-secondary">
-                    pick {daysPerWeek ?? "a few"} — we'll schedule your sessions around them.
-                  </p>
-                  <div className="mt-5 flex flex-wrap gap-2">
-                    {WEEKDAYS.map((d, i) => (
-                      <button
-                        key={d}
-                        onClick={() => toggle(preferredDays, i, setPreferredDays)}
-                        className={chip(preferredDays.includes(i))}
-                      >
-                        {d}
+                  <Heading
+                    title="anything to work around?"
+                    sub="tap any area that's sore, injured or off limits. kai will check in on these. skip if nothing applies."
+                  />
+                  <div className="mt-6 flex flex-wrap gap-2">
+                    {HEALTH_AREAS.map((a) => (
+                      <button key={a} onClick={() => setAreas(toggle(areas, a))} className={chip(areas.includes(a))}>
+                        {a.toLowerCase()}
                       </button>
                     ))}
                   </div>
+                  <Group label="anything else? (optional)">
+                    <textarea
+                      value={injuryNote}
+                      onChange={(e) => setInjuryNote(e.target.value)}
+                      rows={3}
+                      placeholder="e.g. no heavy overhead pressing, past acl surgery"
+                      className={`${field} resize-none`}
+                    />
+                  </Group>
                 </>
               )}
 
               {step === 5 && (
                 <>
-                  <h1 className="text-[1.7rem] font-light lowercase leading-tight text-content-primary">
-                    the basics
-                  </h1>
-                  <p className="mt-2 text-[0.9rem] text-content-secondary">
-                    sets your starting point for weight, strength and recovery targets. optional — skip
-                    if you'd rather not.
-                  </p>
-
-                  <div className="mt-6 label-instrument">bodyweight ({units})</div>
-                  <input
-                    inputMode="decimal"
-                    value={bodyweight}
-                    onChange={(e) => setBodyweight(e.target.value)}
-                    placeholder={units === "kg" ? "80" : "178"}
-                    className="focus-ring mt-2 w-full rounded-2xl border border-white/[0.08] bg-white/[0.03] p-3.5 text-[0.9rem] text-content-primary outline-none placeholder:text-content-tertiary"
-                  />
-
-                  <div className="mt-5 label-instrument">height</div>
-                  {units === "lb" ? (
-                    <div className="mt-2 flex gap-2">
-                      <input
-                        inputMode="numeric"
-                        value={heightPrimary}
-                        onChange={(e) => setHeightPrimary(e.target.value)}
-                        placeholder="5"
-                        aria-label="height feet"
-                        className="focus-ring w-full rounded-2xl border border-white/[0.08] bg-white/[0.03] p-3.5 text-[0.9rem] text-content-primary outline-none placeholder:text-content-tertiary"
-                      />
-                      <input
-                        inputMode="numeric"
-                        value={heightInches}
-                        onChange={(e) => setHeightInches(e.target.value)}
-                        placeholder="10 in"
-                        aria-label="height inches"
-                        className="focus-ring w-full rounded-2xl border border-white/[0.08] bg-white/[0.03] p-3.5 text-[0.9rem] text-content-primary outline-none placeholder:text-content-tertiary"
-                      />
+                  <Heading title="a few basics" sub="optional. helps forma size your loads, calories and recovery targets." />
+                  <Group label="units">
+                    <div className="flex flex-wrap gap-2">
+                      <button onClick={() => setUnits("lb")} className={chip(units === "lb")}>pounds, feet</button>
+                      <button onClick={() => setUnits("kg")} className={chip(units === "kg")}>kilograms, cm</button>
                     </div>
-                  ) : (
+                  </Group>
+                  <Group label={`bodyweight (${wUnit})`}>
                     <input
-                      inputMode="numeric"
-                      value={heightPrimary}
-                      onChange={(e) => setHeightPrimary(e.target.value)}
-                      placeholder="178 cm"
-                      aria-label="height in centimetres"
-                      className="focus-ring mt-2 w-full rounded-2xl border border-white/[0.08] bg-white/[0.03] p-3.5 text-[0.9rem] text-content-primary outline-none placeholder:text-content-tertiary"
+                      inputMode="decimal"
+                      value={bodyweight}
+                      onChange={(e) => setBodyweight(e.target.value)}
+                      placeholder={units === "kg" ? "80" : "178"}
+                      className={field}
                     />
-                  )}
-
-                  <div className="mt-5 label-instrument">year of birth</div>
-                  <input
-                    inputMode="numeric"
-                    value={birthYear}
-                    onChange={(e) => setBirthYear(e.target.value)}
-                    placeholder="1995"
-                    className="focus-ring mt-2 w-full rounded-2xl border border-white/[0.08] bg-white/[0.03] p-3.5 text-[0.9rem] text-content-primary outline-none placeholder:text-content-tertiary"
-                  />
-
-                  <div className="mt-5 label-instrument">biological sex</div>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {SEXES.map((s) => (
-                      <button key={s.id} onClick={() => setSex(s.id)} className={chip(sex === s.id)}>
-                        {s.label}
-                      </button>
-                    ))}
-                  </div>
+                  </Group>
+                  <Group label="height">
+                    {units === "lb" ? (
+                      <div className="flex gap-2">
+                        <input inputMode="numeric" value={heightPrimary} onChange={(e) => setHeightPrimary(e.target.value)} placeholder="5 ft" aria-label="height feet" className={field} />
+                        <input inputMode="numeric" value={heightInches} onChange={(e) => setHeightInches(e.target.value)} placeholder="10 in" aria-label="height inches" className={field} />
+                      </div>
+                    ) : (
+                      <input inputMode="numeric" value={heightPrimary} onChange={(e) => setHeightPrimary(e.target.value)} placeholder="178 cm" aria-label="height in centimetres" className={field} />
+                    )}
+                  </Group>
+                  <Group label="year of birth">
+                    <input inputMode="numeric" maxLength={4} value={birthYear} onChange={(e) => setBirthYear(e.target.value)} placeholder="1995" className={field} />
+                  </Group>
+                  <Group label="biological sex">
+                    <div className="flex flex-wrap gap-2">
+                      {SEXES.map((s) => (
+                        <button key={s.id} onClick={() => setSex(s.id)} className={chip(sex === s.id)}>
+                          {s.label}
+                        </button>
+                      ))}
+                    </div>
+                  </Group>
                 </>
               )}
 
               {step === 6 && (
-                <div className="text-center">
-                  <motion.span
-                    className="mx-auto mb-5 grid h-16 w-16 place-items-center rounded-full"
-                    style={{ background: "color-mix(in srgb, var(--accent-lime) 18%, transparent)" }}
-                    initial={reduce ? { opacity: 1 } : { scale: 0 }}
-                    animate={{ scale: 1 }}
-                    transition={{ type: "spring", stiffness: 300, damping: 18 }}
-                  >
-                    <Check size={26} strokeWidth={2.5} className="text-[var(--accent-lime)]" />
-                  </motion.span>
-                  <h1 className="text-[1.7rem] font-light lowercase leading-tight text-content-primary">
-                    your first week is ready
-                  </h1>
-                  <p className="mx-auto mt-2 max-w-[40ch] text-[0.9rem] text-content-secondary">
-                    {daysPerWeek ?? 4} sessions a week, tuned to{" "}
-                    {GOALS.find((g) => g.id === goal)?.label ?? "your goal"}. first up:{" "}
-                    <span className="text-content-primary">{plan.name.toLowerCase()}</span>, {nextTrainingDay}.
-                  </p>
-                  <div className="mx-auto mt-5 max-w-[36ch] rounded-2xl border border-white/[0.08] bg-white/[0.03] p-4 text-left">
-                    <div className="label-instrument">{plan.name.toLowerCase()}</div>
-                    <ul className="mt-2 space-y-1 text-[0.84rem] text-content-secondary">
-                      {plan.exercises.slice(0, 4).map((e) => (
-                        <li key={e.name}>{e.name}</li>
-                      ))}
-                      {plan.exercises.length > 4 && <li className="label-instrument">+{plan.exercises.length - 4} more</li>}
-                    </ul>
+                <>
+                  <Heading title="how should kai coach you?" sub="you can change this anytime in settings or on the trainer screen." />
+                  <div role="radiogroup" className="mt-6 flex flex-col gap-2.5">
+                    {COACH_STYLES.map((c) => (
+                      <Choice key={c.id} icon={c.icon} title={c.name} hint={c.line} active={coach === c.id} onClick={() => setCoach(c.id)} />
+                    ))}
                   </div>
+                  <Group label="how should forma feel?">
+                    <div role="radiogroup" className="flex flex-col gap-2.5">
+                      <Choice icon={Gauge} title="full" hint="every number and chart, all features from day one." active={!calm} onClick={() => setCalm(false)} />
+                      <Choice icon={Leaf} title="calm" hint="details appear when you tap or scroll to them. features unlock as you train." active={calm} onClick={() => setCalm(true)} />
+                    </div>
+                  </Group>
+                </>
+              )}
+
+              {step === 7 && (
+                <div>
+                  <div className="text-center">
+                    <motion.span
+                      className="mx-auto mb-5 grid h-16 w-16 place-items-center rounded-full"
+                      style={{ background: "color-mix(in srgb, var(--accent-lime) 18%, transparent)" }}
+                      initial={reduce ? { opacity: 1 } : { scale: 0 }}
+                      animate={{ scale: 1 }}
+                      transition={{ type: "spring", stiffness: 300, damping: 18 }}
+                    >
+                      <Check size={26} strokeWidth={2.5} className="text-[var(--accent-lime)]" />
+                    </motion.span>
+                    <h1 className="text-[1.7rem] font-light lowercase leading-tight text-content-primary">
+                      you're set{user?.name ? `, ${user.name.split(" ")[0].toLowerCase()}` : ""}
+                    </h1>
+                    <p className="mx-auto mt-2 max-w-[44ch] text-[0.9rem] text-content-secondary">
+                      {daysPerWeek ?? 4} sessions a week, tuned to {goalInfo?.label ?? "your goal"}. first up:{" "}
+                      <span className="text-content-primary">{plan.name.toLowerCase()}</span>, {nextTrainingDay}.
+                    </p>
+                  </div>
+                  <ul className="mt-6 overflow-hidden rounded-2xl border border-white/[0.08] bg-white/[0.03]">
+                    {recap.map((r, i) => (
+                      <li key={r.label} className={i ? "border-t border-white/[0.06]" : ""}>
+                        <button onClick={() => setStep(r.step)} className="focus-ring flex w-full items-center gap-3 px-4 py-3 text-left" aria-label={`edit ${r.label}`}>
+                          <span className="min-w-0 flex-1">
+                            <span className="label-instrument block">{r.label}</span>
+                            <span className="block truncate text-[0.9rem] lowercase text-content-primary">{r.value}</span>
+                          </span>
+                          <span className="text-[0.78rem] lowercase text-[var(--accent-pink)]">edit</span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
                 </div>
               )}
             </motion.div>
@@ -432,7 +575,7 @@ export default function Onboarding() {
         </div>
 
         <div className="flex items-center justify-between">
-          {step > 0 && step < STEPS.length - 1 ? (
+          {step > 0 ? (
             <button
               onClick={back}
               className="focus-ring flex items-center gap-1.5 text-[0.85rem] lowercase text-content-tertiary transition-colors hover:text-content-secondary"
@@ -443,12 +586,12 @@ export default function Onboarding() {
             <span />
           )}
           <div className="flex items-center gap-3">
-            {(step === 3 || step === 5) && (
+            {OPTIONAL.has(step) && (
               <button
                 onClick={next}
                 className="focus-ring text-[0.85rem] lowercase text-content-tertiary transition-colors hover:text-content-secondary"
               >
-                skip
+                skip for now
               </button>
             )}
             <button
@@ -457,7 +600,7 @@ export default function Onboarding() {
               className="focus-ring tactile inline-flex items-center gap-2 rounded-pill py-2.5 pl-6 pr-2.5 text-[0.9rem] font-medium text-[var(--fill-on-color)] disabled:opacity-40"
               style={{ background: "var(--fill-coral)" }}
             >
-              {step === STEPS.length - 1 ? (submitting ? "saving…" : "enter forma") : "continue"}
+              {step === LAST ? (submitting ? "saving…" : "enter forma") : "continue"}
               <span className="grid h-7 w-7 place-items-center rounded-pill bg-[rgba(255,250,248,0.22)]">
                 <ArrowRight size={14} strokeWidth={2.25} />
               </span>
@@ -465,7 +608,9 @@ export default function Onboarding() {
           </div>
         </div>
         {submitError && (
-          <p role="alert" className="mt-3 text-right text-[0.8rem] text-[var(--accent-pink)]">{submitError}</p>
+          <p role="alert" className="mt-3 text-right text-[0.8rem] text-[var(--accent-pink)]">
+            {submitError}
+          </p>
         )}
       </div>
     </div>
