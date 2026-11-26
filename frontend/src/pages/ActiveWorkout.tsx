@@ -7,6 +7,8 @@ import {
   Circle,
   Clock,
   Coins,
+  Eye,
+  EyeOff,
   Minus,
   Pause,
   Play,
@@ -144,35 +146,19 @@ function useElapsed(session: ReturnType<typeof useFormaData>["active"]) {
 const fmtClock = (sec: number) =>
   `${Math.floor(Math.max(0, sec) / 60)}:${String(Math.max(0, sec) % 60).padStart(2, "0")}`;
 
-// ── progress rail ───────────────────────────────────────────────────────────
-function ProgressRail({ queue, cursor, onJump }: {
-  queue: ReturnType<typeof sessionQueue>;
-  cursor: number;
-  onJump: (i: number) => void;
-}) {
+// ── progress line ───────────────────────────────────────────────────────────
+// One slim line for the whole session; the fill glides instead of jumping.
+function ProgressLine({ frac }: { frac: number }) {
+  const pct = Math.round(Math.max(0, Math.min(1, frac)) * 100);
   return (
-    <div className="flex items-center gap-1.5">
-      {queue
-        .filter((r) => r.phase !== "skipped")
-        .map((r) => {
-          const tone =
-            r.phase === "done"
-              ? "var(--accent-lime)"
-              : r.index === cursor
-              ? "var(--accent-pink)"
-              : r.phase === "deferred"
-              ? "var(--accent-amber)"
-              : "rgba(255,255,255,0.14)";
-          return (
-            <button
-              key={r.index}
-              onClick={() => onJump(r.index)}
-              aria-label={`go to ${r.ex.name}`}
-              className="focus-ring h-1.5 flex-1 rounded-full transition-colors"
-              style={{ background: tone }}
-            />
-          );
-        })}
+    <div className="h-1 w-full overflow-hidden rounded-full bg-white/[0.1]" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100} aria-label="workout progress">
+      <motion.div
+        className="h-full rounded-full"
+        style={{ background: "var(--accent-pink)" }}
+        initial={false}
+        animate={{ width: `${pct}%` }}
+        transition={{ duration: 0.45, ease: EASE }}
+      />
     </div>
   );
 }
@@ -593,11 +579,9 @@ export default function ActiveWorkout() {
         </div>
         <h1 className="mt-3 text-title text-content-primary lowercase">{session?.name}</h1>
         <div className="mt-3">
-          <ProgressRail queue={queue} cursor={cursor} onJump={jumpTo} />
+          <ProgressLine frac={progress && progress.setsTotal ? progress.setsDone / progress.setsTotal : 0} />
           {progress && (
             <div className="label-instrument mt-1.5">
-              exercise {Math.min(progress.exercisesDone + 1, progress.exercisesTotal)} / {progress.exercisesTotal}
-              {" · "}
               {progress.setsDone} / {progress.setsTotal} sets · {Math.round(liveVolume).toLocaleString()} {units}
             </div>
           )}
@@ -716,7 +700,6 @@ export default function ActiveWorkout() {
           last={last}
           rxWeight={rxWeight}
           rxReps={rxReps}
-          cueText={trainerCue(cue.event, cue.ctx)}
           onStopRest={stopRest}
           onStartRest={startRest}
           onPatchActiveSet={patchActiveSet}
@@ -737,56 +720,48 @@ export default function ActiveWorkout() {
       )}
 
       {/* set list for the current exercise */}
-      {currentEx && !session?.restEndsAt && (
-        <div className="mt-4">
+      {currentEx && (
+        <div className="mt-5">
           <div className="label-soft mb-2 lowercase">sets</div>
           <div className="space-y-1.5">
             {currentEx.sets.map((s, si) => {
-              const workingIdx = currentEx.sets.slice(0, si + 1).filter((x) => !x.warmup).length - 1;
-              const prevSet = !s.warmup && last?.sets[workingIdx] ? last.sets[workingIdx] : null;
+              const workingNo = currentEx.sets.slice(0, si + 1).filter((x) => !x.warmup).length;
               return (
-              <div
-                key={si}
-                className={`rounded-[var(--radius-medium)] px-3 py-2 text-[0.88rem] ${
-                  si === activeIdx && !s.done ? "surface-recessed" : ""
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                <span className="w-10 shrink-0 label-instrument">
-                  {s.warmup ? "w/u" : `#${currentEx.sets.slice(0, si + 1).filter((x) => !x.warmup).length}`}
-                </span>
-                <span className="flex-1 tabular-nums text-content-secondary">
-                  {s.weight != null ? `${s.weight} ${units}` : "—"} ×{" "}
-                  {s.isAmrap ? (
-                    <span className="rounded-sm px-1 text-[0.72rem] font-semibold uppercase tracking-wider" style={{ background: "rgba(var(--accent-amber-rgb,250,170,58),0.18)", color: "var(--accent-amber)" }}>amrap</span>
-                  ) : (s.reps ?? "—")}
-                  {s.rpe != null ? ` @ ${s.rpe}` : ""}
-                </span>
-                <button
-                  aria-label={s.done ? "mark set not done" : "mark set done"}
-                  onClick={() => setSet(cursor, si, (set) => ({ ...set, done: !set.done }), { immediate: true })}
-                  className={`focus-ring grid h-7 w-7 shrink-0 place-items-center rounded-full border transition-colors ${
-                    s.done
-                      ? "border-transparent bg-[var(--accent-lime)] text-[#0c0c0c]"
-                      : "border-[var(--line-soft)] text-content-tertiary"
+                <motion.div
+                  layout={!reduce}
+                  initial={reduce ? false : { opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.24, ease: EASE }}
+                  key={si}
+                  className={`group flex min-h-[48px] items-center gap-3 rounded-[var(--radius-medium)] px-3 py-1.5 text-[0.9rem] ${
+                    s.done ? "bg-[rgba(216,255,99,0.08)]" : si === activeIdx ? "surface-recessed" : "bg-white/[0.04]"
                   }`}
                 >
-                  <Check size={13} strokeWidth={2.6} />
-                </button>
-                <button
-                  aria-label="delete set"
-                  onClick={() => deleteSet(cursor, si)}
-                  className="focus-ring grid h-7 w-7 shrink-0 place-items-center rounded-full text-content-tertiary hover:text-content-secondary"
-                >
-                  <X size={13} strokeWidth={2} />
-                </button>
-                </div>
-                {prevSet && !s.done && (
-                  <div className="ml-10 mt-0.5 label-instrument" style={{ color: "var(--content-tertiary)" }}>
-                    last time: {prevSet.weight} {units} × {prevSet.reps}
-                  </div>
-                )}
-              </div>
+                  <span className="w-7 shrink-0 label-instrument">{s.warmup ? "w" : workingNo}</span>
+                  <span className="flex-1 tabular-nums text-content-secondary">
+                    {s.weight != null ? `${s.weight} ${units}` : "—"} ×{" "}
+                    {s.isAmrap && s.reps == null ? "amrap" : (s.reps ?? "—")}
+                    {s.rpe != null ? ` @ ${s.rpe}` : ""}
+                  </span>
+                  <button
+                    aria-label="delete set"
+                    onClick={() => deleteSet(cursor, si)}
+                    className="focus-ring grid h-7 w-7 shrink-0 place-items-center rounded-full text-content-tertiary opacity-0 transition-opacity hover:text-content-secondary focus-visible:opacity-100 group-hover:opacity-100 [@media(hover:none)]:opacity-60"
+                  >
+                    <X size={13} strokeWidth={2} />
+                  </button>
+                  <button
+                    aria-label={s.done ? "mark set not done" : "mark set done"}
+                    onClick={() => setSet(cursor, si, (set) => ({ ...set, done: !set.done }), { immediate: true })}
+                    className={`focus-ring grid h-9 w-9 shrink-0 place-items-center rounded-full border transition-colors ${
+                      s.done
+                        ? "border-transparent bg-[var(--accent-lime)] text-[#0c0c0c]"
+                        : "border-[var(--line-soft)] text-content-tertiary"
+                    }`}
+                  >
+                    <Check size={15} strokeWidth={2.6} />
+                  </button>
+                </motion.div>
               );
             })}
           </div>
@@ -1060,7 +1035,7 @@ function Scrim({ children, onClose }: { children: React.ReactNode; onClose: () =
   );
 }
 
-// ── rest overlay / focus card switch ───────────────────────────────────────
+// ── focus card (+ slim rest bar) ───────────────────────────────────────────
 function RestOrFocus(props: {
   session: NonNullable<ReturnType<typeof useFormaData>["active"]>;
   currentEx: LoggedExercise | null;
@@ -1077,7 +1052,6 @@ function RestOrFocus(props: {
   last: ReturnType<typeof lastPerformance>;
   rxWeight: number | null;
   rxReps: number | null;
-  cueText: string;
   onStopRest: () => void;
   onStartRest: (s: number) => void;
   onPatchActiveSet: (fn: (s: LoggedSet) => LoggedSet) => void;
@@ -1089,18 +1063,22 @@ function RestOrFocus(props: {
   onDeferBusy: () => void;
   onReplace: () => void;
 }) {
-  const { session, currentEx, catEntry, units, activeSet, cueText } = props;
+  const reduce = useReducedMotion();
+  const { session, currentEx, catEntry, units, activeSet } = props;
   const [now, setNow] = useState(() => Date.now());
   const [imgFrame, setImgFrame] = useState(0);
+  const [opts, setOpts] = useState(false);
+  const [showCount, setShowCount] = useState(false);
+  const [restTotal, setRestTotal] = useState(0);
   const restEndsAt = session.restEndsAt;
 
-  // Animate between start/end RepDB frames when resting or viewing the card
+  // Animate between start/end RepDB frames
   const imgStart = catEntry?.imgStart ? repdbImage(catEntry.imgStart) : null;
   const imgEnd = catEntry?.imgEnd ? repdbImage(catEntry.imgEnd) : null;
   const hasAnim = !!(imgStart && imgEnd);
   useEffect(() => {
     if (!hasAnim) return;
-    const id = setInterval(() => setImgFrame((f) => (f === 0 ? 1 : 0)), 800);
+    const id = setInterval(() => setImgFrame((f) => (f === 0 ? 1 : 0)), 900);
     return () => clearInterval(id);
   }, [hasAnim]);
 
@@ -1108,6 +1086,15 @@ function RestOrFocus(props: {
     if (!restEndsAt) return;
     const id = setInterval(() => setNow(Date.now()), 250);
     return () => clearInterval(id);
+  }, [restEndsAt]);
+
+  // longest rest seen this round, so the bar drains from full
+  useEffect(() => {
+    if (!restEndsAt) {
+      setRestTotal(0);
+      return;
+    }
+    setRestTotal((t) => Math.max(t, Math.ceil((restEndsAt - Date.now()) / 1000)));
   }, [restEndsAt]);
 
   const remaining = restEndsAt ? Math.ceil((restEndsAt - now) / 1000) : 0;
@@ -1123,94 +1110,25 @@ function RestOrFocus(props: {
 
   const thumb = repdbThumb(currentEx.name);
   const animSrc = hasAnim ? (imgFrame === 0 ? imgStart! : imgEnd!) : thumb;
-
-  // ── REST STATE ──────────────────────────────────────────────────────────
-  if (restEndsAt && remaining > 0) {
-    const totalRest = restEndsAt
-      ? Math.round((restEndsAt - (restEndsAt - remaining * 1000 - (Date.now() - (restEndsAt - remaining * 1000)))) / 1000)
-      : remaining;
-    const pct = Math.max(0, Math.min(1, remaining / Math.max(totalRest, remaining)));
-    const R = 52;
-    const circumference = 2 * Math.PI * R;
-    const dash = pct * circumference;
-
-    return (
-      <div className="surface-soft overflow-hidden">
-        {/* cinematic rest header */}
-        <div className="flex flex-col items-center px-6 pt-10 pb-6 text-center">
-          <div className="label-soft lowercase flex items-center gap-1.5 mb-6">
-            <Timer size={12} /> rest
-          </div>
-
-          {/* circular countdown ring */}
-          <div className="relative mb-4" style={{ width: 140, height: 140 }}>
-            <svg width={140} height={140} style={{ transform: "rotate(-90deg)" }}>
-              {/* track */}
-              <circle cx={70} cy={70} r={R} fill="none" stroke="rgba(255,255,255,0.07)" strokeWidth={6} />
-              {/* progress */}
-              <circle
-                cx={70} cy={70} r={R}
-                fill="none"
-                stroke="var(--accent-lime)"
-                strokeWidth={6}
-                strokeLinecap="round"
-                strokeDasharray={`${dash} ${circumference}`}
-                style={{ transition: "stroke-dasharray 0.25s linear", filter: "drop-shadow(0 0 8px var(--accent-lime))" }}
-              />
-            </svg>
-            <div className="absolute inset-0 flex flex-col items-center justify-center">
-              <div
-                className="metric-numeral tabular-nums leading-none text-content-primary"
-                style={{ fontSize: "clamp(2.6rem, 10vw, 3.4rem)" }}
-              >
-                {fmtClock(remaining)}
-              </div>
-            </div>
-          </div>
-
-          {/* controls */}
-          <div className="flex items-center gap-2 mb-6">
-            <button onClick={() => props.onStartRest(remaining + 15)} className="focus-ring tactile rounded-pill bg-white/[0.06] px-4 py-2 text-[0.85rem] tabular-nums text-content-primary hover:bg-white/[0.12]">
-              +15s
-            </button>
-            <button onClick={props.onStopRest} className="btn-primary px-7 py-3 text-[0.95rem]">
-              ready
-            </button>
-            <button onClick={() => props.onStartRest(Math.max(1, remaining - 15))} className="focus-ring tactile rounded-pill bg-white/[0.06] px-4 py-2 text-[0.85rem] tabular-nums text-content-primary hover:bg-white/[0.12]">
-              -15s
-            </button>
-          </div>
-        </div>
-
-        {/* next up */}
-        <div className="surface-recessed mx-5 mb-5 rounded-hero p-4 text-left">
-          <div className="label-instrument mb-2">next up</div>
-          <div className="flex items-center gap-3">
-            <ExerciseThumb src={thumb} alt="" size={44} />
-            <div className="min-w-0">
-              <div className="truncate text-[0.95rem] lowercase text-content-primary">{currentEx.name}</div>
-              <div className="label-instrument mt-0.5 tabular-nums">
-                set {props.workingDone + 1} / {props.workingCount}
-                {activeSet?.weight != null ? ` · ${activeSet.weight} ${units} × ${activeSet.reps ?? "—"}` : ""}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="mx-5 mb-5 flex items-start gap-2.5">
-          <KaiOrb size={26} state="idle" />
-          <p className="text-[0.86rem] italic leading-relaxed text-content-secondary">{cueText}</p>
-        </div>
-      </div>
-    );
-  }
-
-  // ── FOCUS STATE ─────────────────────────────────────────────────────────
   const isBodyweight = catEntry?.bodyweight ?? false;
+  const resting = !!restEndsAt && remaining > 0;
+  const low = remaining <= 10;
+  const reveal = showCount || low;
+  const pct = Math.max(0, Math.min(1, remaining / Math.max(1, restTotal, remaining)));
+  const tone = low ? "var(--accent-amber)" : "var(--accent-lime)";
+  const ghost =
+    "focus-ring tactile rounded-pill bg-white/[0.06] px-4 py-2.5 text-[0.85rem] tabular-nums text-content-primary hover:bg-white/[0.12]";
+
   return (
-    <div className="surface-soft overflow-hidden">
+    <motion.div
+      key={currentEx.name}
+      initial={reduce ? false : { opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.28, ease: EASE }}
+      className="surface-soft overflow-hidden"
+    >
       {animSrc && (
-        <div className="relative aspect-[16/10] w-full bg-[#150c12]">
+        <div className="relative aspect-[16/9] w-full bg-[#150c12]">
           <img
             key={animSrc}
             src={animSrc}
@@ -1227,179 +1145,205 @@ function RestOrFocus(props: {
         </div>
       )}
 
-      <div className="p-5 sm:p-6">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0 flex-1">
-            <div className="label-instrument flex flex-wrap items-center gap-x-2">
-              {props.supersetLabel && (
-                <span
-                  className="rounded-pill px-2 py-0.5 text-[0.68rem] uppercase tracking-[0.08em]"
-                  style={{
-                    background: "color-mix(in srgb, var(--accent-mauve) 16%, transparent)",
-                    color: "var(--accent-mauve)",
-                  }}
-                >
-                  {props.supersetLabel}
-                </span>
-              )}
-              <span>
-                exercise {props.trainablePos} / {props.trainableTotal}
-                {currentEx.substitutedFrom ? ` · swapped from ${currentEx.substitutedFrom}` : ""}
-              </span>
-            </div>
-            {/* hero: exercise name at display scale */}
-            <h2
-              className="mt-1 font-medium lowercase text-content-primary leading-[1.0]"
-              style={{ fontSize: "clamp(1.7rem, 6vw, 2.6rem)", letterSpacing: "-0.02em" }}
-            >
-              {currentEx.name}
-            </h2>
-            {/* set counter — prominent, accent color */}
-            <div className="mt-2 flex items-baseline gap-2">
+      <div className="space-y-5 p-5 sm:p-6">
+        <div className="min-w-0">
+          <div className="label-instrument flex flex-wrap items-center gap-x-2">
+            {props.supersetLabel && (
               <span
-                className="font-semibold tabular-nums leading-none"
-                style={{ fontSize: "clamp(2.4rem, 9vw, 3.6rem)", color: "var(--accent-pink)", letterSpacing: "-0.03em" }}
+                className="rounded-pill px-2 py-0.5 text-[0.68rem] uppercase tracking-[0.08em]"
+                style={{ background: "color-mix(in srgb, var(--accent-mauve) 16%, transparent)", color: "var(--accent-mauve)" }}
               >
-                {props.workingDone + 1}
+                {props.supersetLabel}
               </span>
-              <span className="text-[1rem] text-content-tertiary">
-                / {props.workingCount}
-              </span>
-              <span className="label-instrument ml-1">sets · {currentEx.target}</span>
-            </div>
+            )}
+            <span>
+              exercise {props.trainablePos} of {props.trainableTotal}
+              {currentEx.substitutedFrom ? ` · swapped from ${currentEx.substitutedFrom}` : ""}
+            </span>
           </div>
-        </div>
-
-        {/* previous / today */}
-        <div className="mt-4 grid grid-cols-2 gap-2.5">
-          <button
-            onClick={props.onUsePrevious}
-            disabled={!props.last?.sets.length}
-            className="focus-ring surface-recessed rounded-hero p-3 text-left disabled:cursor-default"
+          <h2
+            className="mt-1 font-medium lowercase leading-[1.05] text-content-primary"
+            style={{ fontSize: "clamp(1.7rem, 6vw, 2.4rem)", letterSpacing: "-0.02em" }}
           >
-            <div className="label-instrument flex items-center justify-between">
-              previous
-              {props.last?.sets.length ? <span className="text-content-tertiary">tap to fill</span> : null}
-            </div>
-            <div className="mt-0.5 text-[0.95rem] tabular-nums text-content-secondary">
-              {props.last?.sets.length
-                ? props.last.sets
-                    .slice(0, 3)
-                    .map((s) => `${s.weight}×${s.reps}`)
-                    .join("  ")
-                : "first time"}
-            </div>
-          </button>
-          <div className="surface-recessed rounded-hero p-3">
-            <div className="label-instrument" style={{ color: "var(--accent-mauve)" }}>
-              today
-            </div>
-            <div className="mt-0.5 text-[0.95rem] tabular-nums text-content-primary">
-              {props.rxWeight != null || props.rxReps != null
-                ? `${props.rxWeight != null ? `${props.rxWeight} ${units} ` : ""}${props.rxReps != null ? `× ${props.rxReps}` : ""}`
-                : currentEx.target}
-              {currentEx.prescription?.note ? (
-                <span className="label-instrument block">{currentEx.prescription.note}</span>
-              ) : null}
-              {(() => {
-                if (props.rxWeight == null || !props.last?.sets.length) return null;
-                const bestE1rm = Math.max(...props.last.sets.map((s) => epley1RM(s.weight, s.reps)));
-                if (bestE1rm <= 0) return null;
-                const pct = Math.round((props.rxWeight / bestE1rm) * 100);
-                if (pct < 40 || pct > 115) return null;
-                return (
-                  <span className="label-instrument block" style={{ color: "var(--accent-mauve)" }}>
-                    {pct}% of est. 1RM
-                  </span>
-                );
-              })()}
-            </div>
+            {currentEx.name}
+          </h2>
+          <div className="mt-2 flex items-baseline gap-2">
+            {activeSet?.warmup ? (
+              <span className="font-semibold lowercase" style={{ color: "var(--accent-cyan, #83e9f4)" }}>warm-up set</span>
+            ) : (
+              <>
+                <span className="font-semibold tabular-nums leading-none" style={{ fontSize: "1.6rem", color: "var(--accent-pink)" }}>
+                  {props.workingDone + 1}
+                </span>
+                <span className="text-[0.95rem] text-content-tertiary">
+                  of {props.workingCount} sets · {currentEx.target}
+                  {activeSet?.rpe != null ? ` · rpe ${activeSet.rpe}` : ""}
+                  {activeSet?.isAmrap ? " · amrap" : ""}
+                </span>
+              </>
+            )}
           </div>
         </div>
 
-        {/* steppers for the active set */}
-        <div className="mt-3 flex gap-2.5">
+        {/* weight + reps */}
+        <div className="space-y-3">
           {!isBodyweight && (
-            <Stepper
-              label="weight"
-              suffix={units}
-              value={activeSet?.weight ?? null}
-              step={props.weightStep}
-              onChange={(v) => props.onPatchActiveSet((s) => ({ ...s, weight: v }))}
-            />
+            <div className="flex">
+              <Stepper
+                label="weight"
+                suffix={units}
+                value={activeSet?.weight ?? null}
+                step={props.weightStep}
+                onChange={(v) => props.onPatchActiveSet((s) => ({ ...s, weight: v }))}
+              />
+            </div>
           )}
-          <Stepper
-            label="reps"
-            value={activeSet?.reps ?? null}
-            step={1}
-            onChange={(v) => props.onPatchActiveSet((s) => ({ ...s, reps: v }))}
-          />
-          <Stepper
-            label="rpe"
-            value={activeSet?.rpe ?? null}
-            step={0.5}
-            onChange={(v) => props.onPatchActiveSet((s) => ({ ...s, rpe: v }))}
-          />
+          <div className="flex">
+            <Stepper
+              label={activeSet?.isAmrap ? "reps · amrap" : "reps"}
+              value={activeSet?.reps ?? null}
+              step={1}
+              onChange={(v) => props.onPatchActiveSet((s) => ({ ...s, reps: v }))}
+            />
+          </div>
         </div>
 
-        {/* plate calculator — shown when a weight is set and exercise uses a barbell */}
+        {/* last time — tap to fill */}
+        <button
+          onClick={props.onUsePrevious}
+          disabled={!props.last?.sets.length}
+          className="focus-ring flex min-h-[44px] w-full items-center gap-2 text-left text-[0.85rem] text-content-secondary disabled:cursor-default"
+        >
+          <Clock size={15} className="shrink-0 text-content-tertiary" />
+          <span className="flex-1 truncate tabular-nums">
+            {props.last?.sets.length
+              ? `last time ${props.last.sets.slice(0, 3).map((s) => `${s.weight}×${s.reps}`).join("  ")}`
+              : "first time — nothing to compare yet"}
+          </span>
+          {props.last?.sets.length ? <span style={{ color: "var(--accent-pink)" }}>use</span> : null}
+        </button>
+
+        {/* plates */}
         {activeSet?.weight != null && !isBodyweight && (() => {
           const barKg = units === "kg" ? 20 : 45;
           const result = plateCombo(activeSet.weight, barKg, units as "kg" | "lb");
           if (!result.perSide.length) return null;
           return (
-            <div className="mt-2 flex items-center gap-2 rounded-hero px-3 py-2" style={{ background: "rgba(255,255,255,0.04)" }}>
-              <span className="label-instrument shrink-0">plates/side</span>
-              <span className="flex-1 tabular-nums text-[0.82rem] text-content-secondary">{plateLabel(result.perSide)}</span>
-              {result.loaded !== activeSet.weight && (
-                <span className="label-instrument shrink-0 tabular-nums" style={{ color: "var(--accent-amber)" }}>
-                  {result.loaded} {units}
-                </span>
-              )}
+            <div className="label-instrument -mt-2 tabular-nums">
+              plates per side · {plateLabel(result.perSide)}
+              {result.loaded !== activeSet.weight ? ` → loads ${result.loaded} ${units}` : ""}
             </div>
           );
         })()}
 
-        <button
-          onClick={props.onCompleteSet}
-          className="focus-ring btn-primary mt-3 w-full rounded-[var(--radius-large)] py-4 text-[1.05rem]"
-          style={{ borderRadius: "var(--radius-large)" }}
-        >
-          complete set {props.workingDone + 1}
-        </button>
-
-        <div className="mt-3 flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-[0.76rem] lowercase text-content-tertiary">
-          <button onClick={() => props.onAddSet(false)} className="focus-ring hover:text-content-secondary">
-            + set
-          </button>
-          <button onClick={() => props.onAddSet(true)} className="focus-ring hover:text-content-secondary">
-            + warmup
-          </button>
-          <button onClick={props.onToggleWarmup} className="focus-ring hover:text-content-secondary">
-            {activeSet?.warmup ? "unmark warmup" : "this is a warmup"}
-          </button>
-          <button
-            onClick={() => props.onPatchActiveSet((s) => ({ ...s, isAmrap: !s.isAmrap, reps: s.isAmrap ? s.reps : null }))}
-            className={`focus-ring hover:text-content-secondary ${activeSet?.isAmrap ? "text-[var(--accent-amber)]" : ""}`}
+        {/* the one thing to do next: complete the set, or rest */}
+        {resting ? (
+          <motion.div
+            key="rest"
+            initial={reduce ? false : { opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.2 }}
+            className="space-y-3"
           >
-            {activeSet?.isAmrap ? "unmark amrap" : "amrap set"}
+            <button
+              onClick={() => setShowCount((v) => !v)}
+              aria-label={reveal ? `${remaining} seconds of rest left. Click to hide the countdown` : "Resting. Click to show the countdown"}
+              className="focus-ring block w-full text-left"
+            >
+              <div className="flex min-h-[24px] items-center gap-2 text-[0.9rem] lowercase" style={{ color: tone }}>
+                <Timer size={15} />
+                <span className="flex-1 font-semibold">{low ? "get ready" : "resting"}</span>
+                {reveal ? (
+                  <span className="text-[1.1rem] tabular-nums text-content-primary">{fmtClock(remaining)}</span>
+                ) : (
+                  <Eye size={16} className="text-content-tertiary" />
+                )}
+              </div>
+              <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/[0.08]">
+                <div className="h-full rounded-full" style={{ width: `${pct * 100}%`, background: tone, transition: "width 0.3s linear" }} />
+              </div>
+            </button>
+            <div className="flex items-center gap-2">
+              <button onClick={() => props.onStartRest(Math.max(1, remaining - 15))} className={ghost}>
+                −15s
+              </button>
+              <button onClick={props.onStopRest} className="btn-primary flex-1 px-6 py-3 text-[0.95rem]">
+                ready
+              </button>
+              <button onClick={() => props.onStartRest(remaining + 15)} className={ghost}>
+                +15s
+              </button>
+            </div>
+          </motion.div>
+        ) : (
+          <button
+            onClick={props.onCompleteSet}
+            className="focus-ring btn-primary w-full rounded-[var(--radius-large)] py-4 text-[1.05rem]"
+            style={{ borderRadius: "var(--radius-large)" }}
+          >
+            {activeSet?.warmup ? "complete warm-up" : `complete set ${props.workingDone + 1}`}
           </button>
-          <button onClick={props.onDeferBusy} className="focus-ring hover:text-content-secondary">
-            <SkipForward size={11} className="mr-1 inline" />
-            machine busy
-          </button>
-          <button onClick={props.onReplace} className="focus-ring hover:text-content-secondary">
-            <Repeat2 size={11} className="mr-1 inline" />
-            replace
-          </button>
-        </div>
+        )}
 
-        <div className="mt-4 flex items-start gap-2.5 border-t border-[var(--line-soft)] pt-4">
-          <KaiOrb size={26} state="idle" />
-          <p className="text-[0.86rem] italic leading-relaxed text-content-secondary">{cueText}</p>
+        {/* everything else lives behind one toggle */}
+        <div>
+          <button
+            onClick={() => setOpts((v) => !v)}
+            aria-expanded={opts}
+            className="focus-ring mx-auto flex items-center gap-1 text-[0.78rem] lowercase text-content-tertiary hover:text-content-secondary"
+          >
+            set options
+            <motion.span animate={{ rotate: opts ? 180 : 0 }} transition={{ duration: 0.2 }} className="inline-flex">
+              <ChevronLeft size={13} className="-rotate-90" />
+            </motion.span>
+          </button>
+          <AnimatePresence initial={false}>
+            {opts && (
+              <motion.div
+                key="opts"
+                initial={reduce ? { opacity: 0 } : { opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: "auto" }}
+                exit={reduce ? { opacity: 0 } : { opacity: 0, height: 0 }}
+                transition={{ duration: 0.24, ease: EASE }}
+                className="overflow-hidden"
+              >
+                <div className="space-y-3 pt-3">
+                  <div className="flex">
+                    <Stepper
+                      label="rpe (effort 1–10)"
+                      value={activeSet?.rpe ?? null}
+                      step={0.5}
+                      onChange={(v) => props.onPatchActiveSet((s) => ({ ...s, rpe: v }))}
+                    />
+                  </div>
+                  <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-[0.8rem] lowercase text-content-tertiary">
+                    <button onClick={() => props.onAddSet(false)} className="focus-ring hover:text-content-secondary">+ set</button>
+                    <button onClick={() => props.onAddSet(true)} className="focus-ring hover:text-content-secondary">+ warmup</button>
+                    <button onClick={props.onToggleWarmup} className="focus-ring hover:text-content-secondary">
+                      {activeSet?.warmup ? "unmark warmup" : "this is a warmup"}
+                    </button>
+                    <button
+                      onClick={() => props.onPatchActiveSet((s) => ({ ...s, isAmrap: !s.isAmrap, reps: s.isAmrap ? s.reps : null }))}
+                      className={`focus-ring hover:text-content-secondary ${activeSet?.isAmrap ? "text-[var(--accent-amber)]" : ""}`}
+                    >
+                      {activeSet?.isAmrap ? "unmark amrap" : "amrap set"}
+                    </button>
+                    <button onClick={props.onDeferBusy} className="focus-ring hover:text-content-secondary">
+                      <SkipForward size={11} className="mr-1 inline" />
+                      machine busy
+                    </button>
+                    <button onClick={props.onReplace} className="focus-ring hover:text-content-secondary">
+                      <Repeat2 size={11} className="mr-1 inline" />
+                      replace
+                    </button>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       </div>
-    </div>
+    </motion.div>
   );
 }
 

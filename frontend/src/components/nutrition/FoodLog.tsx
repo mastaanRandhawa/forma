@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { Quiet } from "../Quiet";
 import {
   Plus, ChevronLeft, ChevronRight, Trash2, Pencil, Calendar,
   CopyPlus, Sparkles, Utensils,
@@ -69,7 +70,7 @@ export default function FoodLog() {
           {day && (
             <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
               <div className="space-y-6">
-                <DaySummary day={day} onAdjust={() => setGoalOpen(true)} />
+                <Quiet widgetKey="nutrition-summary"><DaySummary day={day} onAdjust={() => setGoalOpen(true)} /></Quiet>
                 <LogCard
                   day={day}
                   onAdd={(meal) => setAdd({ open: true, meal })}
@@ -96,7 +97,7 @@ export default function FoodLog() {
 
       {tab === "trends" && (
         <Reveal key="trends" className="mt-2">
-          <Trends />
+          <Quiet widgetKey="nutrition-trends"><Trends /></Quiet>
         </Reveal>
       )}
 

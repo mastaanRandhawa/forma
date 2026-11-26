@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { Quiet } from "../components/Quiet";
 import { Trophy, Users } from "lucide-react";
 import { PageHeader } from "../components/PageHeader";
 import { EmptyState } from "../components/EmptyState";
@@ -163,7 +164,7 @@ export default function Records() {
 
           <div className="space-y-2">
             {filtered.map((row, i) => (
-              <PRCard key={row.exercise} row={row} sessions={sessions} units={units} top={i === 0} />
+              <Quiet key={row.exercise} widgetKey="records-lifts"><PRCard row={row} sessions={sessions} units={units} top={i === 0} /></Quiet>
             ))}
           </div>
         </>

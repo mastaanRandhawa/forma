@@ -4,6 +4,7 @@ import { Dumbbell, History as HistoryIcon, Pencil, Plus, Zap, CalendarDays } fro
 import { PageHeader } from "../components/PageHeader";
 import { TrainingTabs } from "../components/layout/TrainingTabs";
 import { Reveal } from "../components/Reveal";
+import { Quiet } from "../components/Quiet";
 import { EmptyState } from "../components/EmptyState";
 import { ErrorState } from "../components/ErrorState";
 import { Button, Panel, PillSelector } from "../components/primitives";
@@ -302,6 +303,7 @@ export default function Workouts() {
             </section>
           ) : (
             <section className="surface-soft p-6 sm:p-8">
+              <Quiet widgetKey="train-today">
               <div className="label-instrument">
                 {apiWorkout
                   ? apiWorkout.scheduledDate
@@ -335,6 +337,7 @@ export default function Workouts() {
                   );
                 })}
               </ol>
+              </Quiet>
 
               <div className="mt-7 flex flex-wrap gap-3">
                 {hasActive ? (
@@ -387,7 +390,7 @@ export default function Workouts() {
             {recentSessions.length === 0 ? (
               <p className="label-instrument">no finished sessions yet.</p>
             ) : (
-              <ul className="space-y-2">
+              <Quiet widgetKey="train-recent"><ul className="space-y-2">
                 {recentSessions.slice(0, 4).map((s) => (
                   <li key={s.id} className="surface-soft flex items-center justify-between p-4">
                     <button onClick={() => setDetail(s)} className="focus-ring min-w-0 flex-1 text-left">
@@ -406,7 +409,7 @@ export default function Workouts() {
                     </button>
                   </li>
                 ))}
-              </ul>
+              </ul></Quiet>
             )}
             <button
               onClick={() => setTab("History")}
