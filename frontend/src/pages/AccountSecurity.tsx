@@ -76,12 +76,7 @@ function EmailGroup() {
   return (
     <Group title="email">
       <p className="mb-3 text-[0.85rem] text-content-secondary">
-        Current: <span className="text-content-primary">{user?.email}</span>{" "}
-        {user?.emailVerified ? (
-          <span className="label-instrument" style={{ color: "var(--accent-cyan)" }}>· verified</span>
-        ) : (
-          <span className="label-instrument" style={{ color: "var(--accent-amber)" }}>· unverified</span>
-        )}
+        Current: <span className="text-content-primary">{user?.email}</span>
       </p>
       <form onSubmit={submit} className="space-y-3">
         <Field label="new email" type="email" autoComplete="email" required value={newEmail} onChange={(e) => setNewEmail(e.target.value)} />

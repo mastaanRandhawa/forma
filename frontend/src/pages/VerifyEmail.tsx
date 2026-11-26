@@ -31,7 +31,7 @@ export default function VerifyEmail() {
       try {
         await auth.verifyEmail(token);
         setPhase("verified");
-        if (status === "authed" || status === "unverified") await refreshUser();
+        if (status === "authed") await refreshUser();
       } catch (e) {
         if (e instanceof ApiRequestError && e.code === "token_expired") setPhase("expired");
         else setPhase("invalid");

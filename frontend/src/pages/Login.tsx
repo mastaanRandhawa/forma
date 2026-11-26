@@ -42,8 +42,7 @@ export default function Login() {
     const s = await run(email.trim(), password, remember);
     if (!s) return;
     setUser(s.user);
-    if (!s.user.emailVerified) nav("/verify-email", { replace: true });
-    else nav(s.user.onboardingCompletedAt ? from : "/onboarding", { replace: true });
+    nav(s.user.onboardingCompletedAt ? from : "/onboarding", { replace: true });
   }
 
   return (

@@ -23,7 +23,7 @@ import { auth as authClient, session as tokenStore } from "./client";
 import { API_ENABLED, invalidateResource } from "./hooks";
 import type { User } from "./types";
 
-type Status = "loading" | "authed" | "unverified" | "anon";
+type Status = "loading" | "authed" | "anon";
 
 const REDIRECT_KEY = "forma.postLoginRedirect";
 
@@ -60,7 +60,8 @@ const Ctx = createContext<AuthValue | null>(null);
 
 function statusFor(u: User | null): Status {
   if (!u) return "anon";
-  return u.emailVerified ? "authed" : "unverified";
+  // Email verification is switched off for now: a signed-in user is an authed user.
+  return "authed";
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -164,9 +165,8 @@ function Splash() {
 }
 
 /**
- * Wrap the authenticated app. Redirects anonymous users to /login, users with an
- * unverified email to /verify-email, and users who haven't finished onboarding to
- * /onboarding.
+ * Wrap the authenticated app. Redirects anonymous users to /login and users who
+ * haven't finished onboarding to /onboarding. (Email verification is off for now.)
  */
 export function RequireAuth({ children }: { children: ReactNode }) {
   const { status, user, required } = useAuth();
@@ -186,9 +186,6 @@ export function RequireAuth({ children }: { children: ReactNode }) {
     }
     return <Navigate to={expired ? "/login?expired=1" : "/login"} replace state={{ from }} />;
   }
-  if (status === "unverified" && location.pathname !== "/verify-email") {
-    return <Navigate to="/verify-email" replace />;
-  }
   if (
     status === "authed" &&
     user &&
@@ -206,6 +203,5 @@ export function RedirectIfAuthed({ children }: { children: ReactNode }) {
   if (!required) return <>{children}</>;
   if (status === "loading") return <Splash />;
   if (status === "authed") return <Navigate to={takeRedirect() ?? "/dashboard"} replace />;
-  if (status === "unverified") return <Navigate to="/verify-email" replace />;
   return <>{children}</>;
 }
