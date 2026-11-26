@@ -182,7 +182,7 @@ export function TourProvider({ children }: { children: ReactNode }) {
               initial={reduce ? false : { opacity: 0, y: 14, scale: 0.97 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               transition={{ duration: 0.35, ease: EASE }}
-              className="surface-float w-full max-w-[380px] p-7 text-center"
+              className="surface-float w-full max-w-[380px] rounded-[var(--radius-large)] p-7 text-center"
               style={{ background: "rgba(22,11,20,0.97)" }}
             >
               <h2 className="text-title text-content-primary lowercase">welcome to forma</h2>
@@ -240,7 +240,7 @@ function StepCard({ step, index, total, rect, onNext, onBack, onSkip, reduce }: 
       initial={reduce ? false : { opacity: 0, y: placeBelow ? 8 : -8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.28, ease: EASE }}
-      className="surface-float pointer-events-auto absolute p-5"
+      className="surface-float pointer-events-auto absolute rounded-[var(--radius-large)] p-5"
       style={{ left, top, width: cw, background: "rgba(22,11,20,0.97)" }}
     >
       <div className="label-instrument">step {index + 1} of {total}</div>
