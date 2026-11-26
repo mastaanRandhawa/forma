@@ -4,6 +4,7 @@ import { Dumbbell, History as HistoryIcon, Pencil, Plus, Zap, CalendarDays } fro
 import { PageHeader } from "../components/PageHeader";
 import { TrainingTabs } from "../components/layout/TrainingTabs";
 import { Reveal } from "../components/Reveal";
+import { Quiet } from "../components/Quiet";
 import { EmptyState } from "../components/EmptyState";
 import { ErrorState } from "../components/ErrorState";
 import { Button, Panel, PillSelector } from "../components/primitives";
@@ -217,12 +218,14 @@ export default function Workouts() {
     <div className="mx-auto max-w-[1120px]">
       <TrainingTabs className="mb-6" />
       <PageHeader eyebrow="train" title="workouts" ghost="& history">
-        <Button variant="ghost" onClick={() => nav("/workouts/builder")}>
-          create workout
-        </Button>
+        <span data-tour="train-create" className="inline-flex">
+          <Button variant="ghost" onClick={() => nav("/workouts/builder")}>
+            create workout
+          </Button>
+        </span>
       </PageHeader>
 
-      <div className="mb-8">
+      <div className="mb-8" data-tour="train-tabs">
         <PillSelector options={TABS} value={tab} onChange={setTab} />
       </div>
 
@@ -302,6 +305,7 @@ export default function Workouts() {
             </section>
           ) : (
             <section className="surface-soft p-6 sm:p-8">
+              <Quiet widgetKey="train-today">
               <div className="label-instrument">
                 {apiWorkout
                   ? apiWorkout.scheduledDate
@@ -335,8 +339,9 @@ export default function Workouts() {
                   );
                 })}
               </ol>
+              </Quiet>
 
-              <div className="mt-7 flex flex-wrap gap-3">
+              <div className="mt-7 flex flex-wrap gap-3" data-tour="train-start">
                 {hasActive ? (
                   <Button onClick={go}>resume workout →</Button>
                 ) : apiWorkout ? (
@@ -387,7 +392,7 @@ export default function Workouts() {
             {recentSessions.length === 0 ? (
               <p className="label-instrument">no finished sessions yet.</p>
             ) : (
-              <ul className="space-y-2">
+              <Quiet widgetKey="train-recent"><ul className="space-y-2">
                 {recentSessions.slice(0, 4).map((s) => (
                   <li key={s.id} className="surface-soft flex items-center justify-between p-4">
                     <button onClick={() => setDetail(s)} className="focus-ring min-w-0 flex-1 text-left">
@@ -406,7 +411,7 @@ export default function Workouts() {
                     </button>
                   </li>
                 ))}
-              </ul>
+              </ul></Quiet>
             )}
             <button
               onClick={() => setTab("History")}
@@ -686,7 +691,7 @@ function HubAction({
   return (
     <button
       onClick={onClick}
-      className="focus-ring tactile surface-soft flex items-center gap-3 p-4 text-left hover:surface-float"
+      className="focus-ring tactile surface-soft flex w-full min-w-0 items-center gap-3 p-4 text-left hover:surface-float"
     >
       <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full surface-recessed text-[var(--accent-pink)]">
         <Icon size={17} strokeWidth={1.9} />

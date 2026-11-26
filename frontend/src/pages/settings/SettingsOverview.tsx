@@ -7,6 +7,7 @@ import { customizationItems } from "../../lib/data";
 import { useFormaData } from "../../lib/localStore";
 import { GOAL_LABELS } from "../../lib/profileOptions";
 import { Section, Row } from "../../components/settings/ui";
+import { useTour } from "../../components/tour/Tour";
 import { SETTINGS_CATEGORIES } from "../../components/settings/SettingsNav";
 
 export default function SettingsOverview() {
@@ -15,6 +16,7 @@ export default function SettingsOverview() {
   const prog = useProgression();
   const prefs = usePrefs();
   const appearance = useAppearance();
+  const tour = useTour();
 
   const name = profile.name || user?.name || "athlete";
   const goal = profile.goal ? GOAL_LABELS[profile.goal] ?? profile.goal : null;
@@ -60,6 +62,10 @@ export default function SettingsOverview() {
         {SETTINGS_CATEGORIES.map((c) => (
           <Row key={c.to} label={c.label} value={subtitle[c.to]} to={c.to} icon={c.icon} />
         ))}
+      </Section>
+
+      <Section>
+        <Row label="replay the app tour" value="a 1-minute walkthrough" onClick={tour.start} />
       </Section>
     </div>
   );

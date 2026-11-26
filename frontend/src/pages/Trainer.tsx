@@ -295,6 +295,7 @@ export default function Trainer() {
             ))}
           </div>
           <form
+            data-tour="coach-composer"
             className="island flex w-full !gap-1 !p-1.5"
             onSubmit={(e) => {
               e.preventDefault();

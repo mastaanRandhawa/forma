@@ -8,6 +8,8 @@ import { SessionCard } from "../components/dashboard/SessionCard";
 import { TrendChartCard } from "../components/dashboard/TrendChartCard";
 import { ProgressStat } from "../components/dashboard/ProgressStat";
 import { StreakWidget } from "../components/dashboard/StreakWidget";
+import { WeekCard } from "../components/dashboard/WeekCard";
+import { RecentRecords } from "../components/dashboard/RecentRecords";
 import { InsightCard } from "../components/dashboard/InsightCard";
 import { GoalsCard } from "../components/dashboard/GoalsCard";
 import { KaiOrb, coachMood } from "../components/KaiOrb";
@@ -139,9 +141,10 @@ export default function Home() {
           <Greeting />
         </Reveal>
 
-        <div className="mt-8 grid gap-4 lg:grid-cols-[minmax(0,1fr)_336px]">
+        <div className="mt-8 grid grid-cols-[minmax(0,1fr)] gap-4 lg:grid-cols-[minmax(0,1fr)_336px]">
           <div className="space-y-4">
-            <Reveal onView className="grid grid-cols-3 gap-2 sm:gap-3">
+            <div data-tour="home-rings">
+            <Reveal onView className="grid grid-cols-3 gap-2 sm:gap-3 [&>*]:min-w-0">
               {rings.map((s) => {
                 const d = details[s.id];
                 return (
@@ -159,6 +162,7 @@ export default function Home() {
                 );
               })}
             </Reveal>
+            </div>
 
             {prefs.recovery.manualCheckins && !checkedInToday && (
               <Reveal onView>
@@ -166,9 +170,11 @@ export default function Home() {
               </Reveal>
             )}
 
-            <Reveal onView className="lg:hidden">
-              <SessionCard />
-            </Reveal>
+            <div className="lg:hidden" data-tour="home-session">
+              <Reveal onView>
+                <SessionCard />
+              </Reveal>
+            </div>
 
             <Reveal onView delay={0.06}>
               <Quiet widgetKey="training-volume-chart">
@@ -199,7 +205,11 @@ export default function Home() {
 
             <Reveal onView>
               <Quiet widgetKey="workout-streak">
-                <StreakWidget weekTrained={weekTrained} to="/progress" />
+                {API_ENABLED ? (
+                  <WeekCard done={weeklyGoal.done} target={weeklyGoal.target} weekTrained={weekTrained} />
+                ) : (
+                  <StreakWidget weekTrained={weekTrained} to="/progress" />
+                )}
               </Quiet>
             </Reveal>
 
@@ -211,9 +221,11 @@ export default function Home() {
           </div>
 
           <aside className="dash-aside space-y-4">
-            <Reveal onView className="hidden lg:block">
-              <SessionCard />
-            </Reveal>
+            <div className="hidden lg:block" data-tour="home-session">
+              <Reveal onView>
+                <SessionCard />
+              </Reveal>
+            </div>
 
             <Reveal onView delay={0.05}>
               <Quiet widgetKey="up-next">
@@ -242,6 +254,12 @@ export default function Home() {
                 <Quiet widgetKey="goals-card">
                   <GoalsCard />
                 </Quiet>
+              </Reveal>
+            )}
+
+            {API_ENABLED && (
+              <Reveal onView delay={0.2}>
+                <RecentRecords />
               </Reveal>
             )}
           </aside>

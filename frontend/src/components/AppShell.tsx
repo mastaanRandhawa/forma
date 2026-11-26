@@ -1,6 +1,6 @@
 import { Outlet, useLocation, useNavigation } from "react-router-dom";
 import { Suspense, useEffect, useState } from "react";
-import { House, Dumbbell, MessageSquare, Apple, Library, Trophy } from "lucide-react";
+import { House, Dumbbell, MessageSquare, Apple, Library, Trophy, Gamepad2 } from "lucide-react";
 import { API_ENABLED } from "../api/hooks";
 import { useFormaData } from "../lib/localStore";
 import { grantDailyBonus } from "../lib/rewards";
@@ -12,6 +12,7 @@ import { ScrollProgress } from "./layout/ScrollProgress";
 import { QuickActions } from "./layout/QuickActions";
 import { WorkoutInProgressBar } from "./workout/WorkoutInProgressBar";
 import { PageSkeleton } from "./skeleton/PageSkeleton";
+import { TourProvider } from "./tour/Tour";
 
 const ICON = { size: 19, strokeWidth: 1.75 } as const;
 
@@ -31,6 +32,7 @@ const NAV: NavItem[] = [
 const SECONDARY: NavItem[] = [
   { to: "/records", label: "Records", icon: <Trophy {...ICON} /> },
   { to: "/exercise-library", label: "Exercise library", icon: <Library {...ICON} /> },
+  { to: "/games", label: "Games", icon: <Gamepad2 {...ICON} /> },
 ];
 
 export function AppShell() {
@@ -51,6 +53,7 @@ export function AppShell() {
   }, []);
 
   return (
+    <TourProvider>
     <div className="relative min-h-[100dvh]">
       <AtmosphericBackground />
       <RouteProgress active={showSkeleton} />
@@ -70,6 +73,7 @@ export function AppShell() {
       <CoinToast />
       <LocalDataBadge />
     </div>
+    </TourProvider>
   );
 }
 

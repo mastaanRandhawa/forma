@@ -38,6 +38,9 @@ const ForgotPassword = lazy(() => import("./pages/ForgotPassword"));
 const ResetPassword = lazy(() => import("./pages/ResetPassword"));
 const VerifyEmail = lazy(() => import("./pages/VerifyEmail"));
 const AccountSecurity = lazy(() => import("./pages/AccountSecurity"));
+const Games = lazy(() => import("./pages/Games"));
+const Game = lazy(() => import("./pages/Game"));
+const RestPlay = lazy(() => import("./pages/RestPlay"));
 
 const gated = (feature: FeatureKey, el: React.ReactNode) => <FeatureGate feature={feature}>{el}</FeatureGate>;
 
@@ -73,6 +76,7 @@ const router = createBrowserRouter([
       { path: "/dashboard", element: <Home /> },
       { path: "/workouts", element: <Workouts /> },
       { path: "/workouts/active", element: <ActiveWorkout /> },
+      { path: "/workouts/play", element: <RestPlay /> },
       { path: "/workouts/builder", element: <WorkoutBuilder /> },
       { path: "/workouts/builder/:id", element: <WorkoutBuilder /> },
       { path: "/trainer", element: <Trainer /> },
@@ -84,6 +88,8 @@ const router = createBrowserRouter([
       { path: "/store", element: gated("store", <Store />) },
       { path: "/exercise-library", element: <ExerciseLibrary /> },
       { path: "/records", element: <Records /> },
+      { path: "/games", element: <Games /> },
+      { path: "/games/:id", element: <Game /> },
       {
         path: "/settings",
         element: <SettingsLayout />,

@@ -113,7 +113,7 @@ function TodayTargets({
   ];
 
   return (
-    <section className="surface-soft p-5 sm:p-6">
+    <section className="surface-soft p-5 sm:p-6" data-tour="nutrition-summary">
       <header className="mb-5 flex items-center justify-between">
         <h2 className="label-soft lowercase">today</h2>
         {targets && (
@@ -288,7 +288,7 @@ function QuickLogMeals() {
     "focus-ring h-9 rounded-lg border border-white/10 bg-white/[0.04] px-2 text-center text-[0.85rem] tabular-nums text-content-primary placeholder:text-content-tertiary";
 
   return (
-    <section className="surface-soft p-5 sm:p-6">
+    <section className="surface-soft p-5 sm:p-6" data-tour="nutrition-add">
       <h2 className="label-soft lowercase">add food</h2>
 
       <div className="mt-3 flex flex-wrap gap-2">

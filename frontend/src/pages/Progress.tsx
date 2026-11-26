@@ -3,6 +3,7 @@ import { Link, useLocation } from "react-router-dom";
 import { PageHeader } from "../components/PageHeader";
 import { TrainingTabs } from "../components/layout/TrainingTabs";
 import { Reveal } from "../components/Reveal";
+import { Quiet } from "../components/Quiet";
 import { EmptyState } from "../components/EmptyState";
 import { PillSelector } from "../components/primitives";
 import { MetricCard } from "../components/health/MetricCard";
@@ -269,7 +270,8 @@ export default function Progress() {
       </Reveal>
 
       {/* training counts — headline numbers first */}
-      <Reveal onView className="mt-8 grid gap-4 sm:grid-cols-3">
+      <Reveal onView className="mt-8">
+<Quiet widgetKey="progress-stats" className="grid gap-4 sm:grid-cols-3">
         <MetricCard
           tone="amber"
           label="workouts / month"
@@ -296,7 +298,8 @@ export default function Progress() {
           revealDelay={0.16}
           className="min-h-[168px]"
         />
-      </Reveal>
+      </Quiet>
+</Reveal>
 
       {/* strength */}
       <Reveal onView delay={0.05} className="mt-12">
@@ -418,7 +421,8 @@ export default function Progress() {
 
       {muscleVol.length > 0 && (
         <Reveal onView className="mt-14">
-          <div className="label-soft mb-4 lowercase">volume by muscle ({range})</div>
+<Quiet widgetKey="progress-muscles">
+                    <div className="label-soft mb-4 lowercase">volume by muscle ({range})</div>
           <ul className="space-y-2.5">
             {muscleVol.slice(0, 8).map(({ muscle, kg }) => (
               <li key={muscle} className="flex items-center gap-3">
@@ -439,13 +443,15 @@ export default function Progress() {
               </li>
             ))}
           </ul>
-        </Reveal>
+        </Quiet>
+</Reveal>
       )}
 
       {/* ── Training load (CTL/ATL) ─────────────────────────────────── */}
       {API_ENABLED && trainingLoad.data && !("insufficient_data" in trainingLoad.data) && (
         <Reveal onView className="mt-14">
-          <div className="label-soft mb-4 lowercase">training status</div>
+<Quiet widgetKey="progress-load">
+                    <div className="label-soft mb-4 lowercase">training status</div>
           <div className="flex items-end gap-6">
             <div className="flex flex-col items-center gap-1">
               <div
@@ -491,13 +497,15 @@ export default function Progress() {
               className="mt-4"
             />
           )}
-        </Reveal>
+        </Quiet>
+</Reveal>
       )}
 
       {/* ── Behavioral pattern insight ───────────────────────────────── */}
       {API_ENABLED && patterns.data && !("insufficient_data" in patterns.data) && patterns.data.insight && (
         <Reveal onView className="mt-8">
-          <div className="label-soft mb-3 lowercase">training patterns</div>
+<Quiet widgetKey="progress-patterns">
+                    <div className="label-soft mb-3 lowercase">training patterns</div>
           <p className="text-[0.9rem] leading-relaxed text-content-secondary">{patterns.data.insight}</p>
           {patterns.data.circadian.filter((b) => b.sessions >= 3).length > 0 && (
             <ul className="mt-3 space-y-1.5">
@@ -516,7 +524,8 @@ export default function Progress() {
                 ))}
             </ul>
           )}
-        </Reveal>
+        </Quiet>
+</Reveal>
       )}
 
       {/* ── Circadian recommendation ─────────────────────────────────── */}
@@ -545,7 +554,8 @@ export default function Progress() {
       {/* ── Nutrition-training correlation ───────────────────────────── */}
       {API_ENABLED && nutritionCorr.data && !("insufficient_data" in nutritionCorr.data) && (
         <Reveal onView className="mt-8">
-          <div className="label-soft mb-3 lowercase">protein vs. volume</div>
+<Quiet widgetKey="progress-protein">
+                    <div className="label-soft mb-3 lowercase">protein vs. volume</div>
           <p className="text-[0.9rem] text-content-secondary">
             Correlation: {" "}
             <span className="font-medium text-content-primary">{nutritionCorr.data.correlation}</span>
@@ -570,7 +580,8 @@ export default function Progress() {
               </div>
             </div>
           )}
-        </Reveal>
+        </Quiet>
+</Reveal>
       )}
 
       <div id="recovery" className="scroll-mt-24">

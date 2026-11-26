@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Plus, X } from "lucide-react";
 import { PageHeader } from "../components/PageHeader";
 import { Reveal } from "../components/Reveal";
+import { Quiet } from "../components/Quiet";
 import { GoalWidget } from "../components/dashboard/GoalWidget";
 import { EmptyState } from "../components/EmptyState";
 import { ErrorState } from "../components/ErrorState";
@@ -102,11 +103,11 @@ export default function Goals() {
           {active.length > 0 ? (
             <Reveal as="section" onView>
               <div className="label-instrument mb-3">in progress · {active.length}</div>
-              <div className="space-y-2.5">
+              <Quiet widgetKey="goals-list"><div className="space-y-2.5">
                 {active.map((g) => (
                   <GoalWidget key={g.id} goal={g} />
                 ))}
-              </div>
+              </div></Quiet>
             </Reveal>
           ) : (
             <EmptyState
@@ -120,11 +121,11 @@ export default function Goals() {
               <div className="label-instrument mb-3" style={{ color: "var(--accent-lime)" }}>
                 completed · {done.length}
               </div>
-              <div className="space-y-2.5">
+              <Quiet widgetKey="goals-list"><div className="space-y-2.5">
                 {done.map((g) => (
                   <GoalWidget key={g.id} goal={g} />
                 ))}
-              </div>
+              </div></Quiet>
             </Reveal>
           )}
         </div>
