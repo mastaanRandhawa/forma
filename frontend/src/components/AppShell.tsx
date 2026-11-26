@@ -1,8 +1,6 @@
 import { Outlet, useLocation, useNavigation } from "react-router-dom";
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect } from "react";
 import { House, Dumbbell, MessageSquare, Apple, Library, Trophy, Gamepad2 } from "lucide-react";
-import { API_ENABLED } from "../api/hooks";
-import { useFormaData } from "../lib/localStore";
 import { grantDailyBonus } from "../lib/rewards";
 import { CoinToast } from "./CoinToast";
 import { AtmosphericBackground } from "./layout/AtmosphericBackground";
@@ -71,34 +69,7 @@ export function AppShell() {
       <QuickActions />
       <WorkoutInProgressBar />
       <CoinToast />
-      <LocalDataBadge />
     </div>
     </TourProvider>
-  );
-}
-
-/** Honest marker that this build has no backend — data lives in this browser. */
-function LocalDataBadge() {
-  const { profile, sessions } = useFormaData();
-  const [dismissed, setDismissed] = useState(false);
-  if (API_ENABLED || dismissed) return null;
-  const fresh = !profile.onboardedAt && sessions.length === 0;
-  return (
-    <div className="fixed bottom-4 left-4 z-[60] max-w-[15rem]">
-      <div className="flex items-start gap-2 rounded-2xl border border-[var(--line-soft)] bg-[var(--surface-opaque)] px-3 py-2 text-[0.72rem] leading-snug text-content-tertiary shadow-[0_16px_36px_-14px_rgba(20,12,18,0.32)] backdrop-blur-md">
-        <span>
-          {fresh
-            ? "Demo build · running on template defaults. Finish setup to make it yours — data stays in this browser."
-            : "Local build · your data is stored in this browser, not on a server."}
-        </span>
-        <button
-          onClick={() => setDismissed(true)}
-          aria-label="Dismiss"
-          className="focus-ring -mr-1 -mt-0.5 shrink-0 text-content-tertiary hover:text-content-secondary"
-        >
-          ×
-        </button>
-      </div>
-    </div>
   );
 }

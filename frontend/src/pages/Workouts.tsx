@@ -698,7 +698,7 @@ function HubAction({
       </span>
       <span className="min-w-0">
         <span className="block text-[0.92rem] lowercase text-content-primary">{label}</span>
-        <span className="label-instrument block truncate">{hint}</span>
+        <span className="label-instrument block">{hint}</span>
       </span>
     </button>
   );
