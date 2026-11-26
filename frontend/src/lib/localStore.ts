@@ -60,6 +60,8 @@ export interface LoggedExercise {
   substitutedFrom?: string | null;
   /** exercises sharing a group value are trained back-to-back as a superset */
   supersetGroup?: number | null;
+  /** backend performance id, on sessions loaded from the API */
+  perfId?: string;
   /** backend ExercisePerformance id, when the session was started via the API */
   apiPerfId?: string;
   exerciseId?: string;
@@ -541,6 +543,33 @@ export function removeLastQuickLog(type: QuickLog["type"]): void {
 
 export function getSession(id: string, d: FormaData = read()): CompletedSession | null {
   return d.sessions.find((s) => s.id === id) ?? null;
+}
+
+// ── edit finished workouts (local build) ────────────────────────────────────
+const setsVolume = (exs: LoggedExercise[]) =>
+  Math.round(exs.reduce((n, e) => n + e.sets.reduce((m, s) => (s.done && !s.warmup && s.weight && s.reps ? m + s.weight * s.reps : m), 0), 0));
+
+export function updateLocalSession(id: string, patch: { name?: string; finishedAt?: string; startedAt?: string; durationSec?: number }): CompletedSession | null {
+  let out: CompletedSession | null = null;
+  mutate((d) => ({ ...d, sessions: d.sessions.map((s) => (s.id === id ? (out = { ...s, ...patch }) : s)) }));
+  return out;
+}
+
+export function deleteLocalSession(id: string): void {
+  mutate((d) => ({ ...d, sessions: d.sessions.filter((s) => s.id !== id) }));
+}
+
+export function removeLocalSessionExercise(id: string, index: number): CompletedSession | null {
+  let out: CompletedSession | null = null;
+  mutate((d) => ({
+    ...d,
+    sessions: d.sessions.map((s) => {
+      if (s.id !== id) return s;
+      const exercises = s.exercises.filter((_, i) => i !== index);
+      return (out = { ...s, exercises, volume: setsVolume(exercises) });
+    }),
+  }));
+  return out;
 }
 
 // ── nutrition ───────────────────────────────────────────────────────────────

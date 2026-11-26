@@ -339,6 +339,11 @@ export const api = {
       put<T.ExerciseSet>(`/sessions/${sessionId}/performances/${perfId}/sets/${setNumber}`, input),
     deleteSet: (sessionId: string, perfId: string, setNumber: number) =>
       del<void>(`/sessions/${sessionId}/performances/${perfId}/sets/${setNumber}`),
+    /** edit a finished workout; the server re-reads records from the corrected history */
+    update: (sessionId: string, body: { name?: string; startedAt?: string; durationSeconds?: number }) =>
+      patch<T.WorkoutSession>(`/sessions/${sessionId}`, body),
+    remove: (sessionId: string) => del<void>(`/sessions/${sessionId}`),
+    removePerformance: (sessionId: string, perfId: string) => del<void>(`/sessions/${sessionId}/performances/${perfId}`),
     formAnalysis: (sessionId: string, body: T.FormAnalysisInput) =>
       post<{ ok: true; reps: number }>(`/sessions/${sessionId}/form-analysis`, body),
     finish: (sessionId: string, body?: { durationSeconds?: number; caloriesEstimate?: number }) =>

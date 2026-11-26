@@ -152,6 +152,7 @@ export function apiSessionToCompleted(s: WorkoutSession, units: Units): Complete
     finishedAt: s.endedAt ?? s.startedAt,
     durationSec: s.durationSeconds,
     exercises: (s.performances ?? []).map((p) => ({
+      perfId: p.id,
       name: p.exercise?.name ?? "exercise",
       target: "",
       skipped: false,
