@@ -425,6 +425,15 @@ export const api = {
   },
 
   // store
+  // rewards — streak, rank, quests, shields, pledge (coins are granted server-side)
+  rewards: {
+    state: (checkinsEnabled: boolean) => get<T.RewardsState>("/rewards/state", { checkins: String(checkinsEnabled) }),
+    claimQuest: (id: string, checkinsEnabled: boolean) =>
+      post<{ coins: number; state: T.RewardsState }>(`/rewards/quests/${id}/claim`, { checkinsEnabled }),
+    buyShield: (checkinsEnabled: boolean) => post<T.RewardsState>("/rewards/shields", { checkinsEnabled }),
+    pledge: (stake: number, checkinsEnabled: boolean) => post<T.RewardsState>("/rewards/pledge", { stake, checkinsEnabled }),
+  },
+
   store: {
     wallet: () => get<T.WalletSummary>("/store/wallet"),
     earn: (amount: number, label: string) => post<T.Wallet>("/store/wallet/earn", { amount, label }),

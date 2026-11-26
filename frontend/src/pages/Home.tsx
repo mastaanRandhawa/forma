@@ -8,6 +8,7 @@ import { SessionCard } from "../components/dashboard/SessionCard";
 import { TrendChartCard } from "../components/dashboard/TrendChartCard";
 import { ProgressStat } from "../components/dashboard/ProgressStat";
 import { StreakWidget } from "../components/dashboard/StreakWidget";
+import { WeekCard } from "../components/dashboard/WeekCard";
 import { InsightCard } from "../components/dashboard/InsightCard";
 import { GoalsCard } from "../components/dashboard/GoalsCard";
 import { KaiOrb, coachMood } from "../components/KaiOrb";
@@ -203,7 +204,11 @@ export default function Home() {
 
             <Reveal onView>
               <Quiet widgetKey="workout-streak">
-                <StreakWidget weekTrained={weekTrained} to="/progress" />
+                {API_ENABLED ? (
+                  <WeekCard done={weeklyGoal.done} target={weeklyGoal.target} weekTrained={weekTrained} />
+                ) : (
+                  <StreakWidget weekTrained={weekTrained} to="/progress" />
+                )}
               </Quiet>
             </Reveal>
 

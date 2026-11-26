@@ -1056,6 +1056,47 @@ export interface WalletTransaction {
   label: string;
   createdAt: ISODate;
 }
+// ── rewards (server-authoritative) ─────────────────────────────────────────
+export interface RankInfo {
+  rank: number;
+  title: string;
+  xp: number;
+  next: { rank: number; title: string; at: number } | null;
+  toNext: number;
+  pct: number;
+}
+export interface StreakInfo {
+  weeks: number;
+  target: number;
+  thisWeek: number;
+  passReady: boolean;
+}
+export interface Quest {
+  id: string;
+  title: string;
+  detail: string;
+  target: number;
+  current: number;
+  unit: string;
+  reward: number;
+  tone: "pink" | "cyan" | "lime" | "amber" | "violet";
+  done: boolean;
+  claimed: boolean;
+}
+export interface RewardsState {
+  week: string;
+  nextWeek: string;
+  balance: number;
+  earnedThisWeek: number;
+  streak: StreakInfo & { shieldedWeeks: string[]; shieldUsedNow: boolean };
+  rank: RankInfo;
+  shields: { held: number; max: number; price: number };
+  pledge: { stake: number; target: number; status: "pending" | "won" | "lost"; payout: number } | null;
+  pledgeOptions: { stakes: number[]; bonusRate: number; available: boolean; reason: string | null };
+  quests: Quest[];
+  deals: { id: string; price: number; dealPrice: number; owned: boolean }[];
+}
+
 export interface WalletSummary {
   balance: number;
   earnedThisWeek: number;
