@@ -11,6 +11,7 @@
  */
 import { useSyncExternalStore } from "react";
 import type { TemplateExercise } from "./workoutTemplates";
+import type { BodyMeasurement, GoalWithProgress } from "../api/types";
 
 const KEY = "forma.data.v1";
 
@@ -44,6 +45,8 @@ export interface LoggedSet {
   warmup?: boolean;
   /** set is performed for max reps (As Many Reps As Possible) */
   isAmrap?: boolean;
+  /** backend set number, on sessions loaded from the API */
+  setNumber?: number;
 }
 
 export interface LoggedExercise {
@@ -59,6 +62,8 @@ export interface LoggedExercise {
   substitutedFrom?: string | null;
   /** exercises sharing a group value are trained back-to-back as a superset */
   supersetGroup?: number | null;
+  /** backend performance id, on sessions loaded from the API */
+  perfId?: string;
   /** backend ExercisePerformance id, when the session was started via the API */
   apiPerfId?: string;
   exerciseId?: string;
@@ -175,6 +180,10 @@ export interface FormaData {
   meals: MealEntry[];
   /** null → targets are derived from the training profile */
   nutritionTargets: NutritionTargets | null;
+  /** local goals; null → the sample goals until the first change */
+  goals: GoalWithProgress[] | null;
+  /** body measurements (local build) */
+  measurements: BodyMeasurement[];
 }
 
 export const DEFAULT_PROFILE: Profile = {
@@ -201,6 +210,8 @@ const EMPTY: FormaData = {
   quickLogs: [],
   meals: [],
   nutritionTargets: null,
+  goals: null,
+  measurements: [],
 };
 
 /** Backfill session-queue / pause fields on sessions saved by an older build. */
@@ -244,6 +255,8 @@ function read(): FormaData {
         quickLogs: parsed.quickLogs ?? [],
         meals: parsed.meals ?? [],
         nutritionTargets: parsed.nutritionTargets ?? null,
+        goals: parsed.goals ?? null,
+        measurements: parsed.measurements ?? [],
         active: parsed.active ? normalizeActive(parsed.active) : null,
       };
       return cache;
@@ -536,6 +549,66 @@ export function removeLastQuickLog(type: QuickLog["type"]): void {
 
 export function getSession(id: string, d: FormaData = read()): CompletedSession | null {
   return d.sessions.find((s) => s.id === id) ?? null;
+}
+
+// ── edit finished workouts (local build) ────────────────────────────────────
+const setsVolume = (exs: LoggedExercise[]) =>
+  Math.round(exs.reduce((n, e) => n + e.sets.reduce((m, s) => (s.done && !s.warmup && s.weight && s.reps ? m + s.weight * s.reps : m), 0), 0));
+
+export function updateLocalSession(id: string, patch: { name?: string; finishedAt?: string; startedAt?: string; durationSec?: number }): CompletedSession | null {
+  let out: CompletedSession | null = null;
+  mutate((d) => ({ ...d, sessions: d.sessions.map((s) => (s.id === id ? (out = { ...s, ...patch }) : s)) }));
+  return out;
+}
+
+/** Fix a set (setIndex) or add one (setIndex null) in a finished workout; volume follows. */
+export function editLocalSet(id: string, exIndex: number, setIndex: number | null, v: { weight: number | null; reps: number | null }): CompletedSession | null {
+  let out: CompletedSession | null = null;
+  mutate((d) => ({
+    ...d,
+    sessions: d.sessions.map((s) => {
+      if (s.id !== id) return s;
+      const exercises = s.exercises.map((e, i) => {
+        if (i !== exIndex) return e;
+        const sets = setIndex == null
+          ? [...e.sets, { weight: v.weight, reps: v.reps, rpe: null, done: true }]
+          : e.sets.map((x, j) => (j === setIndex ? { ...x, weight: v.weight, reps: v.reps, done: true } : x));
+        return { ...e, sets };
+      });
+      return (out = { ...s, exercises, volume: setsVolume(exercises) });
+    }),
+  }));
+  return out;
+}
+
+export function deleteLocalSet(id: string, exIndex: number, setIndex: number): CompletedSession | null {
+  let out: CompletedSession | null = null;
+  mutate((d) => ({
+    ...d,
+    sessions: d.sessions.map((s) => {
+      if (s.id !== id) return s;
+      const exercises = s.exercises.map((e, i) => (i === exIndex ? { ...e, sets: e.sets.filter((_, j) => j !== setIndex) } : e));
+      return (out = { ...s, exercises, volume: setsVolume(exercises) });
+    }),
+  }));
+  return out;
+}
+
+export function deleteLocalSession(id: string): void {
+  mutate((d) => ({ ...d, sessions: d.sessions.filter((s) => s.id !== id) }));
+}
+
+export function removeLocalSessionExercise(id: string, index: number): CompletedSession | null {
+  let out: CompletedSession | null = null;
+  mutate((d) => ({
+    ...d,
+    sessions: d.sessions.map((s) => {
+      if (s.id !== id) return s;
+      const exercises = s.exercises.filter((_, i) => i !== index);
+      return (out = { ...s, exercises, volume: setsVolume(exercises) });
+    }),
+  }));
+  return out;
 }
 
 // ── nutrition ───────────────────────────────────────────────────────────────

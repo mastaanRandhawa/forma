@@ -16,6 +16,7 @@ import { apiSessionToCompleted } from "../lib/lifecycle";
 import { API_ENABLED, useSessionHistory, useResource } from "../api/hooks";
 import { api } from "../api/client";
 import { NutritionCard } from "../components/NutritionCard";
+import { BodyMeasurements } from "../components/progress/BodyMeasurements";
 import {
   adherence,
   allTimePRs,
@@ -245,6 +246,9 @@ export default function Progress() {
           />
         </Reveal>
         <RecoverySection />
+        <Reveal className="mt-10">
+          <BodyMeasurements />
+        </Reveal>
         {API_ENABLED && (
           <Reveal className="mt-10">
             <NutritionCard />
@@ -587,6 +591,10 @@ export default function Progress() {
       <div id="recovery" className="scroll-mt-24">
         <RecoverySection />
       </div>
+
+      <Reveal onView className="mt-14">
+        <BodyMeasurements />
+      </Reveal>
 
       {API_ENABLED && (
         <Reveal onView className="mt-14">

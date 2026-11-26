@@ -5,6 +5,11 @@ import { ExerciseThumb } from "../components/ExerciseThumb";
 import { ExerciseDetailDrawer } from "../components/ExerciseDetailDrawer";
 import { REPDB_URL, repdbImage, type RepDbCatalogEntry } from "../lib/repdb";
 import { REPDB_CATALOG } from "../lib/repdb.catalog";
+import { PillSelector } from "../components/primitives";
+import { API_ENABLED } from "../api/hooks";
+import { FullLibrary, MyExercises } from "../components/library/ApiLibrary";
+
+const VIEWS = ["browse", "full library", "mine"] as const;
 
 const MUSCLES = ["All", "Chest", "Back", "Lats", "Shoulders", "Biceps", "Triceps", "Glutes", "Quads", "Hamstrings", "Abs", "Calves"];
 const EQUIPMENT = ["All", "Barbell", "Dumbbell", "Kettlebell", "Cable", "Machine", "Bodyweight", "Bands"];
@@ -15,6 +20,7 @@ export default function ExerciseLibrary() {
   const [muscle, setMuscle] = useState("All");
   const [equipment, setEquipment] = useState("All");
   const [selected, setSelected] = useState<RepDbCatalogEntry | null>(null);
+  const [view, setView] = useState<(typeof VIEWS)[number]>("browse");
 
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase();
@@ -36,6 +42,15 @@ export default function ExerciseLibrary() {
   return (
     <div className="mx-auto max-w-[1120px]">
       <PageHeader eyebrow="library" title="exercises" ghost={`· ${REPDB_CATALOG.length}`} />
+
+      {API_ENABLED && (
+        <div className="mb-6">
+          <PillSelector options={VIEWS} value={view} onChange={setView} />
+        </div>
+      )}
+      {API_ENABLED && view === "full library" && <FullLibrary />}
+      {API_ENABLED && view === "mine" && <MyExercises />}
+      {(!API_ENABLED || view === "browse") && <>
 
       <Reveal className="mb-6 space-y-3">
         <input
@@ -90,6 +105,7 @@ export default function ExerciseLibrary() {
       </p>
 
       <ExerciseDetailDrawer exercise={selected} onClose={() => setSelected(null)} />
+      </>}
     </div>
   );
 }

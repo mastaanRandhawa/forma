@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { ArrowUp, Plus, Check, SlidersHorizontal, Coins, MessageSquare } from "lucide-react";
+import { ArrowUp, Plus, Check, SlidersHorizontal, Coins, MessageSquare, Trash2 } from "lucide-react";
 import { KaiOrb, coachMood } from "../components/KaiOrb";
 import { Skel } from "../components/skeleton/Skeleton";
 import { ErrorState } from "../components/ErrorState";
@@ -13,6 +13,7 @@ import {
   useTrainer,
   API_ENABLED,
   errorMessage,
+  invalidateResource,
   type Resource,
 } from "../api/hooks";
 import { buildLocalDashboard } from "../api/localDashboard";
@@ -101,6 +102,7 @@ export default function Trainer() {
   const [savedMsgIdx, setSavedMsgIdx] = useState<Set<number>>(new Set());
   const [savingIdx, setSavingIdx] = useState<number | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [confirmClear, setConfirmClear] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -115,6 +117,20 @@ export default function Trainer() {
   }, [thread, typing, reduce]);
 
   const chips = prompts.data ?? mockPrompts;
+
+  async function clearChat() {
+    setConfirmClear(false);
+    if (API_ENABLED) {
+      try {
+        await api.chat.clear();
+        invalidateResource("chat");
+      } catch {
+        return;
+      }
+    }
+    setThread([]);
+    setSavedMsgIdx(new Set());
+  }
 
   async function send(text: string) {
     if (!text.trim() || typing) return;
@@ -185,6 +201,17 @@ export default function Trainer() {
               online · replies in seconds
             </div>
           </div>
+          {thread.length > 0 &&
+            (confirmClear ? (
+              <span className="flex items-center gap-1.5 text-[0.76rem]">
+                <button onClick={() => setConfirmClear(false)} className="focus-ring rounded-pill px-2.5 py-1 lowercase text-content-tertiary">keep</button>
+                <button onClick={clearChat} className="focus-ring rounded-pill bg-[var(--accent-amber)] px-3 py-1 lowercase text-black">clear chat</button>
+              </span>
+            ) : (
+              <button onClick={() => setConfirmClear(true)} aria-label="Clear conversation" title="Clear conversation" className="metric-card__action !h-9 !w-9">
+                <Trash2 size={15} strokeWidth={2} />
+              </button>
+            ))}
           <button
             onClick={() => setSettingsOpen(true)}
             aria-label="Trainer settings"

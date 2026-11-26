@@ -21,7 +21,7 @@ function fmt(n: number) {
 }
 
 /** One goal — ring + progress + ETA + streak, with a completion state. */
-export function GoalWidget({ goal }: { goal: Goal }) {
+export function GoalWidget({ goal, onLog, onEdit }: { goal: Goal; onLog?: () => void; onEdit?: () => void }) {
   const reduce = useReducedMotion();
   const fraction = Math.min(1, goal.value / goal.max);
   const complete = goal.value >= goal.max;
@@ -76,6 +76,20 @@ export function GoalWidget({ goal }: { goal: Goal }) {
           </span>
         </div>
       </div>
+      {(onLog || onEdit) && (
+        <div className="flex shrink-0 flex-col gap-1.5 sm:flex-row">
+          {onLog && (
+            <button onClick={onLog} className="focus-ring tactile rounded-pill bg-white/[0.08] px-3 py-1.5 text-[0.76rem] lowercase text-content-primary hover:bg-white/[0.14]">
+              log
+            </button>
+          )}
+          {onEdit && (
+            <button onClick={onEdit} className="focus-ring rounded-pill px-3 py-1.5 text-[0.76rem] lowercase text-content-tertiary hover:text-content-secondary">
+              edit
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }

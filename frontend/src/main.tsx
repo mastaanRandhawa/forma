@@ -26,6 +26,7 @@ const SettingsOverview = lazy(() => import("./pages/settings/SettingsOverview"))
 const TrainingProfile = lazy(() => import("./pages/settings/TrainingProfile"));
 const Coaching = lazy(() => import("./pages/settings/Coaching"));
 const Connections = lazy(() => import("./pages/settings/Connections"));
+const Notifications = lazy(() => import("./pages/Notifications"));
 const NotificationsSettings = lazy(() => import("./pages/settings/Notifications"));
 const AppearanceSettings = lazy(() => import("./pages/settings/Appearance"));
 const CustomizationSettings = lazy(() => import("./pages/settings/Customization"));
@@ -88,6 +89,7 @@ const router = createBrowserRouter([
       { path: "/store", element: gated("store", <Store />) },
       { path: "/exercise-library", element: <ExerciseLibrary /> },
       { path: "/records", element: <Records /> },
+      { path: "/notifications", element: <Notifications /> },
       { path: "/games", element: <Games /> },
       { path: "/games/:id", element: <Game /> },
       {
