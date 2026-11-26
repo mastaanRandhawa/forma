@@ -10,6 +10,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { api, ApiRequestError } from "./client";
 import type * as T from "./types";
 import * as demo from "./demo";
+import { localGoals } from "../lib/localGoals";
 
 export const API_ENABLED = Boolean(
   (import.meta.env as Record<string, string | undefined>).VITE_API_URL,
@@ -172,7 +173,7 @@ export const useDashboard = () =>
   useResource<T.Dashboard>("dashboard", pick(api.dashboard, demo.demoDashboard));
 
 export const useGoals = () =>
-  useResource<T.GoalWithProgress[]>("goals", pick(api.goals.list, demo.demoGoals));
+  useResource<T.GoalWithProgress[]>("goals", pick(api.goals.list, localGoals));
 
 export const useWallet = () =>
   useResource<T.WalletSummary>("wallet", pick(api.store.wallet, demo.demoWallet));
