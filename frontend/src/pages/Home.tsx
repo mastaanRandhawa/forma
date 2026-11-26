@@ -141,10 +141,10 @@ export default function Home() {
           <Greeting />
         </Reveal>
 
-        <div className="mt-8 grid gap-4 lg:grid-cols-[minmax(0,1fr)_336px]">
+        <div className="mt-8 grid grid-cols-[minmax(0,1fr)] gap-4 lg:grid-cols-[minmax(0,1fr)_336px]">
           <div className="space-y-4">
             <div data-tour="home-rings">
-            <Reveal onView className="grid grid-cols-3 gap-2 sm:gap-3">
+            <Reveal onView className="grid grid-cols-3 gap-2 sm:gap-3 [&>*]:min-w-0">
               {rings.map((s) => {
                 const d = details[s.id];
                 return (

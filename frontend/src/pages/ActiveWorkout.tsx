@@ -1118,7 +1118,7 @@ function RestOrFocus(props: {
   const pct = Math.max(0, Math.min(1, remaining / Math.max(1, restTotal, remaining)));
   const tone = low ? "var(--accent-amber)" : "var(--accent-lime)";
   const ghost =
-    "focus-ring tactile rounded-pill bg-white/[0.06] px-4 py-2.5 text-[0.85rem] tabular-nums text-content-primary hover:bg-white/[0.12]";
+    "focus-ring tactile shrink-0 rounded-pill bg-white/[0.06] px-3 py-2.5 text-[0.85rem] tabular-nums text-content-primary hover:bg-white/[0.12] min-[360px]:px-4";
 
   return (
     <motion.div
@@ -1129,7 +1129,7 @@ function RestOrFocus(props: {
       className="surface-soft overflow-hidden"
     >
       {animSrc && (
-        <div className="relative aspect-[16/9] w-full bg-[#150c12]">
+        <div className="relative aspect-[16/9] max-h-[240px] w-full bg-[#150c12]">
           <img
             key={animSrc}
             src={animSrc}
@@ -1264,16 +1264,16 @@ function RestOrFocus(props: {
                 <div className="h-full rounded-full" style={{ width: `${pct * 100}%`, background: tone, transition: "width 0.3s linear" }} />
               </div>
             </button>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 min-[360px]:gap-2">
               <button onClick={() => props.onStartRest(Math.max(1, remaining - 15))} className={ghost}>
                 −15s
               </button>
               {remaining >= 20 && (
                 <Link to="/workouts/play" className={`${ghost} inline-flex items-center gap-1.5`} aria-label="play a game while you rest">
-                  <Gamepad2 size={15} /> play
+                  <Gamepad2 size={15} /> <span className="hidden min-[360px]:inline">play</span>
                 </Link>
               )}
-              <button onClick={props.onStopRest} className="btn-primary flex-1 px-6 py-3 text-[0.95rem]">
+              <button onClick={props.onStopRest} className="btn-primary min-w-0 flex-1 px-4 py-3 text-[0.95rem]">
                 ready
               </button>
               <button onClick={() => props.onStartRest(remaining + 15)} className={ghost}>

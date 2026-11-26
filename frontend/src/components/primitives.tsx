@@ -123,7 +123,7 @@ export function PillSelector<T extends string>({
   const reduce = useReducedMotion();
   return (
     <LayoutGroup id={groupId}>
-      <div className="surface-recessed inline-flex rounded-pill p-1.5" role="tablist">
+      <div className="surface-recessed inline-flex max-w-full overflow-x-auto rounded-pill p-1.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" role="tablist">
         {options.map((o) => {
           const active = value === o;
           return (
@@ -132,7 +132,7 @@ export function PillSelector<T extends string>({
               role="tab"
               aria-selected={active}
               onClick={() => onChange(o)}
-              className={`focus-ring relative rounded-pill px-4 py-1.5 text-[0.78rem] lowercase tracking-[0.04em] transition-colors ${
+              className={`focus-ring relative shrink-0 rounded-pill px-4 py-1.5 text-[0.78rem] lowercase tracking-[0.04em] transition-colors ${
                 active ? "text-content-primary" : "text-content-tertiary hover:text-content-secondary"
               }`}
             >

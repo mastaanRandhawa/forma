@@ -168,6 +168,8 @@ export function shuffle<T>(arr: readonly T[]): T[] {
 /** Soft buzz on phones that have it; a no-op elsewhere. */
 export const buzz = (p: number | number[] = 12) => {
   try {
+    // browsers refuse (and log an error) until the user has tapped the page
+    if (navigator.userActivation && !navigator.userActivation.hasBeenActive) return;
     navigator.vibrate?.(p);
   } catch {
     /* unsupported */

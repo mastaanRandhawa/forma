@@ -691,7 +691,7 @@ function HubAction({
   return (
     <button
       onClick={onClick}
-      className="focus-ring tactile surface-soft flex items-center gap-3 p-4 text-left hover:surface-float"
+      className="focus-ring tactile surface-soft flex w-full min-w-0 items-center gap-3 p-4 text-left hover:surface-float"
     >
       <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full surface-recessed text-[var(--accent-pink)]">
         <Icon size={17} strokeWidth={1.9} />
