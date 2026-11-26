@@ -70,7 +70,7 @@ export default function FoodLog() {
           {day && (
             <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
               <div className="space-y-6">
-                <Quiet widgetKey="nutrition-summary"><DaySummary day={day} onAdjust={() => setGoalOpen(true)} /></Quiet>
+                <div data-tour="nutrition-summary"><Quiet widgetKey="nutrition-summary"><DaySummary day={day} onAdjust={() => setGoalOpen(true)} /></Quiet></div>
                 <LogCard
                   day={day}
                   onAdd={(meal) => setAdd({ open: true, meal })}
@@ -272,6 +272,7 @@ function LogCard({
       <header className="flex items-center justify-between">
         <h2 className="label-soft lowercase">log food</h2>
         <button
+          data-tour="nutrition-add"
           onClick={() => onAdd(mealForNow())}
           className="focus-ring tactile inline-flex items-center gap-1.5 rounded-pill bg-white/[0.08] px-3.5 py-2 text-[0.8rem] lowercase text-content-primary hover:bg-white/[0.14]"
         >

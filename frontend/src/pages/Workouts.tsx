@@ -218,12 +218,14 @@ export default function Workouts() {
     <div className="mx-auto max-w-[1120px]">
       <TrainingTabs className="mb-6" />
       <PageHeader eyebrow="train" title="workouts" ghost="& history">
-        <Button variant="ghost" onClick={() => nav("/workouts/builder")}>
-          create workout
-        </Button>
+        <span data-tour="train-create" className="inline-flex">
+          <Button variant="ghost" onClick={() => nav("/workouts/builder")}>
+            create workout
+          </Button>
+        </span>
       </PageHeader>
 
-      <div className="mb-8">
+      <div className="mb-8" data-tour="train-tabs">
         <PillSelector options={TABS} value={tab} onChange={setTab} />
       </div>
 
@@ -339,7 +341,7 @@ export default function Workouts() {
               </ol>
               </Quiet>
 
-              <div className="mt-7 flex flex-wrap gap-3">
+              <div className="mt-7 flex flex-wrap gap-3" data-tour="train-start">
                 {hasActive ? (
                   <Button onClick={go}>resume workout →</Button>
                 ) : apiWorkout ? (

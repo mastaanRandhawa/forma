@@ -153,6 +153,7 @@ export function TopNav({
 
   return (
     <motion.header
+      data-tour="nav"
       className="fixed inset-x-0 top-0 z-40 flex justify-center px-4 pt-2.5"
       initial={reduce ? false : { y: -22, opacity: 0 }}
       animate={{ y: 0, opacity: 1 }}

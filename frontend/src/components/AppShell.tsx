@@ -12,6 +12,7 @@ import { ScrollProgress } from "./layout/ScrollProgress";
 import { QuickActions } from "./layout/QuickActions";
 import { WorkoutInProgressBar } from "./workout/WorkoutInProgressBar";
 import { PageSkeleton } from "./skeleton/PageSkeleton";
+import { TourProvider } from "./tour/Tour";
 
 const ICON = { size: 19, strokeWidth: 1.75 } as const;
 
@@ -52,6 +53,7 @@ export function AppShell() {
   }, []);
 
   return (
+    <TourProvider>
     <div className="relative min-h-[100dvh]">
       <AtmosphericBackground />
       <RouteProgress active={showSkeleton} />
@@ -71,6 +73,7 @@ export function AppShell() {
       <CoinToast />
       <LocalDataBadge />
     </div>
+    </TourProvider>
   );
 }
 

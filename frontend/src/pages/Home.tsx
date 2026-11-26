@@ -141,6 +141,7 @@ export default function Home() {
 
         <div className="mt-8 grid gap-4 lg:grid-cols-[minmax(0,1fr)_336px]">
           <div className="space-y-4">
+            <div data-tour="home-rings">
             <Reveal onView className="grid grid-cols-3 gap-2 sm:gap-3">
               {rings.map((s) => {
                 const d = details[s.id];
@@ -159,6 +160,7 @@ export default function Home() {
                 );
               })}
             </Reveal>
+            </div>
 
             {prefs.recovery.manualCheckins && !checkedInToday && (
               <Reveal onView>
@@ -166,9 +168,11 @@ export default function Home() {
               </Reveal>
             )}
 
-            <Reveal onView className="lg:hidden">
-              <SessionCard />
-            </Reveal>
+            <div className="lg:hidden" data-tour="home-session">
+              <Reveal onView>
+                <SessionCard />
+              </Reveal>
+            </div>
 
             <Reveal onView delay={0.06}>
               <Quiet widgetKey="training-volume-chart">
@@ -211,9 +215,11 @@ export default function Home() {
           </div>
 
           <aside className="dash-aside space-y-4">
-            <Reveal onView className="hidden lg:block">
-              <SessionCard />
-            </Reveal>
+            <div className="hidden lg:block" data-tour="home-session">
+              <Reveal onView>
+                <SessionCard />
+              </Reveal>
+            </div>
 
             <Reveal onView delay={0.05}>
               <Quiet widgetKey="up-next">
