@@ -46,13 +46,13 @@ export default function Signup() {
     });
     if (!s) return;
     setUser(s.user);
-    nav("/verify-email", { replace: true });
+    nav("/onboarding", { replace: true });
   }
 
   return (
     <AuthShell
       title="Create your account"
-      subtitle="Then verify your email and we'll set up your training."
+      subtitle="Then we'll set up your training."
       footer={
         <>
           Already have an account?{" "}

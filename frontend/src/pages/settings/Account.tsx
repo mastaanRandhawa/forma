@@ -22,12 +22,6 @@ export default function Account() {
           {user && (
             <p className="mb-3 text-[0.85rem] text-content-secondary">
               signed in as <span className="text-content-primary">{user.email}</span>
-              {!user.emailVerified && (
-                <span className="label-instrument" style={{ color: "var(--accent-amber)" }}>
-                  {" "}
-                  · email unverified
-                </span>
-              )}
               .
             </p>
           )}
