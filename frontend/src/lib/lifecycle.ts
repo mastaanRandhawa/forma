@@ -156,11 +156,13 @@ export function apiSessionToCompleted(s: WorkoutSession, units: Units): Complete
       name: p.exercise?.name ?? "exercise",
       target: "",
       skipped: false,
-      sets: (p.sets ?? []).map((set) => ({
+      sets: [...(p.sets ?? [])].sort((a, b) => a.setNumber - b.setNumber).map((set) => ({
         weight: set.weightKg == null ? null : fromKg(set.weightKg, units),
         reps: set.reps ?? null,
         rpe: set.rpe ?? null,
         done: !!set.completedAt,
+        warmup: set.isWarmup || undefined,
+        setNumber: set.setNumber,
       })),
     })),
     volume: units === "kg" ? Math.round(s.totalVolumeKg) : Math.round(s.totalVolumeKg * 2.2046226218),

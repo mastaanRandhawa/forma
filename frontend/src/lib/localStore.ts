@@ -45,6 +45,8 @@ export interface LoggedSet {
   warmup?: boolean;
   /** set is performed for max reps (As Many Reps As Possible) */
   isAmrap?: boolean;
+  /** backend set number, on sessions loaded from the API */
+  setNumber?: number;
 }
 
 export interface LoggedExercise {
@@ -556,6 +558,39 @@ const setsVolume = (exs: LoggedExercise[]) =>
 export function updateLocalSession(id: string, patch: { name?: string; finishedAt?: string; startedAt?: string; durationSec?: number }): CompletedSession | null {
   let out: CompletedSession | null = null;
   mutate((d) => ({ ...d, sessions: d.sessions.map((s) => (s.id === id ? (out = { ...s, ...patch }) : s)) }));
+  return out;
+}
+
+/** Fix a set (setIndex) or add one (setIndex null) in a finished workout; volume follows. */
+export function editLocalSet(id: string, exIndex: number, setIndex: number | null, v: { weight: number | null; reps: number | null }): CompletedSession | null {
+  let out: CompletedSession | null = null;
+  mutate((d) => ({
+    ...d,
+    sessions: d.sessions.map((s) => {
+      if (s.id !== id) return s;
+      const exercises = s.exercises.map((e, i) => {
+        if (i !== exIndex) return e;
+        const sets = setIndex == null
+          ? [...e.sets, { weight: v.weight, reps: v.reps, rpe: null, done: true }]
+          : e.sets.map((x, j) => (j === setIndex ? { ...x, weight: v.weight, reps: v.reps, done: true } : x));
+        return { ...e, sets };
+      });
+      return (out = { ...s, exercises, volume: setsVolume(exercises) });
+    }),
+  }));
+  return out;
+}
+
+export function deleteLocalSet(id: string, exIndex: number, setIndex: number): CompletedSession | null {
+  let out: CompletedSession | null = null;
+  mutate((d) => ({
+    ...d,
+    sessions: d.sessions.map((s) => {
+      if (s.id !== id) return s;
+      const exercises = s.exercises.map((e, i) => (i === exIndex ? { ...e, sets: e.sets.filter((_, j) => j !== setIndex) } : e));
+      return (out = { ...s, exercises, volume: setsVolume(exercises) });
+    }),
+  }));
   return out;
 }
 

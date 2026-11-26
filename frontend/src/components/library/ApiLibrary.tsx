@@ -167,11 +167,13 @@ function ExerciseForm({ open, entry, onClose, onDone }: { open: boolean; entry: 
   const [primary, setPrimary] = useState<string[]>(entry?.muscles?.filter((m) => m.role === "primary").map((m) => m.muscleGroup.key) ?? []);
   const secondary = entry?.muscles?.filter((m) => m.role !== "primary").map((m) => m.muscleGroup.key) ?? [];
   const [steps, setSteps] = useState((entry?.instructions ?? []).join("\n"));
+  const [link, setLink] = useState((entry as { mediaUrl?: string | null } | null)?.mediaUrl ?? "");
   const [busy, setBusy] = useState(false);
   const [confirm, setConfirm] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const toggle = (list: string[], set: (v: string[]) => void, v: string) => set(list.includes(v) ? list.filter((x) => x !== v) : [...list, v]);
-  const valid = name.trim().length >= 2;
+  const linkOk = !link.trim() || /^https:\/\/\S+$/i.test(link.trim());
+  const valid = name.trim().length >= 2 && linkOk;
 
   const go = async (fn: () => Promise<unknown>) => {
     setBusy(true);
@@ -196,6 +198,7 @@ function ExerciseForm({ open, entry, onClose, onDone }: { open: boolean; entry: 
         instructions: steps.split("\n").map((s) => s.trim()).filter(Boolean).slice(0, 20),
         primaryMuscleKeys: primary,
         secondaryMuscleKeys: secondary.filter((k) => !primary.includes(k)),
+        ...(link.trim() ? { mediaUrl: link.trim() } : entry ? { mediaUrl: null } : {}),
       };
       return entry ? api.library.updateCustom(entry.id, body) : api.library.createCustom(body);
     });
@@ -216,6 +219,11 @@ function ExerciseForm({ open, entry, onClose, onDone }: { open: boolean; entry: 
         <div>
           <div className="label-instrument mb-1.5">steps · one per line</div>
           <textarea className={`${field} min-h-[88px]`} value={steps} onChange={(e) => setSteps(e.target.value)} placeholder="optional" />
+        </div>
+        <div>
+          <div className="label-instrument mb-1.5">photo or video link · optional</div>
+          <input className={field} value={link} onChange={(e) => setLink(e.target.value)} placeholder="https://…" aria-label="media link" inputMode="url" />
+          {!linkOk && <p className="mt-1.5 text-[0.76rem] text-[var(--accent-amber)]">use a link that starts with https://</p>}
         </div>
         {err && <p role="alert" className="text-[0.82rem] text-[var(--accent-amber)]">{err}</p>}
         <button disabled={busy || !valid} onClick={save} className="focus-ring tactile w-full rounded-pill bg-[var(--accent-pink)] py-3 text-[0.88rem] lowercase text-white disabled:opacity-40">

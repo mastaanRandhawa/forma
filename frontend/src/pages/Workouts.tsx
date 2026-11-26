@@ -12,14 +12,16 @@ import { ExerciseThumb } from "../components/ExerciseThumb";
 import { DetailDrawer } from "../components/dashboard/DetailDrawer";
 import { TemplateCard } from "../components/workout/TemplateCard";
 import { SessionDetailDrawer } from "../components/workout/SessionDetailDrawer";
+import { ProgramsManager } from "../components/workout/ProgramsManager";
 import { repdbThumb } from "../lib/repdb";
-import { useFormaData, startSession, updateLocalSession, deleteLocalSession, removeLocalSessionExercise, getSession as getLocalSession, type CompletedSession } from "../lib/localStore";
+import { useFormaData, startSession, updateLocalSession, deleteLocalSession, removeLocalSessionExercise, editLocalSet, deleteLocalSet, getSession as getLocalSession, type CompletedSession } from "../lib/localStore";
 import { sessionVolume } from "../lib/fitness";
 import { sessionElapsedLabel, sessionProgress, supersetLetter } from "../lib/session";
 import {
   startApiSessionFromWorkout,
   apiSessionToCompleted,
   fromKg,
+  toKg,
 } from "../lib/lifecycle";
 import {
   API_ENABLED,
@@ -142,6 +144,7 @@ export default function Workouts() {
   const [preview, setPreview] = useState<TemplateRow | null>(null);
   const [detail, setDetail] = useState<CompletedSession | null>(null);
   const [renaming, setRenaming] = useState<TemplateRow | null>(null);
+  const [programsOpen, setProgramsOpen] = useState(false);
   const [deleting, setDeleting] = useState<TemplateRow | null>(null);
 
   /** the finished-workout edits below work on the server, or on the local store in the demo build */
@@ -194,6 +197,42 @@ export default function Workouts() {
         setDetail(apiSessionToCompleted(await api.sessions.get(s.apiId), units));
       } else {
         setDetail(removeLocalSessionExercise(s.id, index) ?? getLocalSession(s.id));
+      }
+      await afterSessionChange();
+    } catch (e) {
+      return msg(e);
+    }
+  };
+
+  const editSet = async (s: CompletedSession, exIndex: number, setIndex: number | null, v: { weight: number | null; reps: number | null }): Promise<string | void> => {
+    try {
+      if (API_ENABLED && s.apiId) {
+        const ex = s.exercises[exIndex];
+        if (!ex?.perfId) return "Couldn't find that exercise.";
+        const number = setIndex == null ? Math.max(0, ...ex.sets.map((x) => x.setNumber ?? 0)) + 1 : ex.sets[setIndex]?.setNumber;
+        if (!number) return "Couldn't find that set.";
+        await api.sessions.logSet(s.apiId, ex.perfId, number, { weightKg: v.weight == null ? null : toKg(v.weight, units), reps: v.reps, ...(setIndex == null ? { completed: true } : {}) });
+        setDetail(apiSessionToCompleted(await api.sessions.get(s.apiId), units));
+      } else {
+        const next = editLocalSet(s.id, exIndex, setIndex, v);
+        if (next) setDetail(next);
+      }
+      await afterSessionChange();
+    } catch (e) {
+      return msg(e);
+    }
+  };
+  const deleteSet = async (s: CompletedSession, exIndex: number, setIndex: number): Promise<string | void> => {
+    try {
+      if (API_ENABLED && s.apiId) {
+        const ex = s.exercises[exIndex];
+        const number = ex?.sets[setIndex]?.setNumber;
+        if (!ex?.perfId || !number) return "Couldn't find that set.";
+        await api.sessions.deleteSet(s.apiId, ex.perfId, number);
+        setDetail(apiSessionToCompleted(await api.sessions.get(s.apiId), units));
+      } else {
+        const next = deleteLocalSet(s.id, exIndex, setIndex);
+        if (next) setDetail(next);
       }
       await afterSessionChange();
     } catch (e) {
@@ -277,6 +316,11 @@ export default function Workouts() {
     <div className="mx-auto max-w-[1120px]">
       <TrainingTabs className="mb-6" />
       <PageHeader eyebrow="train" title="workouts" ghost="& history">
+        {API_ENABLED && (
+          <Button variant="ghost" onClick={() => setProgramsOpen(true)}>
+            programs
+          </Button>
+        )}
         <span data-tour="train-create" className="inline-flex">
           <Button variant="ghost" onClick={() => nav("/workouts/builder")}>
             create workout
@@ -678,6 +722,8 @@ export default function Workouts() {
         )}
       </DetailDrawer>
 
+      {API_ENABLED && <ProgramsManager open={programsOpen} onClose={() => setProgramsOpen(false)} />}
+
       {/* ── session detail ────────────────────────────────────────── */}
       <SessionDetailDrawer
         session={detail}
@@ -691,6 +737,8 @@ export default function Workouts() {
         onEdit={editSession}
         onDelete={deleteSession}
         onRemoveExercise={removeExercise}
+        onEditSet={editSet}
+        onDeleteSet={deleteSet}
         busy={repeat.pending ? "repeat" : saveTpl.pending ? "template" : null}
       />
 

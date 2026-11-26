@@ -24,6 +24,8 @@ export function SessionDetailDrawer({
   onEdit,
   onDelete,
   onRemoveExercise,
+  onEditSet,
+  onDeleteSet,
   busy,
 }: {
   session: CompletedSession | null;
@@ -35,6 +37,9 @@ export function SessionDetailDrawer({
   onEdit?: (s: CompletedSession, patch: { name: string; date: string; minutes: number }) => Promise<string | void>;
   onDelete?: (s: CompletedSession) => Promise<string | void>;
   onRemoveExercise?: (s: CompletedSession, index: number) => Promise<string | void>;
+  /** fix a set, or add one when `setIndex` is null; weight is in the session's units */
+  onEditSet?: (s: CompletedSession, exIndex: number, setIndex: number | null, v: { weight: number | null; reps: number | null }) => Promise<string | void>;
+  onDeleteSet?: (s: CompletedSession, exIndex: number, setIndex: number) => Promise<string | void>;
   busy?: string | null;
 }) {
   const [saved, setSaved] = useState(false);
@@ -45,13 +50,28 @@ export function SessionDetailDrawer({
   const [confirm, setConfirm] = useState<"delete" | number | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const [setEdit, setSetEdit] = useState<{ ex: number; set: number | null } | null>(null);
+  const [sw, setSw] = useState("");
+  const [sr, setSr] = useState("");
   const [seen, setSeen] = useState<string | null>(null);
   if (session && session.id !== seen) {
     setSeen(session.id);
     setEditing(false);
     setConfirm(null);
     setErr(null);
+    setSetEdit(null);
   }
+  const openSet = (ex: number, set: number | null) => {
+    const e = session?.exercises[ex];
+    const src = set != null ? e?.sets[set] : e?.sets.filter((x) => !x.warmup && x.done).slice(-1)[0];
+    setSw(src?.weight != null ? String(src.weight) : "");
+    setSr(src?.reps != null ? String(src.reps) : "");
+    setErr(null);
+    setSetEdit({ ex, set });
+  };
+  const swN = sw.trim() === "" ? null : Number.parseFloat(sw.replace(",", "."));
+  const srN = sr.trim() === "" ? null : Number(sr);
+  const setOk = (swN == null || (Number.isFinite(swN) && swN >= 0)) && (srN == null || (Number.isInteger(srN) && srN >= 0)) && (swN != null || srN != null);
   const startEdit = () => {
     if (!session) return;
     const d = new Date(session.startedAt);
@@ -154,7 +174,7 @@ export function SessionDetailDrawer({
 
       <div className="space-y-3">
         {session.exercises.map((e, i) => {
-          const working = e.sets.filter((s) => !s.warmup);
+          const working = e.sets.map((s, idx) => ({ s, idx })).filter((x) => !x.s.warmup);
           const was = prior.get(e.name);
           return (
             <div key={i} className="surface-recessed rounded-hero p-3">
@@ -185,7 +205,7 @@ export function SessionDetailDrawer({
                   ))}
               </div>
               <div className="mt-2 space-y-1">
-                {working.map((s, si) => {
+                {working.map(({ s, idx }, si) => {
                   const isPr =
                     s.done &&
                     !!s.weight &&
@@ -205,9 +225,39 @@ export function SessionDetailDrawer({
                       </span>
                       {isPr && <Trophy size={12} className="text-[var(--accent-lime)]" />}
                       {!s.done && <span className="label-instrument">skipped</span>}
+                      {onEditSet && (
+                        <button onClick={() => openSet(i, idx)} aria-label={`edit set ${si + 1} of ${e.name}`} className="focus-ring rounded-pill px-2 py-0.5 text-[0.74rem] lowercase text-content-tertiary hover:text-content-primary">
+                          edit
+                        </button>
+                      )}
                     </div>
                   );
                 })}
+                {onEditSet && (
+                  <button onClick={() => openSet(i, null)} aria-label={`add a set to ${e.name}`} className="focus-ring rounded-pill px-2 py-0.5 text-[0.76rem] lowercase text-[var(--accent-pink)]">
+                    + set
+                  </button>
+                )}
+                {setEdit?.ex === i && onEditSet && (
+                  <div className="mt-1 space-y-2 rounded-xl border border-white/10 bg-white/[0.03] p-2.5">
+                    <div className="label-instrument">{setEdit.set == null ? "add a set" : "edit set"}</div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <input value={sw} onChange={(ev) => setSw(ev.target.value)} inputMode="decimal" placeholder={`weight (${units})`} aria-label="weight" className="w-full rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-[0.88rem] text-content-primary outline-none focus:border-white/30" />
+                      <input value={sr} onChange={(ev) => setSr(ev.target.value)} inputMode="numeric" placeholder="reps" aria-label="reps" className="w-full rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-[0.88rem] text-content-primary outline-none focus:border-white/30" />
+                    </div>
+                    <div className="flex items-center justify-end gap-2">
+                      {setEdit.set != null && onDeleteSet && (
+                        <button disabled={pending} onClick={() => run(() => onDeleteSet(session, i, setEdit.set!), () => setSetEdit(null))} className="focus-ring mr-auto rounded-pill px-2.5 py-1 text-[0.78rem] lowercase text-content-tertiary hover:text-[var(--accent-amber)]">
+                          delete set
+                        </button>
+                      )}
+                      <button onClick={() => setSetEdit(null)} className="focus-ring rounded-pill px-3 py-1.5 text-[0.8rem] lowercase text-content-tertiary">cancel</button>
+                      <button disabled={!setOk || pending} onClick={() => run(() => onEditSet(session, i, setEdit.set, { weight: swN, reps: srN }), () => setSetEdit(null))} className="focus-ring tactile rounded-pill bg-[var(--accent-pink)] px-4 py-1.5 text-[0.8rem] lowercase text-white disabled:opacity-40">
+                        {pending ? "saving…" : "save"}
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           );
