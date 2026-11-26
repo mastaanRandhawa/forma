@@ -46,7 +46,7 @@ function SlotGrid({ slot }: { slot: CustomizationSlot }) {
   const locked = items.filter((i) => !cz.isOwned(i.id)).length;
   return (
     <>
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-2 min-[380px]:grid-cols-2 sm:grid-cols-3">
         {items.map((item) => {
           const owned = cz.isOwned(item.id);
           const active = cz.isEquipped(item.id, item.slot);
@@ -69,7 +69,7 @@ function SlotGrid({ slot }: { slot: CustomizationSlot }) {
                 style={{ background: item.swatch ?? "rgba(255,255,255,0.08)" }}
               />
               <span className="min-w-0 flex-1">
-                <span className="block truncate text-[0.8rem] lowercase text-content-primary">{item.name}</span>
+                <span className="block break-words text-[0.8rem] lowercase leading-tight text-content-primary">{item.name}</span>
                 <span className={`block text-[0.58rem] uppercase tracking-wide ${RARITY_TEXT[item.rarity]}`}>
                   {owned ? (active ? "equipped" : "owned") : `${item.price} coins`}
                 </span>
@@ -143,7 +143,7 @@ export default function Customization() {
         title="theme"
         description="a colour world — accent family, background hue, corner radius and ambient motion. all free, all render in light and dark."
       >
-        <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
+        <div className="grid grid-cols-1 gap-2.5 min-[380px]:grid-cols-2 sm:grid-cols-3">
           {THEMES.map((t) => {
             const active = cz.equippedId("theme") === t.id;
             // the swatch previews the theme AS IT RENDERS in the current mode
