@@ -8,6 +8,7 @@ import {
   Clock,
   Coins,
   Eye,
+  Gamepad2,
   EyeOff,
   Minus,
   Pause,
@@ -1267,6 +1268,11 @@ function RestOrFocus(props: {
               <button onClick={() => props.onStartRest(Math.max(1, remaining - 15))} className={ghost}>
                 −15s
               </button>
+              {remaining >= 20 && (
+                <Link to="/workouts/play" className={`${ghost} inline-flex items-center gap-1.5`} aria-label="play a game while you rest">
+                  <Gamepad2 size={15} /> play
+                </Link>
+              )}
               <button onClick={props.onStopRest} className="btn-primary flex-1 px-6 py-3 text-[0.95rem]">
                 ready
               </button>
