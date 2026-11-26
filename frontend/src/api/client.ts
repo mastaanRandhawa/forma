@@ -293,9 +293,13 @@ export const api = {
     muscleGroupExercises: (key: string) =>
       get<{ muscleGroup: T.MuscleGroup; exercises: T.Exercise[] }>(`/library/muscle-groups/${key}/exercises`),
     exercises: (q?: {
-      q?: string; muscle?: string; equipment?: string; camera?: "true" | "false"; take?: number; skip?: number;
+      q?: string; muscle?: string; equipment?: string; camera?: "true" | "false"; mine?: "true" | "false"; take?: number; skip?: number;
     }) => get<{ items: T.Exercise[]; total: number }>("/library/exercises", q),
     exercise: (slug: string) => get<T.ExerciseDetail>(`/library/exercises/${slug}`),
+    /** your own exercises: create, edit, delete (shared exercises can't be changed) */
+    createCustom: (body: T.CustomExerciseInput) => post<T.Exercise>("/library/exercises", body),
+    updateCustom: (id: string, body: Partial<T.CustomExerciseInput>) => patch<T.Exercise>(`/library/exercises/${id}`, body),
+    deleteCustom: (id: string) => del<void>(`/library/exercises/${id}`),
     exerciseHistory: (slug: string, take?: number) => get<T.ExerciseHistory>(`/library/exercises/${slug}/history`, { take }),
   },
 
@@ -364,6 +368,10 @@ export const api = {
     addMetric: (input: T.ProgressMetricInput) => post<T.ProgressMetric>("/progress/metrics", input),
     measurements: () => get<T.BodyMeasurement[]>("/progress/measurements"),
     addMeasurement: (input: T.BodyMeasurementInput) => post<T.BodyMeasurement>("/progress/measurements", input),
+    /** fix an entry; send null to clear a field */
+    updateMeasurement: (id: string, body: { [K in keyof T.BodyMeasurementInput]: T.BodyMeasurementInput[K] | null }) =>
+      patch<T.BodyMeasurement>(`/progress/measurements/${id}`, body),
+    deleteMeasurement: (id: string) => del<void>(`/progress/measurements/${id}`),
     personalRecords: () => get<T.PersonalRecord[]>("/progress/personal-records"),
     strength: (slug: string, days?: number) => get<T.StrengthSeries>(`/progress/strength/${slug}`, { days }),
     overview: () => get<T.ProgressOverview>("/progress/overview"),

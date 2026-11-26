@@ -607,6 +607,19 @@ export interface Exercise {
   imageEndUrl?: string | null;
 }
 
+export interface CustomExerciseInput {
+  name: string;
+  category?: "push" | "pull" | "legs" | "core" | "cardio" | "mobility" | "other";
+  equipment?: string[];
+  difficulty?: ExperienceLevel;
+  trackingType?: "reps" | "time" | "cardio";
+  instructions?: string[];
+  primaryMuscleKeys?: string[];
+  secondaryMuscleKeys?: string[];
+  mediaUrl?: string | null;
+  guideUrl?: string | null;
+}
+
 export interface ExerciseDetail extends Exercise {
   alternatives: Array<{ slug: string; name: string; equipment: string[] }>;
 }

@@ -11,7 +11,7 @@
  */
 import { useSyncExternalStore } from "react";
 import type { TemplateExercise } from "./workoutTemplates";
-import type { GoalWithProgress } from "../api/types";
+import type { BodyMeasurement, GoalWithProgress } from "../api/types";
 
 const KEY = "forma.data.v1";
 
@@ -180,6 +180,8 @@ export interface FormaData {
   nutritionTargets: NutritionTargets | null;
   /** local goals; null → the sample goals until the first change */
   goals: GoalWithProgress[] | null;
+  /** body measurements (local build) */
+  measurements: BodyMeasurement[];
 }
 
 export const DEFAULT_PROFILE: Profile = {
@@ -207,6 +209,7 @@ const EMPTY: FormaData = {
   meals: [],
   nutritionTargets: null,
   goals: null,
+  measurements: [],
 };
 
 /** Backfill session-queue / pause fields on sessions saved by an older build. */
@@ -251,6 +254,7 @@ function read(): FormaData {
         meals: parsed.meals ?? [],
         nutritionTargets: parsed.nutritionTargets ?? null,
         goals: parsed.goals ?? null,
+        measurements: parsed.measurements ?? [],
         active: parsed.active ? normalizeActive(parsed.active) : null,
       };
       return cache;
