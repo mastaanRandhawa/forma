@@ -246,6 +246,9 @@ export default function Progress() {
           />
         </Reveal>
         <RecoverySection />
+        <Reveal className="mt-10">
+          <BodyMeasurements />
+        </Reveal>
         {API_ENABLED && (
           <Reveal className="mt-10">
             <NutritionCard />
