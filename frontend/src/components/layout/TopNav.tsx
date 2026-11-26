@@ -1,10 +1,11 @@
 import { ReactNode, useEffect, useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import { AnimatePresence, LayoutGroup, motion, useReducedMotion } from "motion/react";
-import { Sun, Moon, Monitor } from "lucide-react";
+import { Sun, Moon, Monitor, Bell } from "lucide-react";
 import { CoinBalance } from "../CoinBalance";
 import { useCustomization, useEquippedItem } from "../../lib/customization";
 import { useProgression } from "../../api/settings";
+import { NOTIFICATIONS_CHANGED, useNotifications } from "../../api/hooks";
 import type { FeatureKey } from "../../api/types";
 
 export type NavItem = {
@@ -149,7 +150,12 @@ export function TopNav({
   };
   const ColorModeIcon = colorMode === "cm-light" ? Sun : colorMode === "cm-dark" ? Moon : Monitor;
 
-  const menuItems = [...visibleItems, ...secondary, { to: "/settings", label: "settings", icon: <ProfileGlyph /> }];
+  const menuItems = [
+    ...visibleItems,
+    ...secondary,
+    { to: "/notifications", label: "notifications", icon: <Bell size={19} strokeWidth={1.8} /> },
+    { to: "/settings", label: "settings", icon: <ProfileGlyph /> },
+  ];
 
   return (
     <motion.header
@@ -278,6 +284,7 @@ export function TopNav({
               </NavLink>
             );
           })}
+          <BellLink />
           <NavLink
             to="/settings"
             aria-label="Profile"
@@ -380,5 +387,30 @@ function ProfileGlyph() {
     <span className="grid h-[19px] w-[19px] place-items-center rounded-full surface-float text-[0.62rem] font-medium text-content-primary">
       A
     </span>
+  );
+}
+
+
+/** Inbox link with an unread dot. */
+function BellLink() {
+  const { data, refetch } = useNotifications();
+  useEffect(() => {
+    // the inbox changed the list; reload quietly
+    const on = () => void refetch();
+    window.addEventListener(NOTIFICATIONS_CHANGED, on);
+    return () => window.removeEventListener(NOTIFICATIONS_CHANGED, on);
+  }, [refetch]);
+  const unread = data?.unreadCount ?? 0;
+  return (
+    <NavLink
+      to="/notifications"
+      aria-label={unread ? `Notifications, ${unread} unread` : "Notifications"}
+      className={({ isActive }) =>
+        `focus-ring tactile relative hidden h-9 w-9 place-items-center rounded-pill transition-colors sm:grid ${isActive ? "surface-recessed text-content-primary" : "text-content-tertiary hover:text-content-secondary"}`
+      }
+    >
+      <Bell size={16} strokeWidth={2} />
+      {unread > 0 && <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-[var(--accent-pink)]" />}
+    </NavLink>
   );
 }

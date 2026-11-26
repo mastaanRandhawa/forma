@@ -11,6 +11,7 @@ import { api, ApiRequestError } from "./client";
 import type * as T from "./types";
 import * as demo from "./demo";
 import { localGoals } from "../lib/localGoals";
+import { localNotifications } from "../lib/localNotifications";
 
 export const API_ENABLED = Boolean(
   (import.meta.env as Record<string, string | undefined>).VITE_API_URL,
@@ -209,7 +210,11 @@ export const useReadiness = () =>
   useResource<T.ReadinessBreakdown>("readiness", pick(api.progress.readiness, demo.demoReadiness));
 
 export const useNotifications = () =>
-  useResource<T.NotificationList>("notifications", pick(() => api.notifications.list(), demo.demoNotifications));
+  useResource<T.NotificationList>("notifications", pick(() => api.notifications.list(), localNotifications));
+
+/** Tell every mounted notifications reader (the bell, the inbox) to reload. */
+export const NOTIFICATIONS_CHANGED = "forma:notifications";
+export const notifyNotificationsChanged = () => window.dispatchEvent(new Event(NOTIFICATIONS_CHANGED));
 
 // ── workout lifecycle (§6) ──────────────────────────────────────────────────
 export const usePlannedWorkouts = () =>
