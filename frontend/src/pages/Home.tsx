@@ -9,6 +9,7 @@ import { TrendChartCard } from "../components/dashboard/TrendChartCard";
 import { ProgressStat } from "../components/dashboard/ProgressStat";
 import { StreakWidget } from "../components/dashboard/StreakWidget";
 import { WeekCard } from "../components/dashboard/WeekCard";
+import { RecentRecords } from "../components/dashboard/RecentRecords";
 import { InsightCard } from "../components/dashboard/InsightCard";
 import { GoalsCard } from "../components/dashboard/GoalsCard";
 import { KaiOrb, coachMood } from "../components/KaiOrb";
@@ -253,6 +254,12 @@ export default function Home() {
                 <Quiet widgetKey="goals-card">
                   <GoalsCard />
                 </Quiet>
+              </Reveal>
+            )}
+
+            {API_ENABLED && (
+              <Reveal onView delay={0.2}>
+                <RecentRecords />
               </Reveal>
             )}
           </aside>
